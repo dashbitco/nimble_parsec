@@ -34,7 +34,7 @@ defmodule NimbleParsec do
   end
 
   @type t :: [combinator()]
-  @type bit_modifiers :: [:signed | :unsigned | :native | :little | :big]
+  @type bin_modifiers :: :utf8 | :utf16 | :utf32
   @type range :: inclusive_range | exclusive_range
   @type inclusive_range :: Range.t() | non_neg_integer()
   @type exclusive_range :: {:not, Range.t()} | {:not, non_neg_integer()}
@@ -51,7 +51,7 @@ defmodule NimbleParsec do
   @typep combinator :: bound_combinator | maybe_bound_combinator | unbound_combinator
 
   @typep bound_combinator ::
-           {:bit_integer, [inclusive_range], [exclusive_range], bit_modifiers}
+           {:bin_segment, [inclusive_range], [exclusive_range], [bin_modifiers]}
            | {:literal, binary}
 
   @typep maybe_bound_combinator ::
@@ -100,7 +100,45 @@ defmodule NimbleParsec do
   @spec ascii_codepoint(t, [range]) :: t
   def ascii_codepoint(combinator \\ empty(), ranges) do
     {inclusive, exclusive} = split_ranges!(ranges, "ascii_codepoint")
-    compile_bit_integer(combinator, inclusive, exclusive, [])
+    compile_bin_segment(combinator, inclusive, exclusive, [])
+  end
+
+  @doc ~S"""
+  Defines a single utf8 codepoint in the given ranges.
+
+  `ranges` is a list containing one of:
+
+    * a `min..max` range expressing supported codepoints
+    * a `codepoint` integer expressing a supported codepoint
+    * `{:not, min..max}` expressing not supported codepoints
+    * `{:not, codepoint}` expressing a not supported codepoint
+
+  Note: currently columns only count codepoints and not graphemes.
+  This means the column count will be off when the input contains
+  grapheme clusters.
+
+  ## Examples
+
+      defmodule MyParser do
+        import NimbleParsec
+
+        defparsec :digit_and_utf8,
+                  empty()
+                  |> utf8_codepoint([?0..?9])
+                  |> utf8_codepoint([])
+      end
+
+      MyParser.digit_and_utf8("1é")
+      #=> {:ok, [?1, ?é], "", 1, 3}
+
+      MyParser.digit_and_utf8("a1")
+      #=> {:error, "expected a utf8 codepoint in the range ?0..?9, followed by a utf8 codepoint", "a1", 1, 1}
+
+  """
+  @spec utf8_codepoint(t, [range]) :: t
+  def utf8_codepoint(combinator \\ empty(), ranges) do
+    {inclusive, exclusive} = split_ranges!(ranges, "utf8_codepoint")
+    compile_bin_segment(combinator, inclusive, exclusive, [:utf8])
   end
 
   @doc ~S"""
@@ -155,7 +193,7 @@ defmodule NimbleParsec do
       when is_integer(size) and size > 0 and is_combinator(combinator) do
     integer =
       Enum.reduce(1..size, empty(), fn _, acc ->
-        compile_bit_integer(acc, [?0..?9], [], [])
+        compile_bin_segment(acc, [?0..?9], [], [])
       end)
 
     mapped = compile_traverse(empty(), integer, &from_ascii_to_integer/1)
@@ -441,8 +479,8 @@ defmodule NimbleParsec do
 
   # A compile bit integer is verified to not have a newline on it
   # and is always bound.
-  defp compile_bit_integer(combinator, inclusive, exclusive, modifiers) do
-    [{:bit_integer, inclusive, exclusive, modifiers} | combinator]
+  defp compile_bin_segment(combinator, inclusive, exclusive, modifiers) do
+    [{:bin_segment, inclusive, exclusive, modifiers} | combinator]
   end
 
   defp reverse_combinators!([], action) do

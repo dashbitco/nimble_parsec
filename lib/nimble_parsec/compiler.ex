@@ -171,10 +171,10 @@ defmodule NimbleParsec.Compiler do
     {:ok, [binary], [], [binary], cursor, counter}
   end
 
-  defp bound_combinator({:bit_integer, inclusive, exclusive, modifiers}, cursor, counter) do
+  defp bound_combinator({:bin_segment, inclusive, exclusive, modifiers}, cursor, counter) do
     {var, counter} = build_var(counter)
-    input = apply_bit_modifiers(var, modifiers)
-    guards = compile_bit_ranges(var, inclusive, exclusive)
+    input = apply_bin_modifiers(var, modifiers)
+    guards = compile_bin_ranges(var, inclusive, exclusive)
 
     cursor =
       if newline_allowed?(inclusive) and not newline_forbidden?(exclusive) do
@@ -318,52 +318,43 @@ defmodule NimbleParsec.Compiler do
     labels(combinators)
   end
 
-  defp label({:bit_integer, inclusive, exclusive, _modifiers}) do
-    inclusive = Enum.map(inclusive, &inspect_byte_range(&1))
-    exclusive = Enum.map(exclusive, &inspect_byte_range(elem(&1, 1)))
-    "byte" <> Enum.join([Enum.join(inclusive, " or") | exclusive], ", and not")
+  defp label({:bin_segment, inclusive, exclusive, modifiers}) do
+    inclusive = Enum.map(inclusive, &inspect_bin_range(&1))
+    exclusive = Enum.map(exclusive, &inspect_bin_range(elem(&1, 1)))
+
+    prefix =
+      cond do
+        :utf8 in modifiers -> "utf8 codepoint"
+        :utf16 in modifiers -> "utf16 codepoint"
+        :utf32 in modifiers -> "utf32 codepoint"
+        true -> "byte"
+      end
+
+    prefix <> Enum.join([Enum.join(inclusive, " or") | exclusive], ", and not")
   end
 
   defp label({:traverse, combinators, _, _}) do
     labels(combinators)
   end
 
-  defp inspect_byte_range(min..max) do
-    if ascii?(min) and ascii?(max) do
-      <<" in the range ", ??, min, ?., ?., ??, max>>
-    else
-      " in the range #{Integer.to_string(min)}..#{Integer.to_string(max)}"
-    end
-  end
+  ## Bin segments
 
-  defp inspect_byte_range(min) do
-    if ascii?(min) do
-      <<" equal to ", ??, min>>
-    else
-      " equal to #{Integer.to_string(min)}"
-    end
-  end
-
-  defp ascii?(char), do: char >= 32 and char <= 126
-
-  ## Helpers
-
-  defp compile_bit_ranges(var, ors, ands) do
-    ands = Enum.map(ands, &bit_range_to_guard(var, &1))
+  defp compile_bin_ranges(var, ors, ands) do
+    ands = Enum.map(ands, &bin_range_to_guard(var, &1))
 
     if ors == [] do
       ands
     else
       ors =
         ors
-        |> Enum.map(&bit_range_to_guard(var, &1))
+        |> Enum.map(&bin_range_to_guard(var, &1))
         |> Enum.reduce(&{:or, [], [&2, &1]})
 
       [ors | ands]
     end
   end
 
-  defp bit_range_to_guard(var, range) do
+  defp bin_range_to_guard(var, range) do
     case range do
       min..max when min < max ->
         quote(do: unquote(var) >= unquote(min) and unquote(var) <= unquote(max))
@@ -391,12 +382,36 @@ defmodule NimbleParsec.Compiler do
     end
   end
 
-  defp apply_bit_modifiers(expr, modifiers) do
-    case modifiers do
-      [] -> expr
-      _ -> {:::, [], [expr, Enum.reduce(modifiers, &{:-, [], [&2, &1]})]}
+  defp inspect_bin_range(min..max) do
+    if ascii?(min) and ascii?(max) do
+      <<" in the range ", ??, min, ?., ?., ??, max>>
+    else
+      " in the range #{Integer.to_string(min)}..#{Integer.to_string(max)}"
     end
   end
+
+  defp inspect_bin_range(min) do
+    if ascii?(min) do
+      <<" equal to ", ??, min>>
+    else
+      " equal to #{Integer.to_string(min)}"
+    end
+  end
+
+  defp ascii?(char), do: char >= 32 and char <= 126
+
+  defp apply_bin_modifiers(expr, modifiers) do
+    case modifiers do
+      [] ->
+        expr
+
+      _ ->
+        modifiers = Enum.map(modifiers, &Macro.var(&1, __MODULE__))
+        {:::, [], [expr, Enum.reduce(modifiers, &{:-, [], [&2, &1]})]}
+    end
+  end
+
+  ## Helpers
 
   defp build_next(step, %{name: name}) do
     {:"#{name}__#{step}", step + 1}

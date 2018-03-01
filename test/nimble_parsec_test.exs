@@ -5,18 +5,18 @@ defmodule NimbleParsecTest do
   doctest NimbleParsec
 
   describe "ascii_codepoint/2 combinator without newlines" do
-    defparsec :only_ascii, ascii_codepoint([?0..?9]) |> ascii_codepoint([?a..?z])
+    defparsec :only_ascii, ascii_codepoint([?0..?9]) |> ascii_codepoint([])
     defparsec :multi_ascii, ascii_codepoint([?0..?9, ?z..?a])
     defparsec :multi_ascii_with_not, ascii_codepoint([?0..?9, ?z..?a, not: ?c])
     defparsec :multi_ascii_with_multi_not, ascii_codepoint([?0..?9, ?z..?a, not: ?c, not: ?d..?e])
     defparsec :ascii_newline, ascii_codepoint([?0..?9, ?\n]) |> ascii_codepoint([?a..?z, ?\n])
 
-    @error "expected byte in the range ?0..?9, followed by byte in the range ?a..?z"
+    @error "expected byte in the range ?0..?9, followed by byte"
 
     test "returns ok/error on composition" do
       assert only_ascii("1a") == {:ok, [?1, ?a], "", 1, 3}
+      assert only_ascii("11") == {:ok, [?1, ?1], "", 1, 3}
       assert only_ascii("a1") == {:error, @error, "a1", 1, 1}
-      assert only_ascii("11") == {:error, @error, "11", 1, 1}
     end
 
     @error "expected byte in the range ?0..?9 or in the range ?z..?a"
@@ -54,7 +54,34 @@ defmodule NimbleParsecTest do
 
     test "is bound" do
       assert bound?(ascii_codepoint([?0..?9]))
-      assert bound?(ascii_codepoint([not: ?\n]))
+      assert bound?(ascii_codepoint(not: ?\n))
+    end
+  end
+
+  describe "utf8_codepoint/2 combinator without newlines" do
+    defparsec :only_utf8, utf8_codepoint([?0..?9]) |> utf8_codepoint([])
+    defparsec :utf8_newline, utf8_codepoint([]) |> utf8_codepoint([?a..?z, ?\n])
+
+    @error "expected utf8 codepoint in the range ?0..?9, followed by utf8 codepoint"
+
+    test "returns ok/error on composition" do
+      assert only_utf8("1a") == {:ok, [?1, ?a], "", 1, 3}
+      assert only_utf8("11") == {:ok, [?1, ?1], "", 1, 3}
+      assert only_utf8("1é") == {:ok, [?1, ?é], "", 1, 3}
+      assert only_utf8("a1") == {:error, @error, "a1", 1, 1}
+    end
+
+    test "returns ok/error even with newlines" do
+      assert utf8_newline("1a\n") == {:ok, [?1, ?a], "\n", 1, 3}
+      assert utf8_newline("1\na") == {:ok, [?1, ?\n], "a", 2, 1}
+      assert utf8_newline("éa\n") == {:ok, [?é, ?a], "\n", 1, 3}
+      assert utf8_newline("é\na") == {:ok, [?é, ?\n], "a", 2, 1}
+      assert utf8_newline("\nao") == {:ok, [?\n, ?a], "o", 2, 2}
+    end
+
+    test "is bound" do
+      assert bound?(utf8_codepoint([?0..?9]))
+      assert bound?(utf8_codepoint(not: ?\n))
     end
   end
 
