@@ -5,18 +5,56 @@ defmodule NimbleParsecTest do
   doctest NimbleParsec
 
   describe "ascii_codepoint/2 combinator without newlines" do
-    defparsec :only_ascii_codepoints, ascii_codepoint([?0..?9]) |> ascii_codepoint([?z..?a])
+    defparsec :only_ascii, ascii_codepoint([?0..?9]) |> ascii_codepoint([?a..?z])
+    defparsec :multi_ascii, ascii_codepoint([?0..?9, ?z..?a])
+    defparsec :multi_ascii_with_not, ascii_codepoint([?0..?9, ?z..?a, not: ?c])
+    defparsec :multi_ascii_with_multi_not, ascii_codepoint([?0..?9, ?z..?a, not: ?c, not: ?d..?e])
+    defparsec :ascii_newline, ascii_codepoint([?0..?9, ?\n]) |> ascii_codepoint([?a..?z, ?\n])
 
-    @error "expected byte in the range ?0..?9, followed by byte in the range ?z..?a"
+    @error "expected byte in the range ?0..?9, followed by byte in the range ?a..?z"
 
-    test "returns ok/error" do
-      assert only_ascii_codepoints("1a") == {:ok, [?1, ?a], "", 1, 3}
-      assert only_ascii_codepoints("a1") == {:error, @error, "a1", 1, 1}
-      assert only_ascii_codepoints("11") == {:error, @error, "11", 1, 1}
+    test "returns ok/error on composition" do
+      assert only_ascii("1a") == {:ok, [?1, ?a], "", 1, 3}
+      assert only_ascii("a1") == {:error, @error, "a1", 1, 1}
+      assert only_ascii("11") == {:error, @error, "11", 1, 1}
+    end
+
+    @error "expected byte in the range ?0..?9 or in the range ?z..?a"
+
+    test "returns ok/error on multiple ranges" do
+      assert multi_ascii("1a") == {:ok, [?1], "a", 1, 2}
+      assert multi_ascii("a1") == {:ok, [?a], "1", 1, 2}
+      assert multi_ascii("++") == {:error, @error, "++", 1, 1}
+    end
+
+    @error "expected byte in the range ?0..?9 or in the range ?z..?a, and not equal to ?c"
+
+    test "returns ok/error on multiple ranges with not" do
+      assert multi_ascii_with_not("1a") == {:ok, [?1], "a", 1, 2}
+      assert multi_ascii_with_not("a1") == {:ok, [?a], "1", 1, 2}
+      assert multi_ascii_with_not("++") == {:error, @error, "++", 1, 1}
+      assert multi_ascii_with_not("cc") == {:error, @error, "cc", 1, 1}
+    end
+
+    @error "expected byte in the range ?0..?9 or in the range ?z..?a, and not equal to ?c, and not in the range ?d..?e"
+
+    test "returns ok/error on multiple ranges with multiple not" do
+      assert multi_ascii_with_multi_not("1a") == {:ok, [?1], "a", 1, 2}
+      assert multi_ascii_with_multi_not("a1") == {:ok, [?a], "1", 1, 2}
+      assert multi_ascii_with_multi_not("++") == {:error, @error, "++", 1, 1}
+      assert multi_ascii_with_multi_not("cc") == {:error, @error, "cc", 1, 1}
+      assert multi_ascii_with_multi_not("de") == {:error, @error, "de", 1, 1}
+    end
+
+    test "returns ok/error even with newlines" do
+      assert ascii_newline("1a\n") == {:ok, [?1, ?a], "\n", 1, 3}
+      assert ascii_newline("1\na") == {:ok, [?1, ?\n], "a", 2, 1}
+      assert ascii_newline("\nao") == {:ok, [?\n, ?a], "o", 2, 2}
     end
 
     test "is bound" do
-      assert bound?(ascii_codepoint([?0..?9]) |> ascii_codepoint([?a..?z]))
+      assert bound?(ascii_codepoint([?0..?9]))
+      assert bound?(ascii_codepoint([not: ?\n]))
     end
   end
 

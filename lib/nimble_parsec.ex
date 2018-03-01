@@ -1,6 +1,7 @@
 # TODO: runtime_composition() and private parsecs
-# TODO: integer()
+# TODO: integer() and integer(min, max)
 # TODO: many()
+# TODO: many_until()
 # TODO: choice()
 # TODO: Docs
 
@@ -34,6 +35,9 @@ defmodule NimbleParsec do
 
   @type t :: [combinator()]
   @type bit_modifiers :: [:signed | :unsigned | :native | :little | :big]
+  @type range :: inclusive_range | exclusive_range
+  @type inclusive_range :: Range.t() | non_neg_integer()
+  @type exclusive_range :: {:not, Range.t()} | {:not, non_neg_integer()}
   @type call ::
           {module :: atom(), function :: atom(), args :: [term]}
           | {function :: atom(), args :: [term]}
@@ -47,7 +51,7 @@ defmodule NimbleParsec do
   @typep combinator :: bound_combinator | maybe_bound_combinator | unbound_combinator
 
   @typep bound_combinator ::
-           {:bit_integer, [Range.t()], bit_modifiers}
+           {:bit_integer, [inclusive_range], [exclusive_range], bit_modifiers}
            | {:literal, binary}
 
   @typep maybe_bound_combinator ::
@@ -68,6 +72,13 @@ defmodule NimbleParsec do
   @doc ~S"""
   Defines a single ascii codepoint in the given ranges.
 
+  `ranges` is a list containing one of:
+
+    * a `min..max` range expressing supported codepoints
+    * a `codepoint` integer expressing a supported codepoint
+    * `{:not, min..max}` expressing not supported codepoints
+    * `{:not, codepoint}` expressing a not supported codepoint
+
   ## Examples
 
       defmodule MyParser do
@@ -86,14 +97,10 @@ defmodule NimbleParsec do
       #=> {:error, "expected a byte in the range ?0..?9, followed by a byte in the range ?a..?z", "a1", 1, 1}
 
   """
+  @spec ascii_codepoint(t, [range]) :: t
   def ascii_codepoint(combinator \\ empty(), ranges) do
-    if ranges == [] or Enum.any?(ranges, &(?\n in &1)) do
-      # TODO: Implement this.
-      raise ArgumentError,
-            "empty ranges or ranges with newlines in them are not currently supported"
-    else
-      compile_bit_integer(combinator, ranges, [])
-    end
+    {inclusive, exclusive} = split_ranges!(ranges, "ascii_codepoint")
+    compile_bit_integer(combinator, inclusive, exclusive, [])
   end
 
   @doc ~S"""
@@ -148,7 +155,7 @@ defmodule NimbleParsec do
       when is_integer(size) and size > 0 and is_combinator(combinator) do
     integer =
       Enum.reduce(1..size, empty(), fn _, acc ->
-        compile_bit_integer(acc, [?0..?9], [])
+        compile_bit_integer(acc, [?0..?9], [], [])
       end)
 
     mapped = compile_traverse(empty(), integer, &from_ascii_to_integer/1)
@@ -158,7 +165,6 @@ defmodule NimbleParsec do
   def integer(combinator, min, max)
       when is_integer(min) and min > 0 and is_integer(max) and max >= min and
              is_combinator(combinator) do
-    # TODO: Implement variadic size integer.
     raise ArgumentError, "not yet implemented"
   end
 
@@ -402,6 +408,19 @@ defmodule NimbleParsec do
 
   ## Inner combinators
 
+  defp split_ranges!(ranges, context) do
+    Enum.split_with(ranges, &split_range!(&1, context))
+  end
+
+  defp split_range!(x, _context) when is_integer(x), do: true
+  defp split_range!(_.._, _context), do: true
+  defp split_range!({:not, x}, _context) when is_integer(x), do: false
+  defp split_range!({:not, _.._}, _context), do: false
+
+  defp split_range!(range, context) do
+    raise ArgumentError, "unknown range #{inspect(range)} given to #{context}"
+  end
+
   # A runtime traverse. Notice the `to_traverse` inside the
   # combinator is already expected to be reversed.
   defp runtime_traverse(combinator, to_traverse, traversal) when is_function(traversal, 1) do
@@ -422,8 +441,8 @@ defmodule NimbleParsec do
 
   # A compile bit integer is verified to not have a newline on it
   # and is always bound.
-  defp compile_bit_integer(combinator, [_ | _] = ranges, modifiers) do
-    [{:bit_integer, ranges, modifiers} | combinator]
+  defp compile_bit_integer(combinator, inclusive, exclusive, modifiers) do
+    [{:bit_integer, inclusive, exclusive, modifiers} | combinator]
   end
 
   defp reverse_combinators!([], action) do

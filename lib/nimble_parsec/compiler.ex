@@ -42,7 +42,7 @@ defmodule NimbleParsec.Compiler do
   defp compile(combinators, defs, inline, current, step, config) do
     {next_combinators, used_combinators, {new_defs, new_inline, next, step, catch_all}} =
       case take_bound_combinators(combinators) do
-        {[combinator | combinators], [], [], [], [], [], _} ->
+        {[combinator | combinators], [], [], [], [], _, _} ->
           case combinator do
             {:label, label_combinators, label} ->
               pre_combinators = [{:update, :labels, &[label | &1]} | label_combinators]
@@ -56,9 +56,9 @@ defmodule NimbleParsec.Compiler do
                compile_unbound_combinator(combinator, current, step, config)}
           end
 
-        {combinators, inputs, guards, outputs, cursors, acc, _} ->
+        {combinators, inputs, guards, outputs, acc, cursor, _} ->
           {combinators, Enum.reverse(acc),
-           compile_bound_combinator(inputs, guards, outputs, cursors, current, step, config)}
+           compile_bound_combinator(inputs, guards, outputs, cursor, current, step, config)}
       end
 
     catch_all_defs =
@@ -119,110 +119,173 @@ defmodule NimbleParsec.Compiler do
   # reporting will accuse the beginning of the bound combinator in case of errors
   # but such can be addressed if desired.
 
-  defp compile_bound_combinator(inputs, guards, outputs, cursors, current, step, config) do
+  defp compile_bound_combinator(inputs, guards, outputs, cursor, current, step, config) do
     arg = {:<<>>, [], inputs ++ [quote(do: rest :: binary)]}
     acc = quote(do: unquote(outputs) ++ combinator__acc)
-    {line, column} = apply_cursors(cursors, 0, 0, false)
-
     {next, step} = build_next(step, config)
-    body = invoke_next(next, quote(do: rest), acc, quote(do: combinator__stack), line, column)
+    stack = quote(do: combinator__stack)
+
+    body =
+      rewrite_cursor(cursor, fn line, column ->
+        invoke_next(next, quote(do: rest), acc, stack, line, column)
+      end)
 
     match_def = build_def(current, arg, guards, body)
     {[match_def], [], next, step, :catch_all}
   end
 
-  defp apply_cursors([{:column, new_column} | cursors], line, column, column_reset?) do
-    apply_cursors(cursors, line, column + new_column, column_reset?)
-  end
-
-  defp apply_cursors([{:line, new_line, new_column} | cursors], line, _column, _column_reset?) do
-    apply_cursors(cursors, line + new_line, new_column, true)
-  end
-
-  defp apply_cursors([], line, column, column_reset?) do
-    line_quoted =
-      if line == 0 do
-        quote(do: combinator__line)
-      else
-        quote(do: combinator__line + unquote(line))
-      end
-
-    column_quoted =
-      if column_reset? do
-        column
-      else
-        quote(do: combinator__column + unquote(column))
-      end
-
-    {line_quoted, column_quoted}
-  end
-
   defp take_bound_combinators(combinators) do
-    take_bound_combinators(combinators, [], [], [], [], [], 0)
+    take_bound_combinators(combinators, [], [], [], [], cursor_pair(), 0)
   end
 
-  defp take_bound_combinators(combinators, inputs, guards, outputs, cursors, acc, counter) do
+  defp take_bound_combinators(combinators, inputs, guards, outputs, acc, cursor, counter) do
     with [combinator | combinators] <- combinators,
-         {:ok, new_inputs, new_guards, new_outputs, new_cursors, new_counter} <-
-           bound_combinator(combinator, counter) do
+         {:ok, new_inputs, new_guards, new_outputs, new_cursor, new_counter} <-
+           bound_combinator(combinator, cursor, counter) do
       take_bound_combinators(
         combinators,
         inputs ++ new_inputs,
         guards ++ new_guards,
         new_outputs ++ outputs,
-        cursors ++ new_cursors,
         [combinator | acc],
+        new_cursor,
         new_counter
       )
     else
       _ ->
-        {combinators, inputs, guards, outputs, cursors, acc, counter}
+        {combinators, inputs, guards, outputs, acc, cursor, counter}
     end
   end
 
-  defp bound_combinator({:literal, binary}, counter) do
+  defp bound_combinator({:literal, binary}, cursor, counter) do
     cursor =
       case String.split(binary, "\n") do
         [single] ->
-          {:column, String.length(single)}
+          add_column(cursor, String.length(single))
 
         [_ | _] = many ->
           column = many |> List.last() |> String.length()
-          {:line, length(many) - 1, column + 1}
+          add_line(cursor, length(many) - 1, column + 1)
       end
 
-    {:ok, [binary], [], [binary], [cursor], counter}
+    {:ok, [binary], [], [binary], cursor, counter}
   end
 
-  defp bound_combinator({:bit_integer, ranges, modifiers}, counter) do
+  defp bound_combinator({:bit_integer, inclusive, exclusive, modifiers}, cursor, counter) do
     {var, counter} = build_var(counter)
     input = apply_bit_modifiers(var, modifiers)
-    guards = ranges_to_guards(var, ranges)
-    {:ok, [input], guards, [var], [{:column, 1}], counter}
+    guards = compile_bit_ranges(var, inclusive, exclusive)
+
+    cursor =
+      if newline_allowed?(inclusive) and not newline_forbidden?(exclusive) do
+        rewrite_cursor(cursor, fn line, column ->
+          quote do
+            {combinator__line, combinator__column} =
+              case unquote(var) do
+                ?\n -> {unquote(line) + 1, 1}
+                _ -> {unquote(line), unquote(column) + 1}
+              end
+          end
+        end)
+      else
+        add_column(cursor, 1)
+      end
+
+    {:ok, [input], guards, [var], cursor, counter}
   end
 
-  defp bound_combinator({:label, combinators, _labels}, counter) do
-    case take_bound_combinators(combinators, [], [], [], [], [], counter) do
-      {[], inputs, guards, outputs, cursors, _, counter} ->
-        {:ok, inputs, guards, outputs, cursors, counter}
+  defp bound_combinator({:label, combinators, _labels}, cursor, counter) do
+    case take_bound_combinators(combinators, [], [], [], [], cursor, counter) do
+      {[], inputs, guards, outputs, _, cursor, counter} ->
+        {:ok, inputs, guards, outputs, cursor, counter}
 
       {_, _, _, _, _, _, _} ->
         :error
     end
   end
 
-  defp bound_combinator({:traverse, combinators, compile_fun, _runtime_fun}, counter) do
-    case take_bound_combinators(combinators, [], [], [], [], [], counter) do
-      {[], inputs, guards, outputs, cursors, _, counter} ->
-        {:ok, inputs, guards, compile_fun.(outputs), cursors, counter}
+  defp bound_combinator({:traverse, combinators, compile_fun, _runtime_fun}, cursor, counter) do
+    case take_bound_combinators(combinators, [], [], [], [], cursor, counter) do
+      {[], inputs, guards, outputs, _, cursor, counter} ->
+        {:ok, inputs, guards, compile_fun.(outputs), cursor, counter}
 
       {_, _, _, _, _, _, _} ->
         :error
     end
   end
 
-  defp bound_combinator(_, _counter) do
+  defp bound_combinator(_, _cursor, _counter) do
     :error
+  end
+
+  ## Cursor handling
+
+  defp cursor_pair() do
+    quote(do: {combinator__line, combinator__column})
+  end
+
+  defp rewrite_cursor({line, column}, fun) do
+    fun.(line, column)
+  end
+
+  defp rewrite_cursor(cursor, fun) do
+    {line, column} = cursor_pair()
+
+    quote do
+      unquote(cursor)
+      unquote(fun.(line, column))
+    end
+  end
+
+  defp add_column({line, {:+, _, [column, current]}}, extra)
+       when is_integer(current) and is_integer(extra) do
+    {line, {:+, [], [column, current + extra]}}
+  end
+
+  defp add_column({line, column}, extra) when is_integer(extra) do
+    {line, {:+, [], [column, extra]}}
+  end
+
+  defp add_column(past, extra) when is_integer(extra) do
+    quote do
+      unquote(past)
+      combinator__column = combinator__column + unquote(extra)
+    end
+  end
+
+  defp add_line({{:+, _, [line, current]}, _}, extra, column)
+       when is_integer(current) and is_integer(extra) do
+    {{:+, [], [line, current + extra]}, column}
+  end
+
+  defp add_line({line, _}, extra, column) when is_integer(extra) do
+    {{:+, [], [line, extra]}, column}
+  end
+
+  defp add_line(past, extra, column) when is_integer(extra) do
+    quote do
+      unquote(past)
+      combinator__line = combinator__line + unquote(extra)
+      combinator__column = unquote(column)
+    end
+  end
+
+  defp newline_allowed?([]), do: true
+
+  defp newline_allowed?(ors) do
+    Enum.any?(ors, fn
+      _.._ = range -> ?\n in range
+      codepoint -> ?\n === codepoint
+    end)
+  end
+
+  defp newline_forbidden?([]), do: false
+
+  defp newline_forbidden?(ands) do
+    Enum.any?(ands, fn
+      {:not, _.._ = range} -> ?\n in range
+      {:not, codepoint} -> ?\n === codepoint
+    end)
   end
 
   ## Label and error handling
@@ -255,13 +318,10 @@ defmodule NimbleParsec.Compiler do
     labels(combinators)
   end
 
-  defp label({:bit_integer, [], _modifiers}) do
-    "byte"
-  end
-
-  defp label({:bit_integer, ranges, _modifiers}) do
-    inspected = Enum.map_join(ranges, ", ", &inspect_byte_range/1)
-    "byte in the #{pluralize(length(ranges), "range", "ranges")} #{inspected}"
+  defp label({:bit_integer, inclusive, exclusive, _modifiers}) do
+    inclusive = Enum.map(inclusive, &inspect_byte_range(&1))
+    exclusive = Enum.map(exclusive, &inspect_byte_range(elem(&1, 1)))
+    "byte" <> Enum.join([Enum.join(inclusive, " or") | exclusive], ", and not")
   end
 
   defp label({:traverse, combinators, _, _}) do
@@ -270,26 +330,64 @@ defmodule NimbleParsec.Compiler do
 
   defp inspect_byte_range(min..max) do
     if ascii?(min) and ascii?(max) do
-      <<??, min, ?., ?., ??, max>>
+      <<" in the range ", ??, min, ?., ?., ??, max>>
     else
-      "#{Integer.to_string(min)}..#{Integer.to_string(max)}"
+      " in the range #{Integer.to_string(min)}..#{Integer.to_string(max)}"
+    end
+  end
+
+  defp inspect_byte_range(min) do
+    if ascii?(min) do
+      <<" equal to ", ??, min>>
+    else
+      " equal to #{Integer.to_string(min)}"
     end
   end
 
   defp ascii?(char), do: char >= 32 and char <= 126
 
-  defp pluralize(1, singular, _plural), do: singular
-  defp pluralize(_, _singular, plural), do: plural
-
   ## Helpers
 
-  defp ranges_to_guards(var, ranges) do
-    for min..max <- ranges do
-      cond do
-        min < max -> quote(do: unquote(var) >= unquote(min) and unquote(var) <= unquote(max))
-        min > max -> quote(do: unquote(var) >= unquote(max) and unquote(var) <= unquote(min))
-        true -> quote(do: unquote(var) === unquote(min))
-      end
+  defp compile_bit_ranges(var, ors, ands) do
+    ands = Enum.map(ands, &bit_range_to_guard(var, &1))
+
+    if ors == [] do
+      ands
+    else
+      ors =
+        ors
+        |> Enum.map(&bit_range_to_guard(var, &1))
+        |> Enum.reduce(&{:or, [], [&2, &1]})
+
+      [ors | ands]
+    end
+  end
+
+  defp bit_range_to_guard(var, range) do
+    case range do
+      min..max when min < max ->
+        quote(do: unquote(var) >= unquote(min) and unquote(var) <= unquote(max))
+
+      min..max when min > max ->
+        quote(do: unquote(var) >= unquote(max) and unquote(var) <= unquote(min))
+
+      min..min ->
+        quote(do: unquote(var) === unquote(min))
+
+      min when is_integer(min) ->
+        quote(do: unquote(var) === unquote(min))
+
+      {:not, min..max} when min < max ->
+        quote(do: unquote(var) < unquote(min) or unquote(var) > unquote(max))
+
+      {:not, min..max} when min > max ->
+        quote(do: unquote(var) < unquote(max) or unquote(var) > unquote(min))
+
+      {:not, min..min} ->
+        quote(do: unquote(var) !== unquote(min))
+
+      {:not, min} when is_integer(min) ->
+        quote(do: unquote(var) !== unquote(min))
     end
   end
 
