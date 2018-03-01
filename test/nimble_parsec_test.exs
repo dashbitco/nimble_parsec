@@ -71,20 +71,20 @@ defmodule NimbleParsecTest do
   end
 
   describe "ignore/2 combinator at compile time" do
-    defparsec :only_ignore, ignore(literal("TO"))
-    defparsec :only_ignore_with_newline, ignore(literal("T\nO"))
+    defparsec :compile_ignore, ignore(literal("TO"))
+    defparsec :compile_ignore_with_newline, ignore(literal("T\nO"))
 
     test "returns ok/error" do
-      assert only_ignore("TO") == {:ok, [], "", 1, 3}
-      assert only_ignore("TOC") == {:ok, [], "C", 1, 3}
-      assert only_ignore("AO") == {:error, "expected literal \"TO\"", "AO", 1, 1}
+      assert compile_ignore("TO") == {:ok, [], "", 1, 3}
+      assert compile_ignore("TOC") == {:ok, [], "C", 1, 3}
+      assert compile_ignore("AO") == {:error, "expected literal \"TO\"", "AO", 1, 1}
     end
 
     test "properly counts newlines" do
-      assert only_ignore_with_newline("T\nO") == {:ok, [], "", 2, 2}
-      assert only_ignore_with_newline("T\nOC") == {:ok, [], "C", 2, 2}
+      assert compile_ignore_with_newline("T\nO") == {:ok, [], "", 2, 2}
+      assert compile_ignore_with_newline("T\nOC") == {:ok, [], "C", 2, 2}
 
-      assert only_ignore_with_newline("A\nO") ==
+      assert compile_ignore_with_newline("A\nO") ==
                {:error, "expected literal \"T\\nO\"", "A\nO", 1, 1}
     end
 
@@ -93,20 +93,87 @@ defmodule NimbleParsecTest do
     end
   end
 
-  describe "label/3 combinator at compile time" do
-    defparsec :only_label, label(literal("TO"), "label")
-    defparsec :only_label_with_newline, label(literal("T\nO"), "label")
+  describe "ignore/2 combinator at runtime" do
+    defparsec :runtime_ignore,
+              ascii_codepoint([?a..?z])
+              |> ascii_codepoint([?a..?z])
+              |> ascii_codepoint([?a..?z])
+              |> map({:to_string, []})
+              |> ignore()
 
     test "returns ok/error" do
-      assert only_label("TO") == {:ok, ["TO"], "", 1, 3}
-      assert only_label("TOC") == {:ok, ["TO"], "C", 1, 3}
-      assert only_label("AO") == {:error, "expected label", "AO", 1, 1}
+      assert runtime_ignore("abc") == {:ok, [], "", 1, 4}
+
+      error =
+        "expected byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z"
+
+      assert runtime_ignore("1bc") == {:error, error, "1bc", 1, 1}
+    end
+
+    test "is not bound" do
+      assert not_bound?(ascii_codepoint([?a..?z]) |> map({:to_string, []}) |> ignore())
+    end
+  end
+
+  describe "replace/3 combinator at compile time" do
+    defparsec :compile_replace, replace(literal("TO"), "OTHER")
+    defparsec :compile_replace_with_newline, replace(literal("T\nO"), "OTHER")
+
+    test "returns ok/error" do
+      assert compile_replace("TO") == {:ok, ["OTHER"], "", 1, 3}
+      assert compile_replace("TOC") == {:ok, ["OTHER"], "C", 1, 3}
+      assert compile_replace("AO") == {:error, "expected literal \"TO\"", "AO", 1, 1}
     end
 
     test "properly counts newlines" do
-      assert only_label_with_newline("T\nO") == {:ok, ["T\nO"], "", 2, 2}
-      assert only_label_with_newline("T\nOC") == {:ok, ["T\nO"], "C", 2, 2}
-      assert only_label_with_newline("A\nO") == {:error, "expected label", "A\nO", 1, 1}
+      assert compile_replace_with_newline("T\nO") == {:ok, ["OTHER"], "", 2, 2}
+      assert compile_replace_with_newline("T\nOC") == {:ok, ["OTHER"], "C", 2, 2}
+
+      assert compile_replace_with_newline("A\nO") ==
+               {:error, "expected literal \"T\\nO\"", "A\nO", 1, 1}
+    end
+
+    test "is bound" do
+      assert bound?(replace(literal("T"), "OTHER"))
+    end
+  end
+
+  describe "replace/2 combinator at runtime" do
+    defparsec :runtime_replace,
+              ascii_codepoint([?a..?z])
+              |> ascii_codepoint([?a..?z])
+              |> ascii_codepoint([?a..?z])
+              |> map({:to_string, []})
+              |> replace("OTHER")
+
+    test "returns ok/error" do
+      assert runtime_replace("abc") == {:ok, ["OTHER"], "", 1, 4}
+
+      error =
+        "expected byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z"
+
+      assert runtime_replace("1bc") == {:error, error, "1bc", 1, 1}
+    end
+
+    test "is not bound" do
+      assert not_bound?(ascii_codepoint([?a..?z]) |> map({:to_string, []}) |> replace("OTHER"))
+    end
+  end
+
+  describe "label/3 combinator at compile time" do
+    defparsec :compile_label, label(literal("TO"), "label")
+    defparsec :compile_label_with_newline, label(literal("T\nO"), "label")
+
+    test "returns ok/error" do
+      assert compile_label("TO") == {:ok, ["TO"], "", 1, 3}
+      assert compile_label("TOC") == {:ok, ["TO"], "C", 1, 3}
+      assert compile_label("AO") == {:error, "expected label", "AO", 1, 1}
+    end
+
+    test "properly counts newlines" do
+      assert compile_label_with_newline("T\nO") == {:ok, ["T\nO"], "", 2, 2}
+      assert compile_label_with_newline("T\nOC") == {:ok, ["T\nO"], "C", 2, 2}
+      assert compile_label_with_newline("A\nO") == {:error, "expected label", "A\nO", 1, 1}
     end
 
     test "is bound" do

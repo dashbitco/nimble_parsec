@@ -1,10 +1,8 @@
-# TODO: runtime_composition()
+# TODO: runtime_composition() and private parsecs
 # TODO: integer()
 # TODO: many()
 # TODO: choice()
 # TODO: Docs
-# TODO: replace/3
-# TODO: Private parsecs
 
 defmodule NimbleParsec do
   defmacrop is_combinator(combinator) do
@@ -46,12 +44,17 @@ defmodule NimbleParsec do
   #   2. Update the compiler bound combinator step
   #   3. Update the compiler label step
   #
-  @typep combinator ::
-           {:literal, binary}
-           | {:label, t, binary}
-           | {:traverse, t, (Macro.t() -> Macro.t())}
-           | {:compile_bit_integer, [Range.t()], bit_modifiers}
-           | {:compile_traverse, t, (Macro.t() -> Macro.t()), (Macro.t() -> Macro.t())}
+  @typep combinator :: bound_combinator | maybe_bound_combinator | unbound_combinator
+
+  @typep bound_combinator ::
+           {:bit_integer, [Range.t()], bit_modifiers}
+           | {:literal, binary}
+
+  @typep maybe_bound_combinator ::
+           {:label, t, binary}
+           | {:traverse, t, (Macro.t() -> Macro.t()), (Macro.t() -> Macro.t())}
+
+  @typep unbound_combinator :: {:traverse, t, (Macro.t() -> Macro.t())}
 
   @doc ~S"""
   Returns an empty combinator.
@@ -367,11 +370,34 @@ defmodule NimbleParsec do
 
   """
   def ignore(combinator \\ empty(), to_ignore)
-
-  def ignore(combinator, to_ignore) when is_combinator(combinator) and is_combinator(to_ignore) do
+      when is_combinator(combinator) and is_combinator(to_ignore) do
     to_ignore = reverse_combinators!(to_ignore, "ignore")
-    # TODO: Define the runtime behaviour.
-    compile_traverse(combinator, to_ignore, fn _ -> [] end)
+    compile_traverse(combinator, to_ignore, fn _ -> [] end, fn _ -> [] end)
+  end
+
+  @doc """
+  Replaces the output of combinator given in `to_replace` by a single value.
+
+  The `value` will be injected at the compile site
+  and therefore must be escapable via `Macro.escape/1`.
+
+  ## Examples
+
+      defmodule MyParser do
+        import NimbleParsec
+
+        defparsec :replaceable, literal("T") |> replace("OTHER") |> integer(2, 2)
+      end
+
+      MyParser.replaceable("T12")
+      #=> {:ok, ["OTHER", 12], "", 1, 3}
+
+  """
+  def replace(combinator \\ empty(), to_replace, value)
+      when is_combinator(combinator) and is_combinator(to_replace) do
+    to_replace = reverse_combinators!(to_replace, "replace")
+    value = Macro.escape(value)
+    compile_traverse(combinator, to_replace, fn _ -> [value] end, fn _ -> [value] end)
   end
 
   ## Inner combinators
@@ -391,13 +417,13 @@ defmodule NimbleParsec do
   # Notice the `to_traverse` inside the combinator is already
   # expected to be reversed.
   defp compile_traverse(combinator, to_traverse, compile_fun, runtime_fun \\ &always_raise!/1) do
-    [{:compile_traverse, to_traverse, compile_fun, runtime_fun} | combinator]
+    [{:traverse, to_traverse, compile_fun, runtime_fun} | combinator]
   end
 
   # A compile bit integer is verified to not have a newline on it
   # and is always bound.
   defp compile_bit_integer(combinator, [_ | _] = ranges, modifiers) do
-    [{:compile_bit_integer, ranges, modifiers} | combinator]
+    [{:bit_integer, ranges, modifiers} | combinator]
   end
 
   defp reverse_combinators!([], action) do

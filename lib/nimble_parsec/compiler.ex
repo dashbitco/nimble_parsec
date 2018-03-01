@@ -73,6 +73,10 @@ defmodule NimbleParsec.Compiler do
 
   ## Unbound combinators
 
+  defp compile_unbound_combinator({:traverse, combinators, _, traversal}, current, step, config) do
+    compile_unbound_combinator({:traverse, combinators, traversal}, current, step, config)
+  end
+
   defp compile_unbound_combinator({:traverse, combinators, traversal}, current, step, config) do
     arg = quote(do: arg)
     line = quote(do: combinator__line)
@@ -190,6 +194,13 @@ defmodule NimbleParsec.Compiler do
     {:ok, [binary], [], [binary], [cursor], counter}
   end
 
+  defp bound_combinator({:bit_integer, ranges, modifiers}, counter) do
+    {var, counter} = build_var(counter)
+    input = apply_bit_modifiers(var, modifiers)
+    guards = ranges_to_guards(var, ranges)
+    {:ok, [input], guards, [var], [{:column, 1}], counter}
+  end
+
   defp bound_combinator({:label, combinators, _labels}, counter) do
     case take_bound_combinators(combinators, [], [], [], [], [], counter) do
       {[], inputs, guards, outputs, cursors, _, counter} ->
@@ -200,14 +211,7 @@ defmodule NimbleParsec.Compiler do
     end
   end
 
-  defp bound_combinator({:compile_bit_integer, ranges, modifiers}, counter) do
-    {var, counter} = build_var(counter)
-    input = apply_bit_modifiers(var, modifiers)
-    guards = ranges_to_guards(var, ranges)
-    {:ok, [input], guards, [var], [{:column, 1}], counter}
-  end
-
-  defp bound_combinator({:compile_traverse, combinators, compile_fun, _runtime_fun}, counter) do
+  defp bound_combinator({:traverse, combinators, compile_fun, _runtime_fun}, counter) do
     case take_bound_combinators(combinators, [], [], [], [], [], counter) do
       {[], inputs, guards, outputs, cursors, _, counter} ->
         {:ok, inputs, guards, compile_fun.(outputs), cursors, counter}
@@ -251,16 +255,16 @@ defmodule NimbleParsec.Compiler do
     labels(combinators)
   end
 
-  defp label({:compile_bit_integer, [], _modifiers}) do
+  defp label({:bit_integer, [], _modifiers}) do
     "byte"
   end
 
-  defp label({:compile_bit_integer, ranges, _modifiers}) do
+  defp label({:bit_integer, ranges, _modifiers}) do
     inspected = Enum.map_join(ranges, ", ", &inspect_byte_range/1)
     "byte in the #{pluralize(length(ranges), "range", "ranges")} #{inspected}"
   end
 
-  defp label({:compile_traverse, combinators, _, _}) do
+  defp label({:traverse, combinators, _, _}) do
     labels(combinators)
   end
 
