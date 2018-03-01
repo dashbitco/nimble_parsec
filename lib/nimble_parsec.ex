@@ -1,7 +1,7 @@
 # TODO: runtime_composition() and private parsecs
 # TODO: integer() and integer(min, max)
-# TODO: many()
-# TODO: many_until()
+# TODO: repeat_until()
+# TODO: repeat_up_to()
 # TODO: choice()
 # TODO: Docs
 
@@ -445,27 +445,38 @@ defmodule NimbleParsec do
   end
 
   @doc """
-  Allow the combinator given on `many` to appear zero or more times.
+  Allow the combinator given on `repeat` to appear zero or more times.
 
   ## Examples
 
       defmodule MyParser do
         import NimbleParsec
 
-        defparsec :many_lower, many(ascii_char([?a..?z]))
+        defparsec :repeat_lower, repeat(ascii_char([?a..?z]))
       end
 
-      MyParser.many_lower("abcd")
+      MyParser.repeat_lower("abcd")
       #=> {:ok, [?a, ?b, ?c, ?d], "", 1, 5}
 
-      MyParser.many_lower("1234")
+      MyParser.repeat_lower("1234")
       #=> {:ok, [], "1234", 1, 1}
 
   """
-  @spec many(t, t) :: t
-  def many(combinator \\ empty(), many) do
-    many = reverse_combinators!(many, "many")
-    [{:many, many} | combinator]
+  @spec repeat(t, t) :: t
+  def repeat(combinator \\ empty(), to_repeat)
+      when is_combinator(combinator) and is_combinator(to_repeat) do
+    to_repeat = reverse_combinators!(to_repeat, "repeat")
+    [{:repeat, to_repeat} | combinator]
+  end
+
+  @spec choice(t, t) :: t
+  def choice(combinator \\ empty(), [_, _ | _] = choices) when is_combinator(combinator) do
+    choices =
+      for choice <- choices do
+        reverse_combinators!(choice, "choice")
+      end
+
+    [{:choice, choices} | combinator]
   end
 
   ## Inner combinators
@@ -511,8 +522,8 @@ defmodule NimbleParsec do
     raise ArgumentError, "cannot #{action} empty combinator"
   end
 
-  defp reverse_combinators!(combinators, _action) do
-    Enum.reverse(combinators)
+  defp reverse_combinators!(combinator, _action) when is_combinator(combinator) do
+    Enum.reverse(combinator)
   end
 
   defp compile_call!(arg, {module, function, args}, _context)

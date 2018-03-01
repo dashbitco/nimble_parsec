@@ -420,26 +420,26 @@ defmodule NimbleParsecTest do
     end
   end
 
-  describe "many/2 combinator" do
-    defparsec :many_digits, many(ascii_char([?0..?9]))
+  describe "repeat/2 combinator" do
+    defparsec :repeat_digits, repeat(ascii_char([?0..?9]))
 
     ascii_to_string = map(ascii_char([?0..?9]), {:to_string, []})
-    defparsec :many_digits_to_string, many(ascii_to_string)
-    defparsec :many_digits_to_same_inner, many(map(ascii_to_string, {String, :to_integer, []}))
-    defparsec :many_digits_to_same_outer, map(many(ascii_to_string), {String, :to_integer, []})
+    defparsec :repeat_digits_to_string, repeat(ascii_to_string)
+    defparsec :repeat_digits_to_same_inner, repeat(map(ascii_to_string, {String, :to_integer, []}))
+    defparsec :repeat_digits_to_same_outer, map(repeat(ascii_to_string), {String, :to_integer, []})
 
     test "returns ok/error" do
-      assert many_digits("123") == {:ok, [?1, ?2, ?3], "", 1, 4}
-      assert many_digits("a123") == {:ok, [], "a123", 1, 1}
+      assert repeat_digits("123") == {:ok, [?1, ?2, ?3], "", 1, 4}
+      assert repeat_digits("a123") == {:ok, [], "a123", 1, 1}
     end
 
     test "returns ok/error with map" do
-      assert many_digits_to_string("123") == {:ok, ["49", "50", "51"], "", 1, 4}
+      assert repeat_digits_to_string("123") == {:ok, ["49", "50", "51"], "", 1, 4}
     end
 
     test "returns ok/error with inner and outer map" do
-      assert many_digits_to_same_inner("123") == {:ok, [?1, ?2, ?3], "", 1, 4}
-      assert many_digits_to_same_outer("123") == {:ok, [?1, ?2, ?3], "", 1, 4}
+      assert repeat_digits_to_same_inner("123") == {:ok, [?1, ?2, ?3], "", 1, 4}
+      assert repeat_digits_to_same_outer("123") == {:ok, [?1, ?2, ?3], "", 1, 4}
     end
   end
 
