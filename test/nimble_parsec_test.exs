@@ -7,7 +7,7 @@ defmodule NimbleParsecTest do
   describe "ascii_codepoint/2 combinator without newlines" do
     defparsec :only_ascii_codepoints, ascii_codepoint([?0..?9]) |> ascii_codepoint([?z..?a])
 
-    @error "expected a byte in the range ?0..?9, followed by a byte in the range ?z..?a"
+    @error "expected byte in the range ?0..?9, followed by byte in the range ?z..?a"
 
     test "returns ok/error" do
       assert only_ascii_codepoints("1a") == {:ok, [?1, ?a], "", 1, 3}
@@ -24,7 +24,7 @@ defmodule NimbleParsecTest do
     defparsec :only_integer, integer(2, 2)
     defparsec :prefixed_integer, literal("T") |> integer(2, 2)
 
-    @error "expected a 2 digits integer"
+    @error "expected 2 digits integer"
 
     test "returns ok/error by itself" do
       assert only_integer("12") == {:ok, [12], "", 1, 3}
@@ -32,7 +32,7 @@ defmodule NimbleParsecTest do
       assert only_integer("1a3") == {:error, @error, "1a3", 1, 1}
     end
 
-    @error "expected a literal \"T\", followed by a 2 digits integer"
+    @error "expected literal \"T\", followed by 2 digits integer"
 
     test "returns ok/error with previous document" do
       assert prefixed_integer("T12") == {:ok, ["T", 12], "", 1, 4}
@@ -54,7 +54,7 @@ defmodule NimbleParsecTest do
     test "returns ok/error" do
       assert only_literal("TO") == {:ok, ["TO"], "", 1, 3}
       assert only_literal("TOC") == {:ok, ["TO"], "C", 1, 3}
-      assert only_literal("AO") == {:error, "expected a literal \"TO\"", "AO", 1, 1}
+      assert only_literal("AO") == {:error, "expected literal \"TO\"", "AO", 1, 1}
     end
 
     test "properly counts newlines" do
@@ -62,7 +62,7 @@ defmodule NimbleParsecTest do
       assert only_literal_with_newline("T\nOC") == {:ok, ["T\nO"], "C", 2, 2}
 
       assert only_literal_with_newline("A\nO") ==
-               {:error, "expected a literal \"T\\nO\"", "A\nO", 1, 1}
+               {:error, "expected literal \"T\\nO\"", "A\nO", 1, 1}
     end
 
     test "is bound" do
@@ -77,7 +77,7 @@ defmodule NimbleParsecTest do
     test "returns ok/error" do
       assert only_ignore("TO") == {:ok, [], "", 1, 3}
       assert only_ignore("TOC") == {:ok, [], "C", 1, 3}
-      assert only_ignore("AO") == {:error, "expected a literal \"TO\"", "AO", 1, 1}
+      assert only_ignore("AO") == {:error, "expected literal \"TO\"", "AO", 1, 1}
     end
 
     test "properly counts newlines" do
@@ -85,7 +85,7 @@ defmodule NimbleParsecTest do
       assert only_ignore_with_newline("T\nOC") == {:ok, [], "C", 2, 2}
 
       assert only_ignore_with_newline("A\nO") ==
-               {:error, "expected a literal \"T\\nO\"", "A\nO", 1, 1}
+               {:error, "expected literal \"T\\nO\"", "A\nO", 1, 1}
     end
 
     test "is bound" do
@@ -94,23 +94,23 @@ defmodule NimbleParsecTest do
   end
 
   describe "label/2 combinator at compile time" do
-    defparsec :only_label, label(literal("TO"), "a label")
-    defparsec :only_label_with_newline, label(literal("T\nO"), "a label")
+    defparsec :only_label, label(literal("TO"), "label")
+    defparsec :only_label_with_newline, label(literal("T\nO"), "label")
 
     test "returns ok/error" do
       assert only_label("TO") == {:ok, ["TO"], "", 1, 3}
       assert only_label("TOC") == {:ok, ["TO"], "C", 1, 3}
-      assert only_label("AO") == {:error, "expected a label", "AO", 1, 1}
+      assert only_label("AO") == {:error, "expected label", "AO", 1, 1}
     end
 
     test "properly counts newlines" do
       assert only_label_with_newline("T\nO") == {:ok, ["T\nO"], "", 2, 2}
       assert only_label_with_newline("T\nOC") == {:ok, ["T\nO"], "C", 2, 2}
-      assert only_label_with_newline("A\nO") == {:error, "expected a label", "A\nO", 1, 1}
+      assert only_label_with_newline("A\nO") == {:error, "expected label", "A\nO", 1, 1}
     end
 
     test "is bound" do
-      assert bound?(label(literal("T"), "a label"))
+      assert bound?(label(literal("T"), "label"))
     end
   end
 
@@ -128,20 +128,22 @@ defmodule NimbleParsecTest do
     test "returns ok/error" do
       assert remote_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", 1, 9}
 
-      error = "expected a literal \"T\", followed by a 2 digits integer"
+      error = "expected literal \"T\", followed by 2 digits integer"
       assert remote_traverse("Tabc34") == {:error, error, "Tabc34", 1, 1}
 
-      error = "expected a 2 digits integer"
+      error = "expected 2 digits integer"
       assert remote_traverse("T12abcdf") == {:error, error, "df", 1, 7}
 
       error =
-        "expected a byte in the range ?a..?z, followed by a byte in the range ?a..?z, followed by a byte in the range ?a..?z"
+        "expected byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z"
 
       assert remote_traverse("T12ab34") == {:error, error, "ab34", 1, 4}
     end
 
     test "is not bound" do
-      assert not_bound?(traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]}))
+      assert not_bound?(
+               traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]})
+             )
     end
 
     def public_join_and_wrap(args, joiner) do
@@ -163,14 +165,14 @@ defmodule NimbleParsecTest do
     test "returns ok/error" do
       assert local_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", 1, 9}
 
-      error = "expected a literal \"T\", followed by a 2 digits integer"
+      error = "expected literal \"T\", followed by 2 digits integer"
       assert local_traverse("Tabc34") == {:error, error, "Tabc34", 1, 1}
 
-      error = "expected a 2 digits integer"
+      error = "expected 2 digits integer"
       assert local_traverse("T12abcdf") == {:error, error, "df", 1, 7}
 
       error =
-        "expected a byte in the range ?a..?z, followed by a byte in the range ?a..?z, followed by a byte in the range ?a..?z"
+        "expected byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z"
 
       assert local_traverse("T12ab34") == {:error, error, "ab34", 1, 4}
     end
@@ -181,6 +183,70 @@ defmodule NimbleParsecTest do
 
     defp private_join_and_wrap(args, joiner) do
       args |> Enum.join(joiner) |> List.wrap()
+    end
+  end
+
+  describe "remote map/3 combinator" do
+    defparsec :remote_map,
+              ascii_codepoint([?a..?z])
+              |> ascii_codepoint([?a..?z])
+              |> ascii_codepoint([?a..?z])
+              |> map({Integer, :to_string, []})
+
+    test "returns ok/error" do
+      assert remote_map("abc") == {:ok, ["97", "98", "99"], "", 1, 4}
+      assert remote_map("abcd") == {:ok, ["97", "98", "99"], "d", 1, 4}
+      assert {:error, _, "1abcd", 1, 1} = remote_map("1abcd")
+    end
+  end
+
+  describe "local map/3 combinator" do
+    defparsec :local_map,
+              ascii_codepoint([?a..?z])
+              |> ascii_codepoint([?a..?z])
+              |> ascii_codepoint([?a..?z])
+              |> map({:local_to_string, []})
+
+    test "returns ok/error" do
+      assert local_map("abc") == {:ok, ["97", "98", "99"], "", 1, 4}
+      assert local_map("abcd") == {:ok, ["97", "98", "99"], "d", 1, 4}
+      assert {:error, _, "1abcd", 1, 1} = local_map("1abcd")
+    end
+
+    defp local_to_string(arg) do
+      Integer.to_string(arg)
+    end
+  end
+
+  describe "remote reduce/3 combinator" do
+    defparsec :remote_reduce,
+              ascii_codepoint([?a..?z])
+              |> ascii_codepoint([?a..?z])
+              |> ascii_codepoint([?a..?z])
+              |> reduce({Enum, :join, ["-"]})
+
+    test "returns ok/error" do
+      assert remote_reduce("abc") == {:ok, ["97-98-99"], "", 1, 4}
+      assert remote_reduce("abcd") == {:ok, ["97-98-99"], "d", 1, 4}
+      assert {:error, _, "1abcd", 1, 1} = remote_reduce("1abcd")
+    end
+  end
+
+  describe "local reduce/3 combinator" do
+    defparsec :local_reduce,
+              ascii_codepoint([?a..?z])
+              |> ascii_codepoint([?a..?z])
+              |> ascii_codepoint([?a..?z])
+              |> reduce({:local_join, ["-"]})
+
+    test "returns ok/error" do
+      assert local_reduce("abc") == {:ok, ["97-98-99"], "", 1, 4}
+      assert local_reduce("abcd") == {:ok, ["97-98-99"], "d", 1, 4}
+      assert {:error, _, "1abcd", 1, 1} = local_reduce("1abcd")
+    end
+
+    defp local_join(list, joiner) do
+      Enum.join(list, joiner)
     end
   end
 

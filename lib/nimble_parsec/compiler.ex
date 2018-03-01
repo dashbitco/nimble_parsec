@@ -8,7 +8,8 @@ defmodule NimbleParsec.Compiler do
 
   def compile(name, combinators, _opts) when is_list(combinators) do
     config = %{
-      name: name
+      name: name,
+      labels: []
     }
 
     {next, step} = build_next(0, config)
@@ -34,12 +35,26 @@ defmodule NimbleParsec.Compiler do
     {defs, inline, current, step}
   end
 
+  defp compile([{:update, key, fun} | combinators], defs, inline, current, step, config) do
+    compile(combinators, defs, inline, current, step, Map.update!(config, key, fun))
+  end
+
   defp compile(combinators, defs, inline, current, step, config) do
     {next_combinators, used_combinators, {new_defs, new_inline, next, step, catch_all}} =
       case take_bound_combinators(combinators) do
         {[combinator | combinators], [], [], [], [], [], _} ->
-          {combinators, [combinator],
-           compile_unbound_combinator(combinator, current, step, config)}
+          case combinator do
+            {:label, label_combinators, label} ->
+              pre_combinators = [{:update, :labels, &[label | &1]} | label_combinators]
+              pos_combinators = [{:update, :labels, &tl(&1)} | combinators]
+
+              {pre_combinators ++ pos_combinators, [combinator],
+               {[], [], current, step, :catch_none}}
+
+            _ ->
+              {combinators, [combinator],
+               compile_unbound_combinator(combinator, current, step, config)}
+          end
 
         {combinators, inputs, guards, outputs, cursors, acc, _} ->
           {combinators, Enum.reverse(acc),
@@ -48,7 +63,7 @@ defmodule NimbleParsec.Compiler do
 
     catch_all_defs =
       case catch_all do
-        :catch_all -> [build_catch_all(current, error_reason(used_combinators))]
+        :catch_all -> [build_catch_all(current, error_reason(used_combinators, config))]
         :catch_none -> []
       end
 
@@ -66,7 +81,7 @@ defmodule NimbleParsec.Compiler do
     # Define the entry point that gets the current accumulator,
     # put it in the stack and then continues with recursion.
     call_acc = []
-    call_stack = quote(do: [combinator__acc | combinator__stack])
+    call_stack = quote(generated: true, do: [combinator__acc | combinator__stack])
 
     {next, step} = build_next(step, config)
     first_body = invoke_next(next, arg, call_acc, call_stack, line, column)
@@ -77,8 +92,8 @@ defmodule NimbleParsec.Compiler do
     # No we need to traverse the accumulator with the user code and
     # concatenate with the previous accumulator at the top of the stack.
     user_acc = traversal.(quote(do: combinator__acc))
-    last_acc = quote(do: unquote(user_acc) ++ hd(combinator__stack))
-    last_stack = quote(do: tl(combinator__stack))
+    last_acc = quote(generated: true, do: unquote(user_acc) ++ hd(combinator__stack))
+    last_stack = quote(generated: true, do: tl(combinator__stack))
 
     {next, step} = build_next(step, config)
     last_body = invoke_next(next, arg, last_acc, last_stack, line, column)
@@ -180,7 +195,7 @@ defmodule NimbleParsec.Compiler do
       {[], inputs, guards, outputs, cursors, _, counter} ->
         {:ok, inputs, guards, outputs, cursors, counter}
 
-      {_, _, _, _, _, _} ->
+      {_, _, _, _, _, _, _} ->
         :error
     end
   end
@@ -197,7 +212,7 @@ defmodule NimbleParsec.Compiler do
       {[], inputs, guards, outputs, cursors, _, counter} ->
         {:ok, inputs, guards, compile_fun.(outputs), cursors, counter}
 
-      {_, _, _, _, _, _} ->
+      {_, _, _, _, _, _, _} ->
         :error
     end
   end
@@ -208,8 +223,12 @@ defmodule NimbleParsec.Compiler do
 
   ## Label and error handling
 
-  defp error_reason(combinators) do
+  defp error_reason(combinators, %{labels: []}) do
     "expected " <> labels(combinators)
+  end
+
+  defp error_reason(combinators, %{labels: labels}) do
+    "error while processing #{Enum.join(labels, " inside ")}. Expected " <> labels(combinators)
   end
 
   defp labels(combinators) do
@@ -217,7 +236,7 @@ defmodule NimbleParsec.Compiler do
   end
 
   defp label({:literal, binary}) do
-    "a literal #{inspect(binary)}"
+    "literal #{inspect(binary)}"
   end
 
   defp label({:label, _document, label}) do
@@ -229,12 +248,12 @@ defmodule NimbleParsec.Compiler do
   end
 
   defp label({:compile_bit_integer, [], _modifiers}) do
-    "a byte"
+    "byte"
   end
 
   defp label({:compile_bit_integer, ranges, _modifiers}) do
     inspected = Enum.map_join(ranges, ", ", &inspect_byte_range/1)
-    "a byte in the #{pluralize(length(ranges), "range", "ranges")} #{inspected}"
+    "byte in the #{pluralize(length(ranges), "range", "ranges")} #{inspected}"
   end
 
   defp label({:compile_traverse, combinators, _, _}) do

@@ -3,7 +3,7 @@
 # TODO: many()
 # TODO: choice()
 # TODO: Docs
-# TODO: Other traversals
+# TODO: replace/3
 # TODO: Private parsecs
 
 defmodule NimbleParsec do
@@ -29,6 +29,8 @@ defmodule NimbleParsec do
         #   defp unquote(name)(unquote_splicing(args)) when unquote(guards), do: unquote(body)
         # end))
       end
+
+      :ok
     end
   end
 
@@ -103,7 +105,7 @@ defmodule NimbleParsec do
                   empty()
                   |> ascii_codepoint([?0..?9])
                   |> ascii_codepoint([?a..?z])
-                  |> label("a digit followed by lowercase letter")
+                  |> label("digit followed by lowercase letter")
       end
 
       MyParser.digit_and_lowercase("1a")
@@ -147,7 +149,7 @@ defmodule NimbleParsec do
       end)
 
     mapped = compile_traverse(empty(), integer, &from_ascii_to_integer/1)
-    label(combinator, mapped, "a #{size} digits integer")
+    label(combinator, mapped, "#{size} digits integer")
   end
 
   def integer(combinator, min, max)
@@ -196,7 +198,7 @@ defmodule NimbleParsec do
   end
 
   @doc ~S"""
-  Traverses the combinator results with the `call`.
+  Traverses the combinator results with the remote or local function `call`.
 
   `call` is either a `{module, function, args}` representing
   a remote call or `{function, args}` representing a local call.
@@ -214,7 +216,7 @@ defmodule NimbleParsec do
   This is a low-level function for changing the parsed result.
   On top of this function, other functions are built, such as
   `map/3` if you want to map over each individual element and
-  not worry about ordering, `join/3` to convert all elements
+  not worry about ordering, `reduce/3` to reduce all elements
   into a single one, `replace/3` if you want to replace the
   parsed result by a single value and `ignore/3` if you want to
   ignore the parsed result.
@@ -244,6 +246,86 @@ defmodule NimbleParsec do
     to_traverse = reverse_combinators!(to_traverse, "traverse")
     compile_call!(:ok, call, "traverse")
     runtime_traverse(combinator, to_traverse, &compile_call!(&1, call, "traverse"))
+  end
+
+  @doc ~S"""
+  Maps over the combinator results with the remote or local function in `call`.
+
+  `call` is either a `{module, function, args}` representing
+  a remote call or `{function, args}` representing a local call.
+
+  Each parser result will be invoked individually for the `call`.
+  Each result  be prepended to the given `args`. The `args` will
+  be injected at the compile site and therefore must be escapable
+  via `Macro.escape/1`.
+
+  See `traverse/3` for a low level version of this function.
+
+  ## Examples
+
+      defmodule MyParser do
+        import NimbleParsec
+
+        defparsec :letters_to_string_codepoints,
+                  ascii_codepoint([?a..?z])
+                  |> ascii_codepoint([?a..?z])
+                  |> ascii_codepoint([?a..?z])
+                  |> map({Integer, :to_string, []})
+      end
+
+      MyParser.letters_to_string_codepoints("abc")
+      #=> {:ok, ["97", "98", "99"], "", 1, 4}
+  """
+  @spec map(t, t, call) :: t
+  def map(combinator \\ empty(), to_map, call)
+      when is_combinator(combinator) and is_combinator(to_map) and is_tuple(call) do
+    to_map = reverse_combinators!(to_map, "map")
+    var = Macro.var(:var, __MODULE__)
+    call = compile_call!(var, call, "map")
+
+    runtime_traverse(combinator, to_map, fn arg ->
+      quote do
+        Enum.map(unquote(arg), fn unquote(var) -> unquote(call) end)
+      end
+    end)
+  end
+
+  @doc ~S"""
+  Reduces over the combinator results with the remote or local function in `call`.
+
+  `call` is either a `{module, function, args}` representing
+  a remote call or `{function, args}` representing a local call.
+
+  The parser results to be reduced will be prepended to the
+  given `args`. The `args` will be injected at the compile site
+  and therefore must be escapable via `Macro.escape/1`.
+
+  See `traverse/3` for a low level version of this function.
+
+  ## Examples
+
+      defmodule MyParser do
+        import NimbleParsec
+
+        defparsec :letters_to_reduced_codepoints,
+                  ascii_codepoint([?a..?z])
+                  |> ascii_codepoint([?a..?z])
+                  |> ascii_codepoint([?a..?z])
+                  |> reduce({Enum, :join, ["-"]})
+      end
+
+      MyParser.letters_to_reduced_codepoints("abc")
+      #=> {:ok, ["97-98-99"], "", 1, 4}
+  """
+  @spec reduce(t, t, call) :: t
+  def reduce(combinator \\ empty(), to_reduce, call)
+      when is_combinator(combinator) and is_combinator(to_reduce) and is_tuple(call) do
+    to_reduce = reverse_combinators!(to_reduce, "reduce")
+    compile_call!(:ok, call, "reduce")
+
+    runtime_traverse(combinator, to_reduce, fn arg ->
+      [compile_call!(quote(do: :lists.reverse(unquote(arg))), call, "reduce")]
+    end)
   end
 
   @doc ~S"""
