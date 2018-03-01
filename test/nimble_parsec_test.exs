@@ -114,37 +114,72 @@ defmodule NimbleParsecTest do
     end
   end
 
-  describe "traverse/5 combinator" do
+  describe "remote traverse/3 combinator" do
     @three_ascii_letters ascii_codepoint([?a..?z])
                          |> ascii_codepoint([?a..?z])
                          |> ascii_codepoint([?a..?z])
 
-    defparsec :traverse_codepoints,
+    defparsec :remote_traverse,
               literal("T")
               |> integer(2, 2)
-              |> traverse(@three_ascii_letters, __MODULE__, :public_join_and_wrap, ["-"])
+              |> traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]})
               |> integer(2, 2)
 
     test "returns ok/error" do
-      assert traverse_codepoints("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", 1, 9}
+      assert remote_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", 1, 9}
 
       error = "expected a literal \"T\", followed by a 2 digits integer"
-      assert traverse_codepoints("Tabc34") == {:error, error, "Tabc34", 1, 1}
+      assert remote_traverse("Tabc34") == {:error, error, "Tabc34", 1, 1}
 
       error = "expected a 2 digits integer"
-      assert traverse_codepoints("T12abcdf") == {:error, error, "df", 1, 7}
+      assert remote_traverse("T12abcdf") == {:error, error, "df", 1, 7}
 
       error =
         "expected a byte in the range ?a..?z, followed by a byte in the range ?a..?z, followed by a byte in the range ?a..?z"
 
-      assert traverse_codepoints("T12ab34") == {:error, error, "ab34", 1, 4}
+      assert remote_traverse("T12ab34") == {:error, error, "ab34", 1, 4}
     end
 
     test "is not bound" do
-      assert not_bound?(traverse(@three_ascii_letters, __MODULE__, :public_join_and_wrap, ["-"]))
+      assert not_bound?(traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]}))
     end
 
     def public_join_and_wrap(args, joiner) do
+      args |> Enum.join(joiner) |> List.wrap()
+    end
+  end
+
+  describe "local traverse/3 combinator" do
+    @three_ascii_letters ascii_codepoint([?a..?z])
+                         |> ascii_codepoint([?a..?z])
+                         |> ascii_codepoint([?a..?z])
+
+    defparsec :local_traverse,
+              literal("T")
+              |> integer(2, 2)
+              |> traverse(@three_ascii_letters, {:private_join_and_wrap, ["-"]})
+              |> integer(2, 2)
+
+    test "returns ok/error" do
+      assert local_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", 1, 9}
+
+      error = "expected a literal \"T\", followed by a 2 digits integer"
+      assert local_traverse("Tabc34") == {:error, error, "Tabc34", 1, 1}
+
+      error = "expected a 2 digits integer"
+      assert local_traverse("T12abcdf") == {:error, error, "df", 1, 7}
+
+      error =
+        "expected a byte in the range ?a..?z, followed by a byte in the range ?a..?z, followed by a byte in the range ?a..?z"
+
+      assert local_traverse("T12ab34") == {:error, error, "ab34", 1, 4}
+    end
+
+    test "is not bound" do
+      assert not_bound?(traverse(@three_ascii_letters, {:public_join_and_wrap, ["-"]}))
+    end
+
+    defp private_join_and_wrap(args, joiner) do
       args |> Enum.join(joiner) |> List.wrap()
     end
   end

@@ -34,6 +34,9 @@ defmodule NimbleParsec do
 
   @type t :: [combinator()]
   @type bit_modifiers :: [:signed | :unsigned | :native | :little | :big]
+  @type call ::
+          {module :: atom(), function :: atom(), args :: [term]}
+          | {function :: atom(), args :: [term]}
 
   # Steps to add a new bound combinator:
   #
@@ -169,7 +172,7 @@ defmodule NimbleParsec do
     []
   end
 
-  @doc """
+  @doc ~S"""
   Concatenates two combinators.
 
   ## Examples
@@ -192,9 +195,11 @@ defmodule NimbleParsec do
     right ++ left
   end
 
-  @doc """
-  Traverses the combinator results with the given `module`,
-  `fun` and `args`.
+  @doc ~S"""
+  Traverses the combinator results with the `call`.
+
+  `call` is either a `{module, function, args}` representing
+  a remote call or `{function, args}` representing a local call.
 
   The parser results to be traversed will be prepended to the
   given `args`. The `args` will be injected at the compile site
@@ -208,26 +213,37 @@ defmodule NimbleParsec do
 
   This is a low-level function for changing the parsed result.
   On top of this function, other functions are built, such as
-  `map/5` (and `map/4`) if you want to map over each individual
-  element and not worry about ordering, `join/5` (and `join/4`)
-  to convert all elements into a single one, `replace/3` if you
-  want to replace the parsed result by a single value and `ignore/3`
-  if you want to ignore the parsed result.
+  `map/3` if you want to map over each individual element and
+  not worry about ordering, `join/3` to convert all elements
+  into a single one, `replace/3` if you want to replace the
+  parsed result by a single value and `ignore/3` if you want to
+  ignore the parsed result.
 
-  See `traversal/4` for using a local function for traversal.
-  """
-  @spec traverse(t, t, module, atom, [term]) :: t
-  def traverse(combinator \\ empty(), to_traverse, module, fun, args)
-      when is_combinator(combinator) and is_combinator(to_traverse) and is_atom(module) and
-             is_atom(fun) and is_list(args) do
-    to_traverse = reverse_combinators!(to_traverse, "traverse")
-    args = Macro.escape(args)
+  ## Examples
 
-    traverse(combinator, to_traverse, fn arg ->
-      quote do
-        unquote(module).unquote(fun)(unquote(arg), unquote_splicing(args))
+      defmodule MyParser do
+        import NimbleParsec
+
+        defparsec :letters_to_codepoints,
+                  ascii_codepoint([?a..?z])
+                  |> ascii_codepoint([?a..?z])
+                  |> ascii_codepoint([?a..?z])
+                  |> traverse({:join_and_wrap, ["-"]})
+
+        defp join_and_wrap(args, joiner) do
+          args |> Enum.join(joiner) |> List.wrap()
+        end
       end
-    end)
+
+      MyParser.letters_to_codepoints("abc")
+      #=> {:ok, ["99-98-97"], "", 1, 4}
+  """
+  @spec traverse(t, t, call) :: t
+  def traverse(combinator \\ empty(), to_traverse, call)
+      when is_combinator(combinator) and is_combinator(to_traverse) and is_tuple(call) do
+    to_traverse = reverse_combinators!(to_traverse, "traverse")
+    compile_call!(:ok, call, "traverse")
+    runtime_traverse(combinator, to_traverse, &compile_call!(&1, call, "traverse"))
   end
 
   @doc ~S"""
@@ -280,7 +296,7 @@ defmodule NimbleParsec do
 
   # A runtime traverse. Notice the `to_traverse` inside the
   # combinator is already expected to be reversed.
-  defp traverse(combinator, to_traverse, traversal) when is_function(traversal, 1) do
+  defp runtime_traverse(combinator, to_traverse, traversal) when is_function(traversal, 1) do
     [{:traverse, to_traverse, traversal} | combinator]
   end
 
@@ -292,12 +308,7 @@ defmodule NimbleParsec do
   #
   # Notice the `to_traverse` inside the combinator is already
   # expected to be reversed.
-  defp compile_traverse(
-         combinator,
-         to_traverse,
-         compile_fun,
-         runtime_fun \\ &must_never_be_invoked/1
-       ) do
+  defp compile_traverse(combinator, to_traverse, compile_fun, runtime_fun \\ &always_raise!/1) do
     [{:compile_traverse, to_traverse, compile_fun, runtime_fun} | combinator]
   end
 
@@ -315,7 +326,24 @@ defmodule NimbleParsec do
     Enum.reverse(combinators)
   end
 
-  defp must_never_be_invoked(_) do
+  defp compile_call!(arg, {module, function, args}, _context)
+       when is_atom(module) and is_atom(function) and is_list(args) do
+    quote do
+      unquote(module).unquote(function)(unquote(arg), unquote_splicing(Macro.escape(args)))
+    end
+  end
+
+  defp compile_call!(arg, {function, args}, _context) when is_atom(function) and is_list(args) do
+    quote do
+      unquote(function)(unquote(arg), unquote_splicing(Macro.escape(args)))
+    end
+  end
+
+  defp compile_call!(_arg, unknown, context) do
+    raise ArgumentError, "unknown call given to #{context}, got: #{inspect(unknown)}"
+  end
+
+  defp always_raise!(_) do
     raise "this function must never be invoked"
   end
 end
