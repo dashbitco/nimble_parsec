@@ -6,6 +6,7 @@ defmodule NimbleParsec.Compiler do
   end
 
   def compile(name, combinators, _opts) when is_list(combinators) do
+    # TODO: Remove step out of config
     config = %{
       name: name,
       step: 0
@@ -28,17 +29,18 @@ defmodule NimbleParsec.Compiler do
   end
 
   defp compile(combinators, defs, current, config) do
-    {combinators, {match_def, catch_all_def, next, config}} =
+    {next_combinators, used_combinators, {match_def, next, config}} =
       case take_bound_combinators(combinators) do
-        {[combinator | combinators], [], [], [], [], _} ->
-          {combinators, compile_unbound_combinator(combinator, current, config)}
+        {[combinator | combinators], [], [], [], [], [], _} ->
+          {combinators, [combinator], compile_unbound_combinator(combinator, current, config)}
 
-        {combinators, inputs, guards, outputs, cursors, _} ->
-          {combinators,
+        {combinators, inputs, guards, outputs, cursors, acc, _} ->
+          {combinators, Enum.reverse(acc),
            compile_bound_combinator(inputs, guards, outputs, cursors, current, config)}
       end
 
-    compile(combinators, [match_def, catch_all_def | defs], next, config)
+    catch_all_def = build_catch_all(current, error_reason(used_combinators))
+    compile(next_combinators, [match_def, catch_all_def | defs], next, config)
   end
 
   ## Unbound combinators
@@ -63,8 +65,7 @@ defmodule NimbleParsec.Compiler do
 
     arg = {:<<>>, [], inputs ++ [quote(do: rest :: binary)]}
     match_def = build_def(current, arg, guards, body)
-    catch_all_def = build_catch_all(current)
-    {match_def, catch_all_def, next, config}
+    {match_def, next, config}
   end
 
   defp apply_cursors([{:column, new_column} | cursors], line, column, column_reset?) do
@@ -94,10 +95,10 @@ defmodule NimbleParsec.Compiler do
   end
 
   defp take_bound_combinators(combinators) do
-    take_bound_combinators(combinators, [], [], [], [], 0)
+    take_bound_combinators(combinators, [], [], [], [], [], 0)
   end
 
-  defp take_bound_combinators(combinators, inputs, guards, outputs, cursors, counter) do
+  defp take_bound_combinators(combinators, inputs, guards, outputs, cursors, acc, counter) do
     with [combinator | combinators] <- combinators,
          {:ok, new_inputs, new_guards, new_outputs, new_cursors, new_counter} <-
            bound_combinator(combinator, counter) do
@@ -107,17 +108,18 @@ defmodule NimbleParsec.Compiler do
         guards ++ new_guards,
         new_outputs ++ outputs,
         cursors ++ new_cursors,
+        [combinator | acc],
         new_counter
       )
     else
       _ ->
-        {combinators, inputs, guards, outputs, cursors, counter}
+        {combinators, inputs, guards, outputs, cursors, acc, counter}
     end
   end
 
   defp bound_combinator({:compile_map, combinators, compile_fun, _runtime_fun}, counter) do
-    case take_bound_combinators(combinators, [], [], [], [], counter) do
-      {[], inputs, guards, outputs, cursors, counter} ->
+    case take_bound_combinators(combinators, [], [], [], [], [], counter) do
+      {[], inputs, guards, outputs, cursors, _, counter} ->
         outputs = outputs |> Enum.reverse() |> compile_fun.() |> Enum.reverse()
         {:ok, inputs, guards, outputs, cursors, counter}
 
@@ -128,24 +130,14 @@ defmodule NimbleParsec.Compiler do
 
   defp bound_combinator({:compile_bit_integer, ranges, modifiers}, counter) do
     {var, counter} = build_var(counter)
-
-    input =
-      case modifiers do
-        [] -> var
-        _ -> {:::, [], [var, Enum.reduce(modifiers, &{:-, [], [&2, &1]})]}
-      end
-
-    guards =
-      for min..max <- ranges do
-        quote(do: unquote(var) >= unquote(min) and unquote(var) <= unquote(max))
-      end
-
+    input = apply_bit_modifiers(var, modifiers)
+    guards = ranges_to_guards(var, ranges)
     {:ok, [input], guards, [var], [{:column, 1}], counter}
   end
 
-  defp bound_combinator({:literal, combinator}, counter) do
+  defp bound_combinator({:literal, binary}, counter) do
     cursor =
-      case String.split(combinator, "\n") do
+      case String.split(binary, "\n") do
         [single] ->
           {:column, String.length(single)}
 
@@ -154,14 +146,71 @@ defmodule NimbleParsec.Compiler do
           {:line, length(many) - 1, column + 1}
       end
 
-    {:ok, [combinator], [], [combinator], [cursor], counter}
+    {:ok, [binary], [], [binary], [cursor], counter}
   end
 
   defp bound_combinator(_, _counter) do
     :error
   end
 
+  ## Label and error handling
+
+  defp error_reason(combinators) do
+    "expected " <> labels(combinators)
+  end
+
+  defp labels(combinators) do
+    Enum.map_join(combinators, ", followed by ", &label/1)
+  end
+
+  defp label({:literal, binary}) do
+    "a literal #{inspect(binary)}"
+  end
+
+  defp label({:compile_bit_integer, [], _modifiers}) do
+    "a byte"
+  end
+
+  defp label({:compile_bit_integer, ranges, _modifiers}) do
+    inspected = Enum.map_join(ranges, ", ", &inspect_byte_range/1)
+    "a byte in the #{pluralize(length(ranges), "range", "ranges")} #{inspected}"
+  end
+
+  defp label({:compile_map, combinators, _, _}) do
+    labels(combinators)
+  end
+
+  defp inspect_byte_range(min..max) do
+    if ascii?(min) and ascii?(max) do
+      <<??, min, ?., ?., ??, max>>
+    else
+      "#{Integer.to_string(min)}..#{Integer.to_string(max)}"
+    end
+  end
+
+  defp ascii?(char), do: char >= 32 and char <= 126
+
+  defp pluralize(1, singular, _plural), do: singular
+  defp pluralize(_, _singular, plural), do: plural
+
   ## Helpers
+
+  defp ranges_to_guards(var, ranges) do
+    for min..max <- ranges do
+      cond do
+        min < max -> quote(do: unquote(var) >= unquote(min) and unquote(var) <= unquote(max))
+        min > max -> quote(do: unquote(var) >= unquote(max) and unquote(var) <= unquote(min))
+        true -> quote(do: unquote(var) === unquote(min))
+      end
+    end
+  end
+
+  defp apply_bit_modifiers(expr, modifiers) do
+    case modifiers do
+      [] -> expr
+      _ -> {:::, [], [expr, Enum.reduce(modifiers, &{:-, [], [&2, &1]})]}
+    end
+  end
 
   defp build_next(%{name: name, step: step} = config) do
     {:"#{name}__#{step}", %{config | step: step + 1}}
@@ -183,9 +232,9 @@ defmodule NimbleParsec.Compiler do
     {name, args, guards, body}
   end
 
-  defp build_catch_all(name) do
+  defp build_catch_all(name, reason) do
     args = quote(do: [rest, acc, line, column])
-    body = quote(do: {:error, rest, line, column})
+    body = quote(do: {:error, unquote(reason), rest, line, column})
     {name, args, true, body}
   end
 

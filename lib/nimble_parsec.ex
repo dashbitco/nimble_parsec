@@ -33,7 +33,7 @@ defmodule NimbleParsec do
   #
   #   1. Update the combinator type
   #   2. Update the compiler bound combinator step
-  #   3. Update the compiler description step
+  #   3. Update the compiler label step
   #
   @type t :: [combinator()]
   @type bit_modifiers :: [:signed | :unsigned | :native | :little | :big]
