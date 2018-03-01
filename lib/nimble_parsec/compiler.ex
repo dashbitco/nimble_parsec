@@ -6,20 +6,18 @@ defmodule NimbleParsec.Compiler do
   end
 
   def compile(name, combinators, _opts) when is_list(combinators) do
-    # TODO: Remove step out of config
     config = %{
-      name: name,
-      step: 0
+      name: name
     }
 
-    {next, config} = build_next(config)
+    {next, step} = build_next(0, config)
 
     combinators
     |> Enum.reverse()
-    |> compile([], next, config)
+    |> compile([], next, step, config)
   end
 
-  defp compile([], defs, current, _config) do
+  defp compile([], defs, current, _step, _config) do
     # TODO: Allow OK to be customized via config.
     # TODO: Allow ERROR to be customized via config.
     body =
@@ -28,24 +26,24 @@ defmodule NimbleParsec.Compiler do
     [build_def(current, quote(do: rest), [], body) | defs]
   end
 
-  defp compile(combinators, defs, current, config) do
-    {next_combinators, used_combinators, {match_def, next, config}} =
+  defp compile(combinators, defs, current, step, config) do
+    {next_combinators, used_combinators, {match_def, next, step}} =
       case take_bound_combinators(combinators) do
         {[combinator | combinators], [], [], [], [], [], _} ->
-          {combinators, [combinator], compile_unbound_combinator(combinator, current, config)}
+          {combinators, [combinator], compile_unbound_combinator(combinator, current, step, config)}
 
         {combinators, inputs, guards, outputs, cursors, acc, _} ->
           {combinators, Enum.reverse(acc),
-           compile_bound_combinator(inputs, guards, outputs, cursors, current, config)}
+           compile_bound_combinator(inputs, guards, outputs, cursors, current, step, config)}
       end
 
     catch_all_def = build_catch_all(current, error_reason(used_combinators))
-    compile(next_combinators, [match_def, catch_all_def | defs], next, config)
+    compile(next_combinators, [match_def, catch_all_def | defs], next, step, config)
   end
 
   ## Unbound combinators
 
-  defp compile_unbound_combinator(combinator, _defs, _current) do
+  defp compile_unbound_combinator(combinator, _defs, _step, _current) do
     raise "TODO: #{inspect(combinator)} not yet compilable"
   end
 
@@ -57,15 +55,15 @@ defmodule NimbleParsec.Compiler do
   # reporting will accuse the beginning of the bound combinator in case of errors
   # but such can be addressed if desired.
 
-  defp compile_bound_combinator(inputs, guards, outputs, cursors, current, config) do
-    {next, config} = build_next(config)
+  defp compile_bound_combinator(inputs, guards, outputs, cursors, current, step, config) do
+    {next, step} = build_next(step, config)
     acc = quote(do: unquote(outputs) ++ combinator__acc)
     {line, column} = apply_cursors(cursors, 0, 0, false)
     body = invoke_next(next, quote(do: rest), acc, line, column)
 
     arg = {:<<>>, [], inputs ++ [quote(do: rest :: binary)]}
     match_def = build_def(current, arg, guards, body)
-    {match_def, next, config}
+    {match_def, next, step}
   end
 
   defp apply_cursors([{:column, new_column} | cursors], line, column, column_reset?) do
@@ -212,8 +210,8 @@ defmodule NimbleParsec.Compiler do
     end
   end
 
-  defp build_next(%{name: name, step: step} = config) do
-    {:"#{name}__#{step}", %{config | step: step + 1}}
+  defp build_next(step, %{name: name}) do
+    {:"#{name}__#{step}", step + 1}
   end
 
   defp invoke_next(next, rest, acc, line, column) do

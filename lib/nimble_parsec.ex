@@ -3,7 +3,7 @@
 # TODO: integer()
 # TODO: many()
 # TODO: choice()
-# TODO: Good error messages / labels
+# TODO: Labels
 # TODO: Docs
 
 defmodule NimbleParsec do
