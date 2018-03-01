@@ -115,10 +115,23 @@ defmodule NimbleParsec.Compiler do
     end
   end
 
-  defp bound_combinator({:compile_map, combinators, compile_fun, _runtime_fun}, counter) do
+  defp bound_combinator({:literal, binary}, counter) do
+    cursor =
+      case String.split(binary, "\n") do
+        [single] ->
+          {:column, String.length(single)}
+
+        [_ | _] = many ->
+          column = many |> List.last() |> String.length()
+          {:line, length(many) - 1, column + 1}
+      end
+
+    {:ok, [binary], [], [binary], [cursor], counter}
+  end
+
+  defp bound_combinator({:label, combinators, _labels}, counter) do
     case take_bound_combinators(combinators, [], [], [], [], [], counter) do
       {[], inputs, guards, outputs, cursors, _, counter} ->
-        outputs = outputs |> Enum.reverse() |> compile_fun.() |> Enum.reverse()
         {:ok, inputs, guards, outputs, cursors, counter}
 
       {_, _, _, _, _, _} ->
@@ -133,18 +146,14 @@ defmodule NimbleParsec.Compiler do
     {:ok, [input], guards, [var], [{:column, 1}], counter}
   end
 
-  defp bound_combinator({:literal, binary}, counter) do
-    cursor =
-      case String.split(binary, "\n") do
-        [single] ->
-          {:column, String.length(single)}
+  defp bound_combinator({:compile_map, combinators, compile_fun, _runtime_fun}, counter) do
+    case take_bound_combinators(combinators, [], [], [], [], [], counter) do
+      {[], inputs, guards, outputs, cursors, _, counter} ->
+        {:ok, inputs, guards, compile_fun.(outputs), cursors, counter}
 
-        [_ | _] = many ->
-          column = many |> List.last() |> String.length()
-          {:line, length(many) - 1, column + 1}
-      end
-
-    {:ok, [binary], [], [binary], [cursor], counter}
+      {_, _, _, _, _, _} ->
+        :error
+    end
   end
 
   defp bound_combinator(_, _counter) do
@@ -163,6 +172,10 @@ defmodule NimbleParsec.Compiler do
 
   defp label({:literal, binary}) do
     "a literal #{inspect(binary)}"
+  end
+
+  defp label({:label, _document, label}) do
+    label
   end
 
   defp label({:compile_bit_integer, [], _modifiers}) do

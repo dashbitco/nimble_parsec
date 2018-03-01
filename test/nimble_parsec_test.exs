@@ -24,7 +24,7 @@ defmodule NimbleParsecTest do
     defparsec(:only_integer, integer(2, 2))
     defparsec(:prefixed_integer, literal("T") |> integer(2, 2))
 
-    @error "expected a byte in the range ?0..?9, followed by a byte in the range ?0..?9"
+    @error "expected a 2 digits integer"
 
     test "returns ok/error by itself" do
       assert only_integer("12") == {:ok, [12], "", 1, 3}
@@ -32,7 +32,7 @@ defmodule NimbleParsecTest do
       assert only_integer("1a3") == {:error, @error, "1a3", 1, 1}
     end
 
-    @error "expected a literal \"T\", followed by a byte in the range ?0..?9, followed by a byte in the range ?0..?9"
+    @error "expected a literal \"T\", followed by a 2 digits integer"
 
     test "returns ok/error with previous document" do
       assert prefixed_integer("T12") == {:ok, ["T", 12], "", 1, 4}
@@ -42,6 +42,7 @@ defmodule NimbleParsecTest do
 
     test "is bound" do
       assert bound?(integer(2, 2))
+      assert bound?(literal("T") |> integer(2, 2))
       assert bound?(literal("T") |> integer(2, 2) |> literal("E"))
     end
   end
@@ -89,6 +90,29 @@ defmodule NimbleParsecTest do
 
     test "is bound" do
       assert bound?(ignore(literal("T")))
+    end
+  end
+
+  describe "label/2 combinator at compile time" do
+    defparsec(:only_label, label(literal("TO"), "a label"))
+    defparsec(:only_label_with_newline, label(literal("T\nO"), "a label"))
+
+    test "returns ok/error" do
+      assert only_label("TO") == {:ok, ["TO"], "", 1, 3}
+      assert only_label("TOC") == {:ok, ["TO"], "C", 1, 3}
+      assert only_label("AO") == {:error, "expected a label", "AO", 1, 1}
+    end
+
+    test "properly counts newlines" do
+      assert only_label_with_newline("T\nO") == {:ok, ["T\nO"], "", 2, 2}
+      assert only_label_with_newline("T\nOC") == {:ok, ["T\nO"], "C", 2, 2}
+
+      assert only_label_with_newline("A\nO") ==
+               {:error, "expected a label", "A\nO", 1, 1}
+    end
+
+    test "is bound" do
+      assert bound?(label(literal("T"), "a label"))
     end
   end
 

@@ -3,7 +3,6 @@
 # TODO: integer()
 # TODO: many()
 # TODO: choice()
-# TODO: Labels
 # TODO: Docs
 
 defmodule NimbleParsec do
@@ -40,10 +39,11 @@ defmodule NimbleParsec do
 
   @typep combinator ::
            {:literal, binary}
-           | {:compile_bit_integer, [Range.t], bit_modifiers}
-           | {:compile_map, t, (Macro.t -> Macro.t), (term -> term)}
+           | {:label, t, binary}
+           | {:compile_bit_integer, [Range.t()], bit_modifiers}
+           | {:compile_map, t, (Macro.t() -> Macro.t()), (term -> term)}
 
-  @doc """
+  @doc ~S"""
   Returns an empty combinator.
 
   An empty combinator cannot be compiled on its own.
@@ -52,12 +52,14 @@ defmodule NimbleParsec do
     []
   end
 
-  @doc """
+  @doc ~S"""
   Defines a single ascii codepoint in the given ranges.
 
   ## Examples
 
       defmodule MyParser do
+        import NimbleParsec
+
         defparsec :digit_and_lowercase,
                   empty()
                   |> ascii_codepoint([?0..?9])
@@ -68,7 +70,7 @@ defmodule NimbleParsec do
       #=> {:ok, [?1, ?a], "", 1, 3}
 
       MyParser.digit_and_lowercase("a1")
-      #=> {:error, "a1", 1, 1}
+      #=> {:error, "expected a byte in the range ?0..?9, followed by a byte in the range ?a..?z", "a1", 1, 1}
 
   """
   def ascii_codepoint(combinator \\ empty(), ranges) do
@@ -81,12 +83,42 @@ defmodule NimbleParsec do
     end
   end
 
-  @doc """
+  @doc ~S"""
+  Adds a label to the combinator to be used in error reports.
+
+  ## Examples
+
+      defmodule MyParser do
+        import NimbleParsec
+
+        defparsec :digit_and_lowercase,
+                  empty()
+                  |> ascii_codepoint([?0..?9])
+                  |> ascii_codepoint([?a..?z])
+                  |> label("a digit followed by lowercase letter")
+      end
+
+      MyParser.digit_and_lowercase("1a")
+      #=> {:ok, [?1, ?a], "", 1, 3}
+
+      MyParser.digit_and_lowercase("a1")
+      #=> {:error, "expected a digit followed by lowercase letter", "a1", 1, 1}
+
+  """
+  def label(combinator \\ empty(), to_label, label)
+      when is_combinator(combinator) and is_combinator(to_label) and is_binary(label) do
+    to_label = reverse_combinators!(to_label, "label")
+    [{:label, to_label, label} | combinator]
+  end
+
+  @doc ~S"""
   Defines an integer combinator with `min` and `max` length.
 
   ## Examples
 
       defmodule MyParser do
+        import NimbleParsec
+
         defparsec :two_digits_integer, integer(2, 2)
       end
 
@@ -94,7 +126,7 @@ defmodule NimbleParsec do
       #=> {:ok, [12], "3", 1, 3}
 
       MyParser.two_digits_integer("1a3")
-      #=> {:error, "1a3", 1, 1}
+      #=> {:error, "expected a two digits integer", "1a3", 1, 1}
 
   """
   def integer(combinator \\ empty(), min, max)
@@ -106,7 +138,8 @@ defmodule NimbleParsec do
         compile_bit_integer(acc, [?0..?9], [])
       end)
 
-    compile_map(combinator, integer, &from_ascii_to_integer/1)
+    mapped = compile_map(empty(), integer, &from_ascii_to_integer/1)
+    label(combinator, mapped, "a #{size} digits integer")
   end
 
   def integer(combinator, min, max)
@@ -118,7 +151,6 @@ defmodule NimbleParsec do
 
   defp from_ascii_to_integer(vars) do
     vars
-    |> Enum.reverse()
     |> from_ascii_to_integer(1)
     |> Enum.reduce(&{:+, [], [&2, &1]})
     |> List.wrap()
@@ -132,12 +164,14 @@ defmodule NimbleParsec do
     []
   end
 
-  @doc """
+  @doc ~S"""
   Defines a literal binary value.
 
   ## Examples
 
       defmodule MyParser do
+        import NimbleParsec
+
         defparsec :literal_t, literal("T")
       end
 
@@ -145,7 +179,7 @@ defmodule NimbleParsec do
       #=> {:ok, ["T"], "", 1, 2}
 
       MyParser.literal_t("not T")
-      #=> {:error, "not T", 1, 1}
+      #=> {:error, "expected a literal \"T\"", "not T", 1, 1}
 
   """
   def literal(combinator \\ empty(), binary)
@@ -159,6 +193,8 @@ defmodule NimbleParsec do
   ## Examples
 
       defmodule MyParser do
+        import NimbleParsec
+
         defparsec :ignorable, literal("T") |> ignore() |> integer(2, 2)
       end
 
@@ -168,18 +204,20 @@ defmodule NimbleParsec do
   """
   def ignore(combinator \\ empty(), to_ignore)
 
-  def ignore(_combinator, []) do
-    raise ArgumentError, "cannot ignore an empty document"
-  end
-
   def ignore(combinator, to_ignore) when is_combinator(combinator) and is_combinator(to_ignore) do
+    to_ignore = reverse_combinators!(to_ignore, "ignore")
     # TODO: Define the runtime behaviour.
     compile_map(combinator, to_ignore, fn _ -> [] end)
   end
 
   # A compile map may or may not be expanded at runtime as
   # it depends if `to_map` is also bound. For this reason,
-  # some operators may pass a runtime_fun/1.
+  # some operators may pass a runtime_fun/1. If one is not
+  # passed, it is assumed that the behaviour is guaranteed
+  # to be bound.
+  #
+  # Notice the `to_map` inside the document is already
+  # expected to be reversed.
   defp compile_map(combinator, to_map, compile_fun, runtime_fun \\ &must_never_be_invoked/1) do
     [{:compile_map, to_map, compile_fun, runtime_fun} | combinator]
   end
@@ -188,6 +226,14 @@ defmodule NimbleParsec do
   # and is always bound.
   defp compile_bit_integer(combinator, [_ | _] = ranges, modifiers) do
     [{:compile_bit_integer, ranges, modifiers} | combinator]
+  end
+
+  defp reverse_combinators!([], action) do
+    raise ArgumentError, "cannot #{action} empty combinator"
+  end
+
+  defp reverse_combinators!(combinators, _action) do
+    Enum.reverse(combinators)
   end
 
   defp must_never_be_invoked(_) do
