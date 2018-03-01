@@ -4,6 +4,19 @@ defmodule NimbleParsecTest do
   import NimbleParsec
   doctest NimbleParsec
 
+  describe "ascii_codepoint/2 combinator without newlines" do
+    defparsec :only_ascii_codepoints, ascii_codepoint([?0..?9]) |> ascii_codepoint([?a..?z])
+
+    test "returns ok/error" do
+      assert only_ascii_codepoints("1a") == {:ok, [?1, ?a], "", 1, 3}
+      assert only_ascii_codepoints("a1") == {:error, "a1", 1, 1}
+    end
+
+    test "is bound" do
+      assert bound?(ascii_codepoint([?0..?9]) |> ascii_codepoint([?a..?z]))
+    end
+  end
+
   describe "integer/3 combinator with min=max" do
     defparsec :only_integer, integer(2, 2)
     defparsec :prefixed_integer, literal("T") |> integer(2, 2)
@@ -30,7 +43,7 @@ defmodule NimbleParsecTest do
     defparsec :only_literal, literal("TO")
     defparsec :only_literal_with_newline, literal("T\nO")
 
-    test "returns ok/error by itself" do
+    test "returns ok/error" do
       assert only_literal("TO") == {:ok, ["TO"], "", 1, 3}
       assert only_literal("TOC") == {:ok, ["TO"], "C", 1, 3}
       assert only_literal("AO") == {:error, "AO", 1, 1}
@@ -40,6 +53,31 @@ defmodule NimbleParsecTest do
       assert only_literal_with_newline("T\nO") == {:ok, ["T\nO"], "", 2, 2}
       assert only_literal_with_newline("T\nOC") == {:ok, ["T\nO"], "C", 2, 2}
       assert only_literal_with_newline("A\nO") == {:error, "A\nO", 1, 1}
+    end
+
+    test "is bound" do
+      assert bound?(literal("T"))
+    end
+  end
+
+  describe "ignore/2 combinator at compile time" do
+    defparsec :only_ignore, ignore(literal("TO"))
+    defparsec :only_ignore_with_newline, ignore(literal("T\nO"))
+
+    test "returns ok/error" do
+      assert only_ignore("TO") == {:ok, [], "", 1, 3}
+      assert only_ignore("TOC") == {:ok, [], "C", 1, 3}
+      assert only_ignore("AO") == {:error, "AO", 1, 1}
+    end
+
+    test "properly counts newlines" do
+      assert only_ignore_with_newline("T\nO") == {:ok, [], "", 2, 2}
+      assert only_ignore_with_newline("T\nOC") == {:ok, [], "C", 2, 2}
+      assert only_ignore_with_newline("A\nO") == {:error, "A\nO", 1, 1}
+    end
+
+    test "is bound" do
+      assert bound?(ignore(literal("T")))
     end
   end
 

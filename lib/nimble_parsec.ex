@@ -54,6 +54,22 @@ defmodule NimbleParsec do
 
   @doc """
   Defines a single ascii codepoint in the given ranges.
+
+  ## Examples
+
+      defmodule MyParser do
+        defparsec :digit_and_lowercase,
+                  empty()
+                  |> ascii_codepoint([?0..?9])
+                  |> ascii_codepoint([?a..?z])
+      end
+
+      MyParser.digit_and_lowercase("1a")
+      #=> {:ok, [?1, ?a], "", 1, 3}
+
+      MyParser.digit_and_lowercase("a1")
+      #=> {:error, "a1", 1, 1}
+
   """
   def ascii_codepoint(combinator \\ empty(), ranges) do
     if ranges == [] or Enum.any?(ranges, &(?\n in &1)) do
