@@ -93,7 +93,7 @@ defmodule NimbleParsecTest do
     end
   end
 
-  describe "label/2 combinator at compile time" do
+  describe "label/3 combinator at compile time" do
     defparsec :only_label, label(literal("TO"), "label")
     defparsec :only_label_with_newline, label(literal("T\nO"), "label")
 
@@ -111,6 +111,32 @@ defmodule NimbleParsecTest do
 
     test "is bound" do
       assert bound?(label(literal("T"), "label"))
+    end
+  end
+
+  describe "label/3 combinator at runtime" do
+    defparsec :runtime_label,
+              label(ascii_codepoint([?a..?z]), "first label")
+              |> label(ascii_codepoint([?a..?z]) |> map({:to_string, []}), "second label")
+              |> ascii_codepoint([?a..?z])
+              |> map({:to_string, []})
+              |> label("third label")
+
+    test "returns ok/error" do
+      assert runtime_label("abc") == {:ok, ["97", "98", "99"], "", 1, 4}
+
+      error = "expected third label"
+      assert runtime_label("1bc") == {:error, error, "1bc", 1, 1}
+
+      error = "expected second label while processing third label"
+      assert runtime_label("a1c") == {:error, error, "1c", 1, 2}
+
+      error = "expected third label"
+      assert runtime_label("ab1") == {:error, error, "1", 1, 3}
+    end
+
+    test "is not bound" do
+      assert not_bound?(ascii_codepoint([?a..?z]) |> map({:to_string, []}) |> label("label"))
     end
   end
 

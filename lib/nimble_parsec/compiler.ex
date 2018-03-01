@@ -227,8 +227,12 @@ defmodule NimbleParsec.Compiler do
     "expected " <> labels(combinators)
   end
 
-  defp error_reason(combinators, %{labels: labels}) do
-    "error while processing #{Enum.join(labels, " inside ")}. Expected " <> labels(combinators)
+  defp error_reason(_combinators, %{labels: [head]}) do
+    "expected #{head}"
+  end
+
+  defp error_reason(_combinators, %{labels: [head | tail]}) do
+    "expected #{head} while processing #{Enum.join(tail, " inside ")}"
   end
 
   defp labels(combinators) do
