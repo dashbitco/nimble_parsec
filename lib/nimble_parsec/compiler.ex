@@ -1,5 +1,6 @@
 defmodule NimbleParsec.Compiler do
   @moduledoc false
+  @arity 5
 
   def compile(name, [], _opts) do
     raise ArgumentError, "cannot compile #{inspect(name)} with an empty parser combinator"
@@ -12,27 +13,29 @@ defmodule NimbleParsec.Compiler do
 
     {next, step} = build_next(0, config)
 
-    {defs, last, _step} =
+    {defs, inline, last, _step} =
       combinators
       |> Enum.reverse()
-      |> compile([], next, step, config)
+      |> compile([], [], next, step, config)
 
-    Enum.reverse([compile_ok(last) | defs])
+    {Enum.reverse([compile_ok(last) | defs]), [{last, @arity} | inline]}
   end
 
   defp compile_ok(current) do
     body =
-      quote(do: {:ok, Enum.reverse(combinator__acc), rest, combinator__line, combinator__column})
+      quote do
+        {:ok, :lists.reverse(combinator__acc), rest, combinator__line, combinator__column}
+      end
 
     build_def(current, quote(do: rest), [], body)
   end
 
-  defp compile([], defs, current, step, _config) do
-    {defs, current, step}
+  defp compile([], defs, inline, current, step, _config) do
+    {defs, inline, current, step}
   end
 
-  defp compile(combinators, defs, current, step, config) do
-    {next_combinators, used_combinators, {new_defs, next, step, catch_all}} =
+  defp compile(combinators, defs, inline, current, step, config) do
+    {next_combinators, used_combinators, {new_defs, new_inline, next, step, catch_all}} =
       case take_bound_combinators(combinators) do
         {[combinator | combinators], [], [], [], [], [], _} ->
           {combinators, [combinator],
@@ -50,7 +53,7 @@ defmodule NimbleParsec.Compiler do
       end
 
     defs = catch_all_defs ++ Enum.reverse(new_defs) ++ defs
-    compile(next_combinators, defs, next, step, config)
+    compile(next_combinators, defs, new_inline ++ inline, next, step, config)
   end
 
   ## Unbound combinators
@@ -69,8 +72,7 @@ defmodule NimbleParsec.Compiler do
     first_body = invoke_next(next, arg, call_acc, call_stack, line, column)
     first_def = build_def(current, arg, [], first_body)
 
-    {defs, last, step} =
-      compile(combinators, [first_def], next, step, config)
+    {defs, inline, last, step} = compile(combinators, [first_def], [], next, step, config)
 
     # No we need to traverse the accumulator with the user code and
     # concatenate with the previous accumulator at the top of the stack.
@@ -82,7 +84,8 @@ defmodule NimbleParsec.Compiler do
     last_body = invoke_next(next, arg, last_acc, last_stack, line, column)
     last_def = build_def(last, arg, [], last_body)
 
-    {Enum.reverse([last_def | defs]), next, step, :catch_none}
+    inline = [{current, @arity}, {last, @arity} | inline]
+    {Enum.reverse([last_def | defs]), inline, next, step, :catch_none}
   end
 
   defp compile_unbound_combinator(combinator, _current, _step, _config) do
@@ -106,7 +109,7 @@ defmodule NimbleParsec.Compiler do
     body = invoke_next(next, quote(do: rest), acc, quote(do: combinator__stack), line, column)
 
     match_def = build_def(current, arg, guards, body)
-    {[match_def], next, step, :catch_all}
+    {[match_def], [], next, step, :catch_all}
   end
 
   defp apply_cursors([{:column, new_column} | cursors], line, column, column_reset?) do

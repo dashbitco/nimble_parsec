@@ -1,9 +1,10 @@
-# TODO: map at runtime
 # TODO: runtime_composition()
 # TODO: integer()
 # TODO: many()
 # TODO: choice()
 # TODO: Docs
+# TODO: Other traversals
+# TODO: Private parsecs
 
 defmodule NimbleParsec do
   defmacrop is_combinator(combinator) do
@@ -18,7 +19,10 @@ defmodule NimbleParsec do
         unquote(:"#{name}__0")(binary, [], [], 1, 1)
       end
 
-      for {name, args, guards, body} <- NimbleParsec.Compiler.compile(name, combinator, opts) do
+      {defs, inline} = NimbleParsec.Compiler.compile(name, combinator, opts)
+      @compile {:inline, inline}
+
+      for {name, args, guards, body} <- defs do
         defp unquote(name)(unquote_splicing(args)) when unquote(guards), do: unquote(body)
 
         # IO.puts(Macro.to_string(quote do

@@ -184,14 +184,14 @@ defmodule NimbleParsecTest do
   end
 
   defp bound?(document) do
-    defs = NimbleParsec.Compiler.compile(:not_used, document, [])
+    {defs, _} = NimbleParsec.Compiler.compile(:not_used, document, [])
 
     assert length(defs) == 3,
            "Expected #{inspect(document)} to contain 3 clauses, got #{length(defs)}"
   end
 
   defp not_bound?(document) do
-    defs = NimbleParsec.Compiler.compile(:not_used, document, [])
+    {defs, _} = NimbleParsec.Compiler.compile(:not_used, document, [])
 
     assert length(defs) != 3, "Expected #{inspect(document)} to contain more than 3 clauses"
   end
