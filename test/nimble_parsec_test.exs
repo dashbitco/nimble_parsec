@@ -4,12 +4,12 @@ defmodule NimbleParsecTest do
   import NimbleParsec
   doctest NimbleParsec
 
-  describe "ascii_codepoint/2 combinator without newlines" do
-    defparsec :only_ascii, ascii_codepoint([?0..?9]) |> ascii_codepoint([])
-    defparsec :multi_ascii, ascii_codepoint([?0..?9, ?z..?a])
-    defparsec :multi_ascii_with_not, ascii_codepoint([?0..?9, ?z..?a, not: ?c])
-    defparsec :multi_ascii_with_multi_not, ascii_codepoint([?0..?9, ?z..?a, not: ?c, not: ?d..?e])
-    defparsec :ascii_newline, ascii_codepoint([?0..?9, ?\n]) |> ascii_codepoint([?a..?z, ?\n])
+  describe "ascii_char/2 combinator without newlines" do
+    defparsec :only_ascii, ascii_char([?0..?9]) |> ascii_char([])
+    defparsec :multi_ascii, ascii_char([?0..?9, ?z..?a])
+    defparsec :multi_ascii_with_not, ascii_char([?0..?9, ?z..?a, not: ?c])
+    defparsec :multi_ascii_with_multi_not, ascii_char([?0..?9, ?z..?a, not: ?c, not: ?d..?e])
+    defparsec :ascii_newline, ascii_char([?0..?9, ?\n]) |> ascii_char([?a..?z, ?\n])
 
     @error "expected byte in the range ?0..?9, followed by byte"
 
@@ -53,14 +53,14 @@ defmodule NimbleParsecTest do
     end
 
     test "is bound" do
-      assert bound?(ascii_codepoint([?0..?9]))
-      assert bound?(ascii_codepoint(not: ?\n))
+      assert bound?(ascii_char([?0..?9]))
+      assert bound?(ascii_char(not: ?\n))
     end
   end
 
-  describe "utf8_codepoint/2 combinator without newlines" do
-    defparsec :only_utf8, utf8_codepoint([?0..?9]) |> utf8_codepoint([])
-    defparsec :utf8_newline, utf8_codepoint([]) |> utf8_codepoint([?a..?z, ?\n])
+  describe "utf8_char/2 combinator without newlines" do
+    defparsec :only_utf8, utf8_char([?0..?9]) |> utf8_char([])
+    defparsec :utf8_newline, utf8_char([]) |> utf8_char([?a..?z, ?\n])
 
     @error "expected utf8 codepoint in the range ?0..?9, followed by utf8 codepoint"
 
@@ -80,8 +80,8 @@ defmodule NimbleParsecTest do
     end
 
     test "is bound" do
-      assert bound?(utf8_codepoint([?0..?9]))
-      assert bound?(utf8_codepoint(not: ?\n))
+      assert bound?(utf8_char([?0..?9]))
+      assert bound?(utf8_char(not: ?\n))
     end
   end
 
@@ -160,9 +160,9 @@ defmodule NimbleParsecTest do
 
   describe "ignore/2 combinator at runtime" do
     defparsec :runtime_ignore,
-              ascii_codepoint([?a..?z])
-              |> ascii_codepoint([?a..?z])
-              |> ascii_codepoint([?a..?z])
+              ascii_char([?a..?z])
+              |> ascii_char([?a..?z])
+              |> ascii_char([?a..?z])
               |> map({:to_string, []})
               |> ignore()
 
@@ -176,7 +176,7 @@ defmodule NimbleParsecTest do
     end
 
     test "is not bound" do
-      assert not_bound?(ascii_codepoint([?a..?z]) |> map({:to_string, []}) |> ignore())
+      assert not_bound?(ascii_char([?a..?z]) |> map({:to_string, []}) |> ignore())
     end
   end
 
@@ -205,9 +205,9 @@ defmodule NimbleParsecTest do
 
   describe "replace/2 combinator at runtime" do
     defparsec :runtime_replace,
-              ascii_codepoint([?a..?z])
-              |> ascii_codepoint([?a..?z])
-              |> ascii_codepoint([?a..?z])
+              ascii_char([?a..?z])
+              |> ascii_char([?a..?z])
+              |> ascii_char([?a..?z])
               |> map({:to_string, []})
               |> replace("OTHER")
 
@@ -221,7 +221,7 @@ defmodule NimbleParsecTest do
     end
 
     test "is not bound" do
-      assert not_bound?(ascii_codepoint([?a..?z]) |> map({:to_string, []}) |> replace("OTHER"))
+      assert not_bound?(ascii_char([?a..?z]) |> map({:to_string, []}) |> replace("OTHER"))
     end
   end
 
@@ -248,9 +248,9 @@ defmodule NimbleParsecTest do
 
   describe "label/3 combinator at runtime" do
     defparsec :runtime_label,
-              label(ascii_codepoint([?a..?z]), "first label")
-              |> label(ascii_codepoint([?a..?z]) |> map({:to_string, []}), "second label")
-              |> ascii_codepoint([?a..?z])
+              label(ascii_char([?a..?z]), "first label")
+              |> label(ascii_char([?a..?z]) |> map({:to_string, []}), "second label")
+              |> ascii_char([?a..?z])
               |> map({:to_string, []})
               |> label("third label")
 
@@ -268,14 +268,14 @@ defmodule NimbleParsecTest do
     end
 
     test "is not bound" do
-      assert not_bound?(ascii_codepoint([?a..?z]) |> map({:to_string, []}) |> label("label"))
+      assert not_bound?(ascii_char([?a..?z]) |> map({:to_string, []}) |> label("label"))
     end
   end
 
   describe "remote traverse/3 combinator" do
-    @three_ascii_letters ascii_codepoint([?a..?z])
-                         |> ascii_codepoint([?a..?z])
-                         |> ascii_codepoint([?a..?z])
+    @three_ascii_letters ascii_char([?a..?z])
+                         |> ascii_char([?a..?z])
+                         |> ascii_char([?a..?z])
 
     defparsec :remote_traverse,
               literal("T")
@@ -310,9 +310,9 @@ defmodule NimbleParsecTest do
   end
 
   describe "local traverse/3 combinator" do
-    @three_ascii_letters ascii_codepoint([?a..?z])
-                         |> ascii_codepoint([?a..?z])
-                         |> ascii_codepoint([?a..?z])
+    @three_ascii_letters ascii_char([?a..?z])
+                         |> ascii_char([?a..?z])
+                         |> ascii_char([?a..?z])
 
     defparsec :local_traverse,
               literal("T")
@@ -346,9 +346,9 @@ defmodule NimbleParsecTest do
 
   describe "remote map/3 combinator" do
     defparsec :remote_map,
-              ascii_codepoint([?a..?z])
-              |> ascii_codepoint([?a..?z])
-              |> ascii_codepoint([?a..?z])
+              ascii_char([?a..?z])
+              |> ascii_char([?a..?z])
+              |> ascii_char([?a..?z])
               |> map({Integer, :to_string, []})
 
     test "returns ok/error" do
@@ -360,9 +360,9 @@ defmodule NimbleParsecTest do
 
   describe "local map/3 combinator" do
     defparsec :local_map,
-              ascii_codepoint([?a..?z])
-              |> ascii_codepoint([?a..?z])
-              |> ascii_codepoint([?a..?z])
+              ascii_char([?a..?z])
+              |> ascii_char([?a..?z])
+              |> ascii_char([?a..?z])
               |> map({:local_to_string, []})
 
     test "returns ok/error" do
@@ -378,9 +378,9 @@ defmodule NimbleParsecTest do
 
   describe "remote reduce/3 combinator" do
     defparsec :remote_reduce,
-              ascii_codepoint([?a..?z])
-              |> ascii_codepoint([?a..?z])
-              |> ascii_codepoint([?a..?z])
+              ascii_char([?a..?z])
+              |> ascii_char([?a..?z])
+              |> ascii_char([?a..?z])
               |> reduce({Enum, :join, ["-"]})
 
     test "returns ok/error" do
@@ -392,9 +392,9 @@ defmodule NimbleParsecTest do
 
   describe "local reduce/3 combinator" do
     defparsec :local_reduce,
-              ascii_codepoint([?a..?z])
-              |> ascii_codepoint([?a..?z])
-              |> ascii_codepoint([?a..?z])
+              ascii_char([?a..?z])
+              |> ascii_char([?a..?z])
+              |> ascii_char([?a..?z])
               |> reduce({:local_join, ["-"]})
 
     test "returns ok/error" do
@@ -411,12 +411,35 @@ defmodule NimbleParsecTest do
   describe "concat/2 combinator" do
     defparsec :concat_digit_upper_lower_plus,
               concat(
-                concat(ascii_codepoint([?0..?9]), ascii_codepoint([?A..?Z])),
-                concat(ascii_codepoint([?a..?z]), ascii_codepoint([?+..?+]))
+                concat(ascii_char([?0..?9]), ascii_char([?A..?Z])),
+                concat(ascii_char([?a..?z]), ascii_char([?+..?+]))
               )
 
     test "returns ok/error" do
       assert concat_digit_upper_lower_plus("1Az+") == {:ok, [?1, ?A, ?z, ?+], "", 1, 5}
+    end
+  end
+
+  describe "many/2 combinator" do
+    defparsec :many_digits, many(ascii_char([?0..?9]))
+
+    ascii_to_string = map(ascii_char([?0..?9]), {:to_string, []})
+    defparsec :many_digits_to_string, many(ascii_to_string)
+    defparsec :many_digits_to_same_inner, many(map(ascii_to_string, {String, :to_integer, []}))
+    defparsec :many_digits_to_same_outer, map(many(ascii_to_string), {String, :to_integer, []})
+
+    test "returns ok/error" do
+      assert many_digits("123") == {:ok, [?1, ?2, ?3], "", 1, 4}
+      assert many_digits("a123") == {:ok, [], "a123", 1, 1}
+    end
+
+    test "returns ok/error with map" do
+      assert many_digits_to_string("123") == {:ok, ["49", "50", "51"], "", 1, 4}
+    end
+
+    test "returns ok/error with inner and outer map" do
+      assert many_digits_to_same_inner("123") == {:ok, [?1, ?2, ?3], "", 1, 4}
+      assert many_digits_to_same_outer("123") == {:ok, [?1, ?2, ?3], "", 1, 4}
     end
   end
 

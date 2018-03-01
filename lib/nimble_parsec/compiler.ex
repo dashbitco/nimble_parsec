@@ -8,8 +8,10 @@ defmodule NimbleParsec.Compiler do
 
   def compile(name, combinators, _opts) when is_list(combinators) do
     config = %{
+      catch_all: nil,
+      labels: [],
       name: name,
-      labels: []
+      stack_depth: 0
     }
 
     {next, step} = build_next(0, config)
@@ -63,7 +65,7 @@ defmodule NimbleParsec.Compiler do
 
     catch_all_defs =
       case catch_all do
-        :catch_all -> [build_catch_all(current, error_reason(used_combinators, config))]
+        :catch_all -> [build_catch_all(current, used_combinators, config)]
         :catch_none -> []
       end
 
@@ -91,6 +93,7 @@ defmodule NimbleParsec.Compiler do
     first_body = invoke_next(next, arg, call_acc, call_stack, line, column)
     first_def = build_def(current, arg, [], first_body)
 
+    config = update_in(config.stack_depth, & &1 + 1)
     {defs, inline, last, step} = compile(combinators, [first_def], [], next, step, config)
 
     # No we need to traverse the accumulator with the user code and
@@ -107,8 +110,12 @@ defmodule NimbleParsec.Compiler do
     {Enum.reverse([last_def | defs]), inline, next, step, :catch_none}
   end
 
-  defp compile_unbound_combinator(combinator, _current, _step, _config) do
-    raise "TODO: #{inspect(combinator)} not yet compilable"
+  defp compile_unbound_combinator({:many, combinators}, current, step, config) do
+    {failure, step} = build_next(step, config)
+    config = %{config | catch_all: failure, stack_depth: 0}
+    {defs, inline, success, step} = compile(combinators, [], [], current, step, config)
+    def = build_proxy_to(success, current)
+    {Enum.reverse([def | defs]), [{success, @arity} | inline], failure, step, :catch_none}
   end
 
   ## Bound combinators
@@ -288,19 +295,7 @@ defmodule NimbleParsec.Compiler do
     end)
   end
 
-  ## Label and error handling
-
-  defp error_reason(combinators, %{labels: []}) do
-    "expected " <> labels(combinators)
-  end
-
-  defp error_reason(_combinators, %{labels: [head]}) do
-    "expected #{head}"
-  end
-
-  defp error_reason(_combinators, %{labels: [head | tail]}) do
-    "expected #{head} while processing #{Enum.join(tail, " inside ")}"
-  end
+  ## Label
 
   defp labels(combinators) do
     Enum.map_join(combinators, ", followed by ", &label/1)
@@ -312,10 +307,6 @@ defmodule NimbleParsec.Compiler do
 
   defp label({:label, _document, label}) do
     label
-  end
-
-  defp label({:traverse, combinators, _}) do
-    labels(combinators)
   end
 
   defp label({:bin_segment, inclusive, exclusive, modifiers}) do
@@ -331,6 +322,14 @@ defmodule NimbleParsec.Compiler do
       end
 
     prefix <> Enum.join([Enum.join(inclusive, " or") | exclusive], ", and not")
+  end
+
+  defp label({:many, combinators}) do
+    labels(combinators)
+  end
+
+  defp label({:traverse, combinators, _}) do
+    labels(combinators)
   end
 
   defp label({:traverse, combinators, _, _}) do
@@ -413,6 +412,10 @@ defmodule NimbleParsec.Compiler do
 
   ## Helpers
 
+  defp build_var(counter) do
+    {{:"x#{counter}", [], __MODULE__}, counter + 1}
+  end
+
   defp build_next(step, %{name: name}) do
     {:"#{name}__#{step}", step + 1}
   end
@@ -433,13 +436,43 @@ defmodule NimbleParsec.Compiler do
     {name, [arg | args], guards, body}
   end
 
-  defp build_catch_all(name, reason) do
+  defp build_catch_all(name, combinators, %{catch_all: nil, labels: labels}) do
+    reason = error_reason(combinators, labels)
     args = quote(do: [rest, acc, stack, line, column])
     body = quote(do: {:error, unquote(reason), rest, line, column})
     {name, args, true, body}
   end
 
-  defp build_var(counter) do
-    {{:"x#{counter}", [], __MODULE__}, counter + 1}
+  defp build_catch_all(name, _combinators, %{catch_all: next, stack_depth: 0}) do
+    build_proxy_to(name, next)
+  end
+
+  defp build_catch_all(name, _combinators, %{catch_all: next, stack_depth: n}) do
+    vars = quote(do: [rest, acc, stack, line, column])
+    [rest, acc, stack, line, column] = vars
+    args = [rest, quote(do: _), build_stack_depth(n, acc, stack), line, column]
+    body = {next, [], vars}
+    {name, args, true, body}
+  end
+
+  defp build_stack_depth(1, acc, stack), do: [{:|, [], [acc, stack]}]
+  defp build_stack_depth(n, acc, stack), do: [quote(do: _) | build_stack_depth(n - 1, acc, stack)]
+
+  defp build_proxy_to(name, next) do
+    args = quote(do: [rest, acc, stack, line, column])
+    body = {next, [], args}
+    {name, args, true, body}
+  end
+
+  defp error_reason(combinators, []) do
+    "expected " <> labels(combinators)
+  end
+
+  defp error_reason(_combinators, [head]) do
+    "expected #{head}"
+  end
+
+  defp error_reason(_combinators, [head | tail]) do
+    "expected #{head} while processing #{Enum.join(tail, " inside ")}"
   end
 end

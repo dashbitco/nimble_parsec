@@ -86,8 +86,8 @@ defmodule NimbleParsec do
 
         defparsec :digit_and_lowercase,
                   empty()
-                  |> ascii_codepoint([?0..?9])
-                  |> ascii_codepoint([?a..?z])
+                  |> ascii_char([?0..?9])
+                  |> ascii_char([?a..?z])
       end
 
       MyParser.digit_and_lowercase("1a")
@@ -97,9 +97,9 @@ defmodule NimbleParsec do
       #=> {:error, "expected a byte in the range ?0..?9, followed by a byte in the range ?a..?z", "a1", 1, 1}
 
   """
-  @spec ascii_codepoint(t, [range]) :: t
-  def ascii_codepoint(combinator \\ empty(), ranges) do
-    {inclusive, exclusive} = split_ranges!(ranges, "ascii_codepoint")
+  @spec ascii_char(t, [range]) :: t
+  def ascii_char(combinator \\ empty(), ranges) do
+    {inclusive, exclusive} = split_ranges!(ranges, "ascii_char")
     compile_bin_segment(combinator, inclusive, exclusive, [])
   end
 
@@ -124,8 +124,8 @@ defmodule NimbleParsec do
 
         defparsec :digit_and_utf8,
                   empty()
-                  |> utf8_codepoint([?0..?9])
-                  |> utf8_codepoint([])
+                  |> utf8_char([?0..?9])
+                  |> utf8_char([])
       end
 
       MyParser.digit_and_utf8("1é")
@@ -135,9 +135,9 @@ defmodule NimbleParsec do
       #=> {:error, "expected a utf8 codepoint in the range ?0..?9, followed by a utf8 codepoint", "a1", 1, 1}
 
   """
-  @spec utf8_codepoint(t, [range]) :: t
-  def utf8_codepoint(combinator \\ empty(), ranges) do
-    {inclusive, exclusive} = split_ranges!(ranges, "utf8_codepoint")
+  @spec utf8_char(t, [range]) :: t
+  def utf8_char(combinator \\ empty(), ranges) do
+    {inclusive, exclusive} = split_ranges!(ranges, "utf8_char")
     compile_bin_segment(combinator, inclusive, exclusive, [:utf8])
   end
 
@@ -151,8 +151,8 @@ defmodule NimbleParsec do
 
         defparsec :digit_and_lowercase,
                   empty()
-                  |> ascii_codepoint([?0..?9])
-                  |> ascii_codepoint([?a..?z])
+                  |> ascii_char([?0..?9])
+                  |> ascii_char([?a..?z])
                   |> label("digit followed by lowercase letter")
       end
 
@@ -231,8 +231,8 @@ defmodule NimbleParsec do
 
         defparsec :digit_upper_lower_plus,
                   concat(
-                    concat(ascii_codepoint([?0..?9]), ascii_codepoint([?A..?Z])),
-                    concat(ascii_codepoint([?a..?z]), ascii_codepoint([?+..?+]))
+                    concat(ascii_char([?0..?9]), ascii_char([?A..?Z])),
+                    concat(ascii_char([?a..?z]), ascii_char([?+..?+]))
                   )
       end
 
@@ -273,10 +273,10 @@ defmodule NimbleParsec do
       defmodule MyParser do
         import NimbleParsec
 
-        defparsec :letters_to_codepoints,
-                  ascii_codepoint([?a..?z])
-                  |> ascii_codepoint([?a..?z])
-                  |> ascii_codepoint([?a..?z])
+        defparsec :letters_to_chars,
+                  ascii_char([?a..?z])
+                  |> ascii_char([?a..?z])
+                  |> ascii_char([?a..?z])
                   |> traverse({:join_and_wrap, ["-"]})
 
         defp join_and_wrap(args, joiner) do
@@ -284,7 +284,7 @@ defmodule NimbleParsec do
         end
       end
 
-      MyParser.letters_to_codepoints("abc")
+      MyParser.letters_to_chars("abc")
       #=> {:ok, ["99-98-97"], "", 1, 4}
   """
   @spec traverse(t, t, call) :: t
@@ -313,14 +313,14 @@ defmodule NimbleParsec do
       defmodule MyParser do
         import NimbleParsec
 
-        defparsec :letters_to_string_codepoints,
-                  ascii_codepoint([?a..?z])
-                  |> ascii_codepoint([?a..?z])
-                  |> ascii_codepoint([?a..?z])
+        defparsec :letters_to_string_chars,
+                  ascii_char([?a..?z])
+                  |> ascii_char([?a..?z])
+                  |> ascii_char([?a..?z])
                   |> map({Integer, :to_string, []})
       end
 
-      MyParser.letters_to_string_codepoints("abc")
+      MyParser.letters_to_string_chars("abc")
       #=> {:ok, ["97", "98", "99"], "", 1, 4}
   """
   @spec map(t, t, call) :: t
@@ -354,14 +354,14 @@ defmodule NimbleParsec do
       defmodule MyParser do
         import NimbleParsec
 
-        defparsec :letters_to_reduced_codepoints,
-                  ascii_codepoint([?a..?z])
-                  |> ascii_codepoint([?a..?z])
-                  |> ascii_codepoint([?a..?z])
+        defparsec :letters_to_reduced_chars,
+                  ascii_char([?a..?z])
+                  |> ascii_char([?a..?z])
+                  |> ascii_char([?a..?z])
                   |> reduce({Enum, :join, ["-"]})
       end
 
-      MyParser.letters_to_reduced_codepoints("abc")
+      MyParser.letters_to_reduced_chars("abc")
       #=> {:ok, ["97-98-99"], "", 1, 4}
   """
   @spec reduce(t, t, call) :: t
@@ -442,6 +442,30 @@ defmodule NimbleParsec do
     to_replace = reverse_combinators!(to_replace, "replace")
     value = Macro.escape(value)
     compile_traverse(combinator, to_replace, fn _ -> [value] end, fn _ -> [value] end)
+  end
+
+  @doc """
+  Allow the combinator given on `many` to appear zero or more times.
+
+  ## Examples
+
+      defmodule MyParser do
+        import NimbleParsec
+
+        defparsec :many_lower, many(ascii_char([?a..?z]))
+      end
+
+      MyParser.many_lower("abcd")
+      #=> {:ok, [?a, ?b, ?c, ?d], "", 1, 5}
+
+      MyParser.many_lower("1234")
+      #=> {:ok, [], "1234", 1, 1}
+
+  """
+  @spec many(t, t) :: t
+  def many(combinator \\ empty(), many) do
+    many = reverse_combinators!(many, "many")
+    [{:many, many} | combinator]
   end
 
   ## Inner combinators
