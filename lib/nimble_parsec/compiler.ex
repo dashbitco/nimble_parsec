@@ -115,11 +115,32 @@ defmodule NimbleParsec.Compiler do
     end
   end
 
-  defp bound_combinator({:integer, size}, counter) do
-    {vars, counter} = build_vars(counter, size)
-    guards = Enum.map(vars, fn var -> quote(do: unquote(var) >= ?0 and unquote(var) <= ?9) end)
-    output = from_ascii_to_integer(vars)
-    {:ok, vars, guards, [output], [{:column, size}], counter}
+  defp bound_combinator({:compile_map, combinators, compile_fun, _runtime_fun}, counter) do
+    case take_bound_combinators(combinators, [], [], [], [], counter) do
+      {[], inputs, guards, outputs, cursors, counter} ->
+        outputs = outputs |> Enum.reverse() |> compile_fun.() |> Enum.reverse()
+        {:ok, inputs, guards, outputs, cursors, counter}
+
+      {_, _, _, _, _, _} ->
+        :error
+    end
+  end
+
+  defp bound_combinator({:compile_bit_integer, ranges, modifiers}, counter) do
+    {var, counter} = build_var(counter)
+
+    input =
+      case modifiers do
+        [] -> var
+        _ -> {:::, [], [var, Enum.reduce(modifiers, &{:-, [], [&2, &1]})]}
+      end
+
+    guards =
+      for min..max <- ranges do
+        quote(do: unquote(var) >= unquote(min) and unquote(var) <= unquote(max))
+      end
+
+    {:ok, [input], guards, [var], [{:column, 1}], counter}
   end
 
   defp bound_combinator({:literal, combinator}, counter) do
@@ -136,37 +157,8 @@ defmodule NimbleParsec.Compiler do
     {:ok, [combinator], [], [combinator], [cursor], counter}
   end
 
-  defp bound_combinator({:ignore, combinators}, counter) do
-    case take_bound_combinators(combinators, [], [], [], [], counter) do
-      {[], inputs, guards, _outputs, cursors, counter} ->
-        {:ok, inputs, guards, [], cursors, counter}
-
-      {_, _, _, _, _, _} ->
-        :error
-    end
-  end
-
   defp bound_combinator(_, _counter) do
     :error
-  end
-
-  ## Integer helpers
-
-  # Converts a list of variables from ?0 up to ?9 into
-  # an integer at compile time using arithmetic operations.
-  defp from_ascii_to_integer(vars) do
-    vars
-    |> Enum.reverse()
-    |> from_ascii_to_integer(1)
-    |> Enum.reduce(&{:+, [], [&2, &1]})
-  end
-
-  defp from_ascii_to_integer([var | vars], index) do
-    [quote(do: (unquote(var) - ?0) * unquote(index)) | from_ascii_to_integer(vars, index * 10)]
-  end
-
-  defp from_ascii_to_integer([], _index) do
-    []
   end
 
   ## Helpers
@@ -199,9 +191,5 @@ defmodule NimbleParsec.Compiler do
 
   defp build_var(counter) do
     {{:"x#{counter}", [], __MODULE__}, counter + 1}
-  end
-
-  defp build_vars(counter, how_many) do
-    Enum.map_reduce(1..how_many, counter, fn _, counter -> build_var(counter) end)
   end
 end
