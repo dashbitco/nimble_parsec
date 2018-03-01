@@ -15,7 +15,7 @@ defmodule NimbleParsec do
   defmacro defparsec(name, combinator, opts \\ []) do
     quote bind_quoted: [name: name, combinator: combinator, opts: opts] do
       def unquote(name)(binary, opts \\ []) when is_binary(binary) do
-        unquote(:"#{name}__0")(binary, [], 1, 1)
+        unquote(:"#{name}__0")(binary, [], [], 1, 1)
       end
 
       for {name, args, guards, body} <- NimbleParsec.Compiler.compile(name, combinator, opts) do
@@ -28,20 +28,21 @@ defmodule NimbleParsec do
     end
   end
 
+  @type t :: [combinator()]
+  @type bit_modifiers :: [:signed | :unsigned | :native | :little | :big]
+
   # Steps to add a new bound combinator:
   #
   #   1. Update the combinator type
   #   2. Update the compiler bound combinator step
   #   3. Update the compiler label step
   #
-  @type t :: [combinator()]
-  @type bit_modifiers :: [:signed | :unsigned | :native | :little | :big]
-
   @typep combinator ::
            {:literal, binary}
            | {:label, t, binary}
+           | {:traverse, t, (Macro.t() -> Macro.t())}
            | {:compile_bit_integer, [Range.t()], bit_modifiers}
-           | {:compile_map, t, (Macro.t() -> Macro.t()), (term -> term)}
+           | {:compile_traverse, t, (Macro.t() -> Macro.t()), (Macro.t() -> Macro.t())}
 
   @doc ~S"""
   Returns an empty combinator.
@@ -138,7 +139,7 @@ defmodule NimbleParsec do
         compile_bit_integer(acc, [?0..?9], [])
       end)
 
-    mapped = compile_map(empty(), integer, &from_ascii_to_integer/1)
+    mapped = compile_traverse(empty(), integer, &from_ascii_to_integer/1)
     label(combinator, mapped, "a #{size} digits integer")
   end
 
@@ -162,6 +163,67 @@ defmodule NimbleParsec do
 
   defp from_ascii_to_integer([], _index) do
     []
+  end
+
+  @doc """
+  Concatenates two combinators.
+
+  ## Examples
+
+      defmodule MyParser do
+        import NimbleParsec
+
+        defparsec :digit_upper_lower_plus,
+                  concat(
+                    concat(ascii_codepoint([?0..?9]), ascii_codepoint([?A..?Z])),
+                    concat(ascii_codepoint([?a..?z]), ascii_codepoint([?+..?+]))
+                  )
+      end
+
+      MyParser.digit_upper_lower_plus("1Az+")
+      #=> {:ok, [?1, ?A, ?z, ?+], "", 1, 5}
+
+  """
+  def concat(left, right) when is_combinator(left) and is_combinator(right) do
+    right ++ left
+  end
+
+  @doc """
+  Traverses the combinator results with the given `module`,
+  `fun` and `args`.
+
+  The parser results to be traversed will be prepended to the
+  given `args`. The `args` will be injected at the compile site
+  and therefore must be escapable via `Macro.escape/1`.
+
+  Notice the results are received in reverse order and
+  must be returned in reverse order.
+
+  The number of elements returned does not need to be
+  the same as the number of elements given.
+
+  This is a low-level function for changing the parsed result.
+  On top of this function, other functions are built, such as
+  `map/5` (and `map/4`) if you want to map over each individual
+  element and not worry about ordering, `join/5` (and `join/4`)
+  to convert all elements into a single one, `replace/3` if you
+  want to replace the parsed result by a single value and `ignore/3`
+  if you want to ignore the parsed result.
+
+  See `traversal/4` for using a local function for traversal.
+  """
+  @spec traverse(t, t, module, atom, [term]) :: t
+  def traverse(combinator \\ empty(), to_traverse, module, fun, args)
+      when is_combinator(combinator) and is_combinator(to_traverse) and is_atom(module) and
+             is_atom(fun) and is_list(args) do
+    to_traverse = reverse_combinators!(to_traverse, "traverse")
+    args = Macro.escape(args)
+
+    traverse(combinator, to_traverse, fn arg ->
+      quote do
+        unquote(module).unquote(fun)(unquote(arg), unquote_splicing(args))
+      end
+    end)
   end
 
   @doc ~S"""
@@ -207,19 +269,32 @@ defmodule NimbleParsec do
   def ignore(combinator, to_ignore) when is_combinator(combinator) and is_combinator(to_ignore) do
     to_ignore = reverse_combinators!(to_ignore, "ignore")
     # TODO: Define the runtime behaviour.
-    compile_map(combinator, to_ignore, fn _ -> [] end)
+    compile_traverse(combinator, to_ignore, fn _ -> [] end)
   end
 
-  # A compile map may or may not be expanded at runtime as
-  # it depends if `to_map` is also bound. For this reason,
-  # some operators may pass a runtime_fun/1. If one is not
-  # passed, it is assumed that the behaviour is guaranteed
-  # to be bound.
+  ## Inner combinators
+
+  # A runtime traverse. Notice the `to_traverse` inside the
+  # combinator is already expected to be reversed.
+  defp traverse(combinator, to_traverse, traversal) when is_function(traversal, 1) do
+    [{:traverse, to_traverse, traversal} | combinator]
+  end
+
+  # A compile traverse may or may not be expanded at runtime
+  # as it depends if `to_traverse` is also bound. For this
+  # reason, some operators may pass a runtime_fun/1. If one
+  # is not passed, it is assumed that the behaviour is
+  # guaranteed to be bound.
   #
-  # Notice the `to_map` inside the document is already
+  # Notice the `to_traverse` inside the combinator is already
   # expected to be reversed.
-  defp compile_map(combinator, to_map, compile_fun, runtime_fun \\ &must_never_be_invoked/1) do
-    [{:compile_map, to_map, compile_fun, runtime_fun} | combinator]
+  defp compile_traverse(
+         combinator,
+         to_traverse,
+         compile_fun,
+         runtime_fun \\ &must_never_be_invoked/1
+       ) do
+    [{:compile_traverse, to_traverse, compile_fun, runtime_fun} | combinator]
   end
 
   # A compile bit integer is verified to not have a newline on it

@@ -12,38 +12,80 @@ defmodule NimbleParsec.Compiler do
 
     {next, step} = build_next(0, config)
 
-    combinators
-    |> Enum.reverse()
-    |> compile([], next, step, config)
+    {defs, last, _step} =
+      combinators
+      |> Enum.reverse()
+      |> compile([], next, step, config)
+
+    Enum.reverse([compile_ok(last) | defs])
   end
 
-  defp compile([], defs, current, _step, _config) do
-    # TODO: Allow OK to be customized via config.
-    # TODO: Allow ERROR to be customized via config.
+  defp compile_ok(current) do
     body =
       quote(do: {:ok, Enum.reverse(combinator__acc), rest, combinator__line, combinator__column})
 
-    [build_def(current, quote(do: rest), [], body) | defs]
+    build_def(current, quote(do: rest), [], body)
+  end
+
+  defp compile([], defs, current, step, _config) do
+    {defs, current, step}
   end
 
   defp compile(combinators, defs, current, step, config) do
-    {next_combinators, used_combinators, {match_def, next, step}} =
+    {next_combinators, used_combinators, {new_defs, next, step, catch_all}} =
       case take_bound_combinators(combinators) do
         {[combinator | combinators], [], [], [], [], [], _} ->
-          {combinators, [combinator], compile_unbound_combinator(combinator, current, step, config)}
+          {combinators, [combinator],
+           compile_unbound_combinator(combinator, current, step, config)}
 
         {combinators, inputs, guards, outputs, cursors, acc, _} ->
           {combinators, Enum.reverse(acc),
            compile_bound_combinator(inputs, guards, outputs, cursors, current, step, config)}
       end
 
-    catch_all_def = build_catch_all(current, error_reason(used_combinators))
-    compile(next_combinators, [match_def, catch_all_def | defs], next, step, config)
+    catch_all_defs =
+      case catch_all do
+        :catch_all -> [build_catch_all(current, error_reason(used_combinators))]
+        :catch_none -> []
+      end
+
+    defs = catch_all_defs ++ Enum.reverse(new_defs) ++ defs
+    compile(next_combinators, defs, next, step, config)
   end
 
   ## Unbound combinators
 
-  defp compile_unbound_combinator(combinator, _defs, _step, _current) do
+  defp compile_unbound_combinator({:traverse, combinators, traversal}, current, step, config) do
+    arg = quote(do: arg)
+    line = quote(do: combinator__line)
+    column = quote(do: combinator__column)
+
+    # Define the entry point that gets the current accumulator,
+    # put it in the stack and then continues with recursion.
+    call_acc = []
+    call_stack = quote(do: [combinator__acc | combinator__stack])
+
+    {next, step} = build_next(step, config)
+    first_body = invoke_next(next, arg, call_acc, call_stack, line, column)
+    first_def = build_def(current, arg, [], first_body)
+
+    {defs, last, step} =
+      compile(combinators, [first_def], next, step, config)
+
+    # No we need to traverse the accumulator with the user code and
+    # concatenate with the previous accumulator at the top of the stack.
+    user_acc = traversal.(quote(do: combinator__acc))
+    last_acc = quote(do: unquote(user_acc) ++ hd(combinator__stack))
+    last_stack = quote(do: tl(combinator__stack))
+
+    {next, step} = build_next(step, config)
+    last_body = invoke_next(next, arg, last_acc, last_stack, line, column)
+    last_def = build_def(last, arg, [], last_body)
+
+    {Enum.reverse([last_def | defs]), next, step, :catch_none}
+  end
+
+  defp compile_unbound_combinator(combinator, _current, _step, _config) do
     raise "TODO: #{inspect(combinator)} not yet compilable"
   end
 
@@ -56,14 +98,15 @@ defmodule NimbleParsec.Compiler do
   # but such can be addressed if desired.
 
   defp compile_bound_combinator(inputs, guards, outputs, cursors, current, step, config) do
-    {next, step} = build_next(step, config)
+    arg = {:<<>>, [], inputs ++ [quote(do: rest :: binary)]}
     acc = quote(do: unquote(outputs) ++ combinator__acc)
     {line, column} = apply_cursors(cursors, 0, 0, false)
-    body = invoke_next(next, quote(do: rest), acc, line, column)
 
-    arg = {:<<>>, [], inputs ++ [quote(do: rest :: binary)]}
+    {next, step} = build_next(step, config)
+    body = invoke_next(next, quote(do: rest), acc, quote(do: combinator__stack), line, column)
+
     match_def = build_def(current, arg, guards, body)
-    {match_def, next, step}
+    {[match_def], next, step, :catch_all}
   end
 
   defp apply_cursors([{:column, new_column} | cursors], line, column, column_reset?) do
@@ -146,7 +189,7 @@ defmodule NimbleParsec.Compiler do
     {:ok, [input], guards, [var], [{:column, 1}], counter}
   end
 
-  defp bound_combinator({:compile_map, combinators, compile_fun, _runtime_fun}, counter) do
+  defp bound_combinator({:compile_traverse, combinators, compile_fun, _runtime_fun}, counter) do
     case take_bound_combinators(combinators, [], [], [], [], [], counter) do
       {[], inputs, guards, outputs, cursors, _, counter} ->
         {:ok, inputs, guards, compile_fun.(outputs), cursors, counter}
@@ -178,6 +221,10 @@ defmodule NimbleParsec.Compiler do
     label
   end
 
+  defp label({:traverse, combinators, _}) do
+    labels(combinators)
+  end
+
   defp label({:compile_bit_integer, [], _modifiers}) do
     "a byte"
   end
@@ -187,7 +234,7 @@ defmodule NimbleParsec.Compiler do
     "a byte in the #{pluralize(length(ranges), "range", "ranges")} #{inspected}"
   end
 
-  defp label({:compile_map, combinators, _, _}) do
+  defp label({:compile_traverse, combinators, _, _}) do
     labels(combinators)
   end
 
@@ -227,12 +274,12 @@ defmodule NimbleParsec.Compiler do
     {:"#{name}__#{step}", step + 1}
   end
 
-  defp invoke_next(next, rest, acc, line, column) do
-    {next, [], [rest, acc, line, column]}
+  defp invoke_next(next, rest, acc, stack, line, column) do
+    {next, [], [rest, acc, stack, line, column]}
   end
 
   defp build_def(name, arg, guards, body) do
-    args = quote(do: [unquote(arg), combinator__acc, combinator__line, combinator__column])
+    args = quote(do: [combinator__acc, combinator__stack, combinator__line, combinator__column])
 
     guards =
       case guards do
@@ -240,11 +287,11 @@ defmodule NimbleParsec.Compiler do
         _ -> Enum.reduce(guards, &{:and, [], [&2, &1]})
       end
 
-    {name, args, guards, body}
+    {name, [arg | args], guards, body}
   end
 
   defp build_catch_all(name, reason) do
-    args = quote(do: [rest, acc, line, column])
+    args = quote(do: [rest, acc, stack, line, column])
     body = quote(do: {:error, unquote(reason), rest, line, column})
     {name, args, true, body}
   end

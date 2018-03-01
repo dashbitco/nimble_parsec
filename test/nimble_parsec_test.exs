@@ -5,7 +5,7 @@ defmodule NimbleParsecTest do
   doctest NimbleParsec
 
   describe "ascii_codepoint/2 combinator without newlines" do
-    defparsec(:only_ascii_codepoints, ascii_codepoint([?0..?9]) |> ascii_codepoint([?z..?a]))
+    defparsec :only_ascii_codepoints, ascii_codepoint([?0..?9]) |> ascii_codepoint([?z..?a])
 
     @error "expected a byte in the range ?0..?9, followed by a byte in the range ?z..?a"
 
@@ -21,8 +21,8 @@ defmodule NimbleParsecTest do
   end
 
   describe "integer/3 combinator with min=max" do
-    defparsec(:only_integer, integer(2, 2))
-    defparsec(:prefixed_integer, literal("T") |> integer(2, 2))
+    defparsec :only_integer, integer(2, 2)
+    defparsec :prefixed_integer, literal("T") |> integer(2, 2)
 
     @error "expected a 2 digits integer"
 
@@ -48,8 +48,8 @@ defmodule NimbleParsecTest do
   end
 
   describe "literal/2 combinator" do
-    defparsec(:only_literal, literal("TO"))
-    defparsec(:only_literal_with_newline, literal("T\nO"))
+    defparsec :only_literal, literal("TO")
+    defparsec :only_literal_with_newline, literal("T\nO")
 
     test "returns ok/error" do
       assert only_literal("TO") == {:ok, ["TO"], "", 1, 3}
@@ -71,8 +71,8 @@ defmodule NimbleParsecTest do
   end
 
   describe "ignore/2 combinator at compile time" do
-    defparsec(:only_ignore, ignore(literal("TO")))
-    defparsec(:only_ignore_with_newline, ignore(literal("T\nO")))
+    defparsec :only_ignore, ignore(literal("TO"))
+    defparsec :only_ignore_with_newline, ignore(literal("T\nO"))
 
     test "returns ok/error" do
       assert only_ignore("TO") == {:ok, [], "", 1, 3}
@@ -94,8 +94,8 @@ defmodule NimbleParsecTest do
   end
 
   describe "label/2 combinator at compile time" do
-    defparsec(:only_label, label(literal("TO"), "a label"))
-    defparsec(:only_label_with_newline, label(literal("T\nO"), "a label"))
+    defparsec :only_label, label(literal("TO"), "a label")
+    defparsec :only_label_with_newline, label(literal("T\nO"), "a label")
 
     test "returns ok/error" do
       assert only_label("TO") == {:ok, ["TO"], "", 1, 3}
@@ -106,9 +106,7 @@ defmodule NimbleParsecTest do
     test "properly counts newlines" do
       assert only_label_with_newline("T\nO") == {:ok, ["T\nO"], "", 2, 2}
       assert only_label_with_newline("T\nOC") == {:ok, ["T\nO"], "C", 2, 2}
-
-      assert only_label_with_newline("A\nO") ==
-               {:error, "expected a label", "A\nO", 1, 1}
+      assert only_label_with_newline("A\nO") == {:error, "expected a label", "A\nO", 1, 1}
     end
 
     test "is bound" do
@@ -116,21 +114,69 @@ defmodule NimbleParsecTest do
     end
   end
 
+  describe "traverse/5 combinator" do
+    @three_ascii_letters ascii_codepoint([?a..?z])
+                         |> ascii_codepoint([?a..?z])
+                         |> ascii_codepoint([?a..?z])
+
+    defparsec :traverse_codepoints,
+              literal("T")
+              |> integer(2, 2)
+              |> traverse(@three_ascii_letters, __MODULE__, :public_join_and_wrap, ["-"])
+              |> integer(2, 2)
+
+    test "returns ok/error" do
+      assert traverse_codepoints("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", 1, 9}
+
+      error = "expected a literal \"T\", followed by a 2 digits integer"
+      assert traverse_codepoints("Tabc34") == {:error, error, "Tabc34", 1, 1}
+
+      error = "expected a 2 digits integer"
+      assert traverse_codepoints("T12abcdf") == {:error, error, "df", 1, 7}
+
+      error =
+        "expected a byte in the range ?a..?z, followed by a byte in the range ?a..?z, followed by a byte in the range ?a..?z"
+
+      assert traverse_codepoints("T12ab34") == {:error, error, "ab34", 1, 4}
+    end
+
+    test "is not bound" do
+      assert not_bound?(traverse(@three_ascii_letters, __MODULE__, :public_join_and_wrap, ["-"]))
+    end
+
+    def public_join_and_wrap(args, joiner) do
+      args |> Enum.join(joiner) |> List.wrap()
+    end
+  end
+
+  describe "concat/2 combinator" do
+    defparsec :concat_digit_upper_lower_plus,
+              concat(
+                concat(ascii_codepoint([?0..?9]), ascii_codepoint([?A..?Z])),
+                concat(ascii_codepoint([?a..?z]), ascii_codepoint([?+..?+]))
+              )
+
+    test "returns ok/error" do
+      assert concat_digit_upper_lower_plus("1Az+") == {:ok, [?1, ?A, ?z, ?+], "", 1, 5}
+    end
+  end
+
   describe "custom datetime/2 combinator" do
-    datetime =
+    date =
       integer(4, 4)
       |> ignore(literal("-"))
       |> integer(2, 2)
       |> ignore(literal("-"))
       |> integer(2, 2)
-      |> ignore(literal("T"))
-      |> integer(2, 2)
+
+    time =
+      integer(2, 2)
       |> ignore(literal(":"))
       |> integer(2, 2)
       |> ignore(literal(":"))
       |> integer(2, 2)
 
-    defparsec(:datetime, datetime)
+    defparsec :datetime, date |> ignore(literal("T")) |> concat(time)
 
     test "returns ok/error by itself" do
       assert datetime("2010-04-17T14:12:34") == {:ok, [2010, 4, 17, 14, 12, 34], "", 1, 20}
@@ -142,5 +188,11 @@ defmodule NimbleParsecTest do
 
     assert length(defs) == 3,
            "Expected #{inspect(document)} to contain 3 clauses, got #{length(defs)}"
+  end
+
+  defp not_bound?(document) do
+    defs = NimbleParsec.Compiler.compile(:not_used, document, [])
+
+    assert length(defs) != 3, "Expected #{inspect(document)} to contain more than 3 clauses"
   end
 end
