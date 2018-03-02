@@ -13,6 +13,43 @@ defmodule NimbleParsec do
   @doc """
   Defines a public parser `combinator` with the given `name` and `opts`.
 
+  ## Beware!
+
+  `defparsec/3` is executed during compilation. This means you can't
+  invoke a function defined in the same module. The following will error
+  because the `date` function has not yet been defined:
+
+      defmodule MyParser do
+        import NimbleParsec
+
+        def date do
+          integer(4)
+          |> ignore(literal("-"))
+          |> integer(2)
+          |> ignore(literal("-"))
+          |> integer(2)
+        end
+
+        defparsec :date, date()
+      end
+
+  This can be solved in different ways. You may define `date` in another
+  module and then invoke it. You can also store the parsec in a variable
+  or a module attribute and use that instead. For example:
+
+      defmodule MyParser do
+        import NimbleParsec
+
+        date =
+          integer(4)
+          |> ignore(literal("-"))
+          |> integer(2)
+          |> ignore(literal("-"))
+          |> integer(2)
+
+        defparsec :date, date
+      end
+
   ## Options
 
     * `:inline` - when true, inlines clauses that work as redirection for

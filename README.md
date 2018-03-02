@@ -111,6 +111,12 @@ def deps do
 end
 ```
 
+## Nimble*
+
+Other nimble libraries by Plataformatec:
+
+  * [NimbleCSV](https://github.com/plataformatec/nimble_csv) - simple and fast CSV parsing
+
 ## License
 
 Copyright 2018 Plataformatec
