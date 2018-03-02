@@ -238,17 +238,13 @@ defmodule NimbleParsec do
 
   def integer(combinator, count)
       when is_combinator(combinator) and is_integer(count) and count > 0 do
-    integer =
-      Enum.reduce(1..count, empty(), fn _, acc ->
-        bin_segment(acc, [?0..?9], [], [])
-      end)
-
+    integer = duplicate(ascii_char([?0..?9]), count)
     quoted_traverse(combinator, integer, &quoted_ascii_to_integer/1)
   end
 
   def integer(combinator, opts) when is_combinator(combinator) and is_list(opts) do
     {min, max} = validate_min_and_max!(opts)
-    to_repeat = bin_segment(empty(), [?0..?9], [], [])
+    to_repeat = ascii_char([?0..?9])
 
     integer =
       if min do
@@ -259,9 +255,9 @@ defmodule NimbleParsec do
 
     integer =
       if max do
-        [{:repeat_up_to, to_repeat, max - (min || 0)} | integer]
+        times(integer, to_repeat, max: max - (min || 0))
       else
-        [{:repeat, to_repeat} | integer]
+        repeat(integer, to_repeat)
       end
 
     quoted_traverse(combinator, integer, fn x ->
@@ -309,6 +305,15 @@ defmodule NimbleParsec do
   @spec concat(t, t) :: t
   def concat(left, right) when is_combinator(left) and is_combinator(right) do
     right ++ left
+  end
+
+  @doc """
+  Duplicates the combinator `to_duplicate` `n` times.
+  """
+  @spec duplicate(t, t, pos_integer) :: t
+  def duplicate(combinator \\ empty(), to_duplicate, n)
+      when is_combinator(combinator) and is_combinator(to_duplicate) and is_integer(n) and n >= 1 do
+    Enum.reduce(1..n, combinator, fn _, acc -> to_duplicate ++ acc end)
   end
 
   @doc ~S"""
@@ -593,10 +598,9 @@ defmodule NimbleParsec do
   @spec times(t, t, pos_integer | [min_and_max]) :: t
   def times(combinator \\ empty(), to_repeat, count_or_min_max)
 
-  def times(combinator, to_repeat, count)
-      when is_combinator(combinator) and is_combinator(to_repeat) and is_integer(count) do
-    to_repeat = reverse_combinators!(to_repeat, "times")
-    Enum.reduce(1..count, combinator, fn _, acc -> to_repeat ++ acc end)
+  def times(combinator, to_repeat, n)
+      when is_combinator(combinator) and is_combinator(to_repeat) and is_integer(n) and n >= 1 do
+    duplicate(combinator, to_repeat, n)
   end
 
   def times(combinator, to_repeat, opts)
@@ -605,7 +609,7 @@ defmodule NimbleParsec do
 
     combinator =
       if min do
-        Enum.reduce(1..min, combinator, fn _, acc -> to_repeat ++ acc end)
+        duplicate(combinator, to_repeat, min)
       else
         combinator
       end
