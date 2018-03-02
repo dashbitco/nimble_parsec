@@ -76,6 +76,16 @@ defmodule NimbleParsec.Compiler do
     compile_unbound_combinator({:traverse, combinators, traversal}, current, step, config)
   end
 
+  defp compile_unbound_combinator({:traverse, [], traversal}, current, step, config) do
+    {next, step} = build_next(step, config)
+    user_acc = traversal.([])
+    head = quote(do: [arg, acc, stack, line, column])
+    args = quote(do: [arg, unquote(user_acc) ++ acc, stack, line, column])
+    body = {next, [], args}
+    def = {current, head, true, body}
+    {[def], [{current, @arity}], next, step, :catch_none}
+  end
+
   defp compile_unbound_combinator({:traverse, combinators, traversal}, current, step, config) do
     {next, step} = build_next(step, config)
     head = quote(do: [arg, acc, stack, line, column])
@@ -115,6 +125,7 @@ defmodule NimbleParsec.Compiler do
     # have any fallback besides the requirement to drop the stack
     # this allows us to compose with repeat and traverse.
     config = update_in(config.stack_depth, &(&1 + 2))
+    config = update_in(config.labels, &[label({:choice, choices}) | &1])
 
     {first, defs, inline, step} =
       compile_choice(Enum.reverse(choices), [], inline, :unused, step, done, config)
@@ -339,6 +350,10 @@ defmodule NimbleParsec.Compiler do
   end
 
   ## Label
+
+  defp labels([]) do
+    "nothing"
+  end
 
   defp labels(combinators) do
     Enum.map_join(combinators, ", followed by ", &label/1)

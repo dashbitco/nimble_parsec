@@ -1,8 +1,7 @@
 # TODO: runtime_composition() and private parsecs
-# TODO: integer() and integer(min, max)
+# TODO: integer() and integer(min, max) (and benchmark)
 # TODO: repeat_until()
 # TODO: repeat_up_to()
-# TODO: choice()
 # TODO: Docs
 
 defmodule NimbleParsec do
@@ -12,6 +11,17 @@ defmodule NimbleParsec do
     end
   end
 
+  @doc """
+  Defines a public parser `combinator` with the given `name` and `opts`.
+
+  ## Options
+
+    * `:inline` - when true, inlines clauses that work as redirection for
+      other clauses. It is disabled by default because of a bug in Elixir
+      v1.5 and v1.6 where unused functions that are inlined cause a
+      compilation error.
+
+  """
   defmacro defparsec(name, combinator, opts \\ []) do
     quote bind_quoted: [name: name, combinator: combinator, opts: opts] do
       def unquote(name)(binary, opts \\ []) when is_binary(binary) do
@@ -19,7 +29,10 @@ defmodule NimbleParsec do
       end
 
       {defs, inline} = NimbleParsec.Compiler.compile(name, combinator, opts)
-      @compile {:inline, inline}
+
+      if Keyword.get(opts, :inline, false) do
+        @compile {:inline, inline}
+      end
 
       for {name, args, guards, body} <- defs do
         defp unquote(name)(unquote_splicing(args)) when unquote(guards), do: unquote(body)
@@ -33,11 +46,12 @@ defmodule NimbleParsec do
     end
   end
 
-  @type t :: [combinator()]
+  @type t :: [combinator]
   @type bin_modifiers :: :utf8 | :utf16 | :utf32
   @type range :: inclusive_range | exclusive_range
-  @type inclusive_range :: Range.t() | non_neg_integer()
-  @type exclusive_range :: {:not, Range.t()} | {:not, non_neg_integer()}
+  @type inclusive_range :: Range.t() | char()
+  @type exclusive_range :: {:not, Range.t()} | {:not, char()}
+  @type min_and_max :: {:min, pos_integer()} | {:max, pos_integer()}
   @type call ::
           {module :: atom(), function :: atom(), args :: [term]}
           | {function :: atom(), args :: [term]}
@@ -98,7 +112,8 @@ defmodule NimbleParsec do
 
   """
   @spec ascii_char(t, [range]) :: t
-  def ascii_char(combinator \\ empty(), ranges) do
+  def ascii_char(combinator \\ empty(), ranges)
+      when is_combinator(combinator) and is_list(ranges) do
     {inclusive, exclusive} = split_ranges!(ranges, "ascii_char")
     compile_bin_segment(combinator, inclusive, exclusive, [])
   end
@@ -136,7 +151,8 @@ defmodule NimbleParsec do
 
   """
   @spec utf8_char(t, [range]) :: t
-  def utf8_char(combinator \\ empty(), ranges) do
+  def utf8_char(combinator \\ empty(), ranges)
+      when is_combinator(combinator) and is_list(ranges) do
     {inclusive, exclusive} = split_ranges!(ranges, "utf8_char")
     compile_bin_segment(combinator, inclusive, exclusive, [:utf8])
   end
@@ -170,14 +186,33 @@ defmodule NimbleParsec do
   end
 
   @doc ~S"""
-  Defines an integer combinator with `min` and `max` length.
+  Defines an integer combinator with of exact length or `min` and `max`
+  length.
+
+  If you want an integer of unknown size, use `integer(min: 1)`.
 
   ## Examples
+
+  With exact length:
 
       defmodule MyParser do
         import NimbleParsec
 
-        defparsec :two_digits_integer, integer(2, 2)
+        defparsec :two_digits_integer, integer(2)
+      end
+
+      MyParser.two_digits_integer("123")
+      #=> {:ok, [12], "3", 1, 3}
+
+      MyParser.two_digits_integer("1a3")
+      #=> {:error, "expected a two digits integer", "1a3", 1, 1}
+
+  With min and max:
+
+      defmodule MyParser do
+        import NimbleParsec
+
+        defparsec :two_digits_integer, integer(min: 2, max: 4)
       end
 
       MyParser.two_digits_integer("123")
@@ -187,37 +222,52 @@ defmodule NimbleParsec do
       #=> {:error, "expected a two digits integer", "1a3", 1, 1}
 
   """
-  def integer(combinator \\ empty(), min, max)
+  @spec integer(t, pos_integer | [min_and_max]) :: t
+  def integer(combinator \\ empty(), count)
 
-  def integer(combinator, size, size)
-      when is_integer(size) and size > 0 and is_combinator(combinator) do
+  def integer(combinator, count)
+      when is_combinator(combinator) and is_integer(count) and count > 0 do
     integer =
-      Enum.reduce(1..size, empty(), fn _, acc ->
+      Enum.reduce(1..count, empty(), fn _, acc ->
         compile_bin_segment(acc, [?0..?9], [], [])
       end)
 
-    mapped = compile_traverse(empty(), integer, &from_ascii_to_integer/1)
-    label(combinator, mapped, "#{size} digits integer")
+    compile_traverse(combinator, integer, &quoted_ascii_to_integer/1)
   end
 
-  def integer(combinator, min, max)
-      when is_integer(min) and min > 0 and is_integer(max) and max >= min and
-             is_combinator(combinator) do
-    raise ArgumentError, "not yet implemented"
+  def integer(combinator, opts) when is_combinator(combinator) and is_list(opts) do
+    {min, max} = validate_min_and_max!(opts)
+    to_repeat = compile_bin_segment(empty(), [?0..?9], [], [])
+
+    combinator =
+      if min do
+        integer(combinator, min)
+      else
+        combinator
+      end
+
+    combinator =
+      if max do
+        [{:repeat_up_to, to_repeat, max - min} | combinator]
+      else
+        [{:repeat, to_repeat} | combinator]
+      end
+
+    combinator
   end
 
-  defp from_ascii_to_integer(vars) do
+  defp quoted_ascii_to_integer(vars) do
     vars
-    |> from_ascii_to_integer(1)
+    |> quoted_ascii_to_integer(1)
     |> Enum.reduce(&{:+, [], [&2, &1]})
     |> List.wrap()
   end
 
-  defp from_ascii_to_integer([var | vars], index) do
-    [quote(do: (unquote(var) - ?0) * unquote(index)) | from_ascii_to_integer(vars, index * 10)]
+  defp quoted_ascii_to_integer([var | vars], index) do
+    [quote(do: (unquote(var) - ?0) * unquote(index)) | quoted_ascii_to_integer(vars, index * 10)]
   end
 
-  defp from_ascii_to_integer([], _index) do
+  defp quoted_ascii_to_integer([], _index) do
     []
   end
 
@@ -240,6 +290,7 @@ defmodule NimbleParsec do
       #=> {:ok, [?1, ?A, ?z, ?+], "", 1, 5}
 
   """
+  @spec concat(t, t) :: t
   def concat(left, right) when is_combinator(left) and is_combinator(right) do
     right ++ left
   end
@@ -290,9 +341,8 @@ defmodule NimbleParsec do
   @spec traverse(t, t, call) :: t
   def traverse(combinator \\ empty(), to_traverse, call)
       when is_combinator(combinator) and is_combinator(to_traverse) and is_tuple(call) do
-    to_traverse = reverse_combinators!(to_traverse, "traverse")
     compile_call!(:ok, call, "traverse")
-    runtime_traverse(combinator, to_traverse, &compile_call!(&1, call, "traverse"))
+    runtime_traverse(combinator, Enum.reverse(to_traverse), &compile_call!(&1, call, "traverse"))
   end
 
   @doc ~S"""
@@ -326,11 +376,10 @@ defmodule NimbleParsec do
   @spec map(t, t, call) :: t
   def map(combinator \\ empty(), to_map, call)
       when is_combinator(combinator) and is_combinator(to_map) and is_tuple(call) do
-    to_map = reverse_combinators!(to_map, "map")
     var = Macro.var(:var, __MODULE__)
     call = compile_call!(var, call, "map")
 
-    runtime_traverse(combinator, to_map, fn arg ->
+    runtime_traverse(combinator, Enum.reverse(to_map), fn arg ->
       quote do
         Enum.map(unquote(arg), fn unquote(var) -> unquote(call) end)
       end
@@ -367,10 +416,9 @@ defmodule NimbleParsec do
   @spec reduce(t, t, call) :: t
   def reduce(combinator \\ empty(), to_reduce, call)
       when is_combinator(combinator) and is_combinator(to_reduce) and is_tuple(call) do
-    to_reduce = reverse_combinators!(to_reduce, "reduce")
     compile_call!(:ok, call, "reduce")
 
-    runtime_traverse(combinator, to_reduce, fn arg ->
+    runtime_traverse(combinator, Enum.reverse(to_reduce), fn arg ->
       [compile_call!(quote(do: :lists.reverse(unquote(arg))), call, "reduce")]
     end)
   end
@@ -393,6 +441,7 @@ defmodule NimbleParsec do
       #=> {:error, "expected a literal \"T\"", "not T", 1, 1}
 
   """
+  @spec literal(t, binary) :: t
   def literal(combinator \\ empty(), binary)
       when is_combinator(combinator) and is_binary(binary) do
     [{:literal, binary} | combinator]
@@ -413,10 +462,14 @@ defmodule NimbleParsec do
       #=> {:ok, [12], "", 1, 3}
 
   """
+  @spec ignore(t, t) :: t
   def ignore(combinator \\ empty(), to_ignore)
       when is_combinator(combinator) and is_combinator(to_ignore) do
-    to_ignore = reverse_combinators!(to_ignore, "ignore")
-    compile_traverse(combinator, to_ignore, fn _ -> [] end, fn _ -> [] end)
+    if to_ignore == empty() do
+      to_ignore
+    else
+      compile_traverse(combinator, to_ignore, fn _ -> [] end, fn _ -> [] end)
+    end
   end
 
   @doc """
@@ -437,15 +490,33 @@ defmodule NimbleParsec do
       #=> {:ok, ["OTHER", 12], "", 1, 3}
 
   """
+  @spec replace(t, t, term) :: t
   def replace(combinator \\ empty(), to_replace, value)
       when is_combinator(combinator) and is_combinator(to_replace) do
-    to_replace = reverse_combinators!(to_replace, "replace")
     value = Macro.escape(value)
-    compile_traverse(combinator, to_replace, fn _ -> [value] end, fn _ -> [value] end)
+
+    compile_traverse(combinator, Enum.reverse(to_replace), fn _ -> [value] end, fn _ ->
+      [value]
+    end)
   end
 
   @doc """
-  Allow the combinator given on `repeat` to appear zero or more times.
+  Allow the combinator given on `to_repeat` to appear zero or more times.
+
+  Beware! Since `repeat/2` allows zero entries, it cannot be used inside
+  `choice/2`, because it will always succeed and may lead to unused function
+  warnings since any further choice won't ever be attempted. For example,
+  because `repeat/2` always suceeds, the combinator below won't ever
+  parse "OK", since the first combinator will succeed even when parsing
+  nothing:
+
+      choice([
+        repeat(ascii_char([?a..?z])),
+        literal("OK")
+      ])
+
+  Instead of `repeat/2`, you may want to use `times/3` with the flags `:min`
+  and `:max`.
 
   ## Examples
 
@@ -469,17 +540,128 @@ defmodule NimbleParsec do
     [{:repeat, to_repeat} | combinator]
   end
 
-  @spec choice(t, t) :: t
-  def choice(combinator \\ empty(), [_, _ | _] = choices) when is_combinator(combinator) do
-    choices =
-      for choice <- choices do
-        reverse_combinators!(choice, "choice")
+  @doc """
+  Allow the combinator given on `to_repeat` to appear at least, at most
+  or exactly a given amout of times.
+
+  ## Examples
+
+      defmodule MyParser do
+        import NimbleParsec
+
+        defparsec :minimum_lower, times(ascii_char([?a..?z]), min: 2)
       end
 
+      MyParser.minimum_lower("abcd")
+      #=> {:ok, [?a, ?b, ?c, ?d], "", 1, 5}
+
+      MyParser.minimum_lower("ab12")
+      #=> {:ok, [?a, ?b], "12", 1, 3}
+
+      MyParser.minimum_lower("a123")
+      #=> {:ok, [], "a123", 1, 1}
+
+  """
+  @spec times(t, t, pos_integer | [min_and_max]) :: t
+  def times(combinator \\ empty(), to_repeat, count_or_min_max)
+
+  def times(combinator, to_repeat, count)
+      when is_combinator(combinator) and is_combinator(to_repeat) and is_integer(count) do
+    to_repeat = reverse_combinators!(to_repeat, "times")
+    Enum.reduce(1..count, combinator, fn _, acc -> to_repeat ++ acc end)
+  end
+
+  def times(combinator, to_repeat, opts)
+      when is_combinator(combinator) and is_combinator(to_repeat) and is_list(opts) do
+    to_repeat = reverse_combinators!(to_repeat, "times")
+    {min, max} = validate_min_and_max!(opts)
+
+    combinator =
+      if min do
+        Enum.reduce(1..min, combinator, fn _, acc -> to_repeat ++ acc end)
+      else
+        combinator
+      end
+
+    combinator =
+      if max do
+        [{:repeat_up_to, to_repeat, max - min} | combinator]
+      else
+        [{:repeat, to_repeat} | combinator]
+      end
+
+    combinator
+  end
+
+  @doc """
+  Chooses one of the given combinators.
+
+  Expects at leasts two choices.
+
+  Beware! If a combinator that always succeeds is given as a choice,
+  that choice will always succeed which may lead to unused function
+  warnings since any further choice won't ever be attempted. For example,
+  because `repeat` always suceeds, the combinator below won't ever
+  parse "OK", since the first combinator will succeed even when parsing
+  nothing:
+
+      choice([
+        repeat(ascii_char([?0..?9])),
+        literal("OK")
+      ])
+
+  Instead of `repeat/2`, you may want to use `times/3` with the flags `:min`
+  and `:max`.
+  """
+  @spec choice(t, t) :: t
+  def choice(combinator \\ empty(), [_, _ | _] = choices) when is_combinator(combinator) do
+    choices = Enum.map(choices, &Enum.reverse/1)
     [{:choice, choices} | combinator]
   end
 
-  ## Inner combinators
+  @doc """
+  Marks the given combinator as `optional`.
+
+  It is equivalent to `choice([optional, empty()])`.
+  """
+  @spec optional(t, t) :: t
+  def optional(combinator \\ empty(), optional) do
+    choice(combinator, [optional, empty()])
+  end
+
+  ## Helpers
+
+  defp validate_min_and_max!(opts) do
+    min = opts[:min]
+    max = opts[:max]
+
+    cond do
+      min && max ->
+        validate_min_or_max!(:min, min)
+        validate_min_or_max!(:max, max)
+
+        max <= min and
+          raise ArgumentError,
+                "expected :max to be strictly more than :min, got: #{min} and #{max}"
+
+      min ->
+        validate_min_or_max!(:min, min)
+
+      max ->
+        validate_min_or_max!(:max, max)
+
+      true ->
+        raise ArgumentError, "expected :min or :max to be given"
+    end
+
+    {min, max}
+  end
+
+  defp validate_min_or_max!(kind, value) do
+    unless is_integer(value) and value >= 1 do
+      raise ArgumentError, "expected #{kind} to be an integer more than 1, got: #{inspect(value)}"
+    end
+  end
 
   defp split_ranges!(ranges, context) do
     Enum.split_with(ranges, &split_range!(&1, context))
@@ -493,6 +675,25 @@ defmodule NimbleParsec do
   defp split_range!(range, context) do
     raise ArgumentError, "unknown range #{inspect(range)} given to #{context}"
   end
+
+  defp compile_call!(arg, {module, function, args}, _context)
+       when is_atom(module) and is_atom(function) and is_list(args) do
+    quote do
+      unquote(module).unquote(function)(unquote(arg), unquote_splicing(Macro.escape(args)))
+    end
+  end
+
+  defp compile_call!(arg, {function, args}, _context) when is_atom(function) and is_list(args) do
+    quote do
+      unquote(function)(unquote(arg), unquote_splicing(Macro.escape(args)))
+    end
+  end
+
+  defp compile_call!(_arg, unknown, context) do
+    raise ArgumentError, "unknown call given to #{context}, got: #{inspect(unknown)}"
+  end
+
+  ## Inner combinators
 
   # A runtime traverse. Notice the `to_traverse` inside the
   # combinator is already expected to be reversed.
@@ -524,23 +725,6 @@ defmodule NimbleParsec do
 
   defp reverse_combinators!(combinator, _action) when is_combinator(combinator) do
     Enum.reverse(combinator)
-  end
-
-  defp compile_call!(arg, {module, function, args}, _context)
-       when is_atom(module) and is_atom(function) and is_list(args) do
-    quote do
-      unquote(module).unquote(function)(unquote(arg), unquote_splicing(Macro.escape(args)))
-    end
-  end
-
-  defp compile_call!(arg, {function, args}, _context) when is_atom(function) and is_list(args) do
-    quote do
-      unquote(function)(unquote(arg), unquote_splicing(Macro.escape(args)))
-    end
-  end
-
-  defp compile_call!(_arg, unknown, context) do
-    raise ArgumentError, "unknown call given to #{context}, got: #{inspect(unknown)}"
   end
 
   defp always_raise!(_) do

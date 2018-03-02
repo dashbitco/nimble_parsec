@@ -85,11 +85,11 @@ defmodule NimbleParsecTest do
     end
   end
 
-  describe "integer/3 combinator with min=max" do
-    defparsec :only_integer, integer(2, 2)
-    defparsec :prefixed_integer, literal("T") |> integer(2, 2)
+  describe "integer/3 combinator with exact length" do
+    defparsec :only_integer, integer(2)
+    defparsec :prefixed_integer, literal("T") |> integer(2)
 
-    @error "expected 2 digits integer"
+    @error "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
     test "returns ok/error by itself" do
       assert only_integer("12") == {:ok, [12], "", 1, 3}
@@ -97,7 +97,7 @@ defmodule NimbleParsecTest do
       assert only_integer("1a3") == {:error, @error, "1a3", 1, 1}
     end
 
-    @error "expected literal \"T\", followed by 2 digits integer"
+    @error "expected literal \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
     test "returns ok/error with previous document" do
       assert prefixed_integer("T12") == {:ok, ["T", 12], "", 1, 4}
@@ -106,9 +106,9 @@ defmodule NimbleParsecTest do
     end
 
     test "is bound" do
-      assert bound?(integer(2, 2))
-      assert bound?(literal("T") |> integer(2, 2))
-      assert bound?(literal("T") |> integer(2, 2) |> literal("E"))
+      assert bound?(integer(2))
+      assert bound?(literal("T") |> integer(2))
+      assert bound?(literal("T") |> integer(2) |> literal("E"))
     end
   end
 
@@ -183,11 +183,16 @@ defmodule NimbleParsecTest do
   describe "replace/3 combinator at compile time" do
     defparsec :compile_replace, replace(literal("TO"), "OTHER")
     defparsec :compile_replace_with_newline, replace(literal("T\nO"), "OTHER")
+    defparsec :compile_replace_empty, replace(empty(), "OTHER")
 
     test "returns ok/error" do
       assert compile_replace("TO") == {:ok, ["OTHER"], "", 1, 3}
       assert compile_replace("TOC") == {:ok, ["OTHER"], "C", 1, 3}
       assert compile_replace("AO") == {:error, "expected literal \"TO\"", "AO", 1, 1}
+    end
+
+    test "can replace empty" do
+      assert compile_replace_empty("TO") == {:ok, ["OTHER"], "TO", 1, 1}
     end
 
     test "properly counts newlines" do
@@ -200,6 +205,7 @@ defmodule NimbleParsecTest do
 
     test "is bound" do
       assert bound?(replace(literal("T"), "OTHER"))
+      assert bound?(replace(empty(), "OTHER"))
     end
   end
 
@@ -279,17 +285,19 @@ defmodule NimbleParsecTest do
 
     defparsec :remote_traverse,
               literal("T")
-              |> integer(2, 2)
+              |> integer(2)
               |> traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]})
-              |> integer(2, 2)
+              |> integer(2)
 
     test "returns ok/error" do
       assert remote_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", 1, 9}
 
-      error = "expected literal \"T\", followed by 2 digits integer"
+      error =
+        "expected literal \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
+
       assert remote_traverse("Tabc34") == {:error, error, "Tabc34", 1, 1}
 
-      error = "expected 2 digits integer"
+      error = "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
       assert remote_traverse("T12abcdf") == {:error, error, "df", 1, 7}
 
       error =
@@ -316,17 +324,19 @@ defmodule NimbleParsecTest do
 
     defparsec :local_traverse,
               literal("T")
-              |> integer(2, 2)
+              |> integer(2)
               |> traverse(@three_ascii_letters, {:private_join_and_wrap, ["-"]})
-              |> integer(2, 2)
+              |> integer(2)
 
     test "returns ok/error" do
       assert local_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", 1, 9}
 
-      error = "expected literal \"T\", followed by 2 digits integer"
+      error =
+        "expected literal \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
+
       assert local_traverse("Tabc34") == {:error, error, "Tabc34", 1, 1}
 
-      error = "expected 2 digits integer"
+      error = "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
       assert local_traverse("T12abcdf") == {:error, error, "df", 1, 7}
 
       error =
@@ -351,10 +361,16 @@ defmodule NimbleParsecTest do
               |> ascii_char([?a..?z])
               |> map({Integer, :to_string, []})
 
+    defparsec :empty_map, map(empty(), {Integer, :to_string, []})
+
     test "returns ok/error" do
       assert remote_map("abc") == {:ok, ["97", "98", "99"], "", 1, 4}
       assert remote_map("abcd") == {:ok, ["97", "98", "99"], "d", 1, 4}
       assert {:error, _, "1abcd", 1, 1} = remote_map("1abcd")
+    end
+
+    test "can map empty" do
+      assert empty_map("abc") == {:ok, [], "abc", 1, 1}
     end
   end
 
@@ -383,10 +399,16 @@ defmodule NimbleParsecTest do
               |> ascii_char([?a..?z])
               |> reduce({Enum, :join, ["-"]})
 
+    defparsec :empty_reduce, reduce(empty(), {Enum, :join, ["-"]})
+
     test "returns ok/error" do
       assert remote_reduce("abc") == {:ok, ["97-98-99"], "", 1, 4}
       assert remote_reduce("abcd") == {:ok, ["97-98-99"], "d", 1, 4}
       assert {:error, _, "1abcd", 1, 1} = remote_reduce("1abcd")
+    end
+
+    test "can reduce empty" do
+      assert empty_reduce("abc") == {:ok, [""], "abc", 1, 1}
     end
   end
 
@@ -425,8 +447,12 @@ defmodule NimbleParsecTest do
 
     ascii_to_string = map(ascii_char([?0..?9]), {:to_string, []})
     defparsec :repeat_digits_to_string, repeat(ascii_to_string)
-    defparsec :repeat_digits_to_same_inner, repeat(map(ascii_to_string, {String, :to_integer, []}))
-    defparsec :repeat_digits_to_same_outer, map(repeat(ascii_to_string), {String, :to_integer, []})
+
+    defparsec :repeat_digits_to_same_inner,
+              repeat(map(ascii_to_string, {String, :to_integer, []}))
+
+    defparsec :repeat_digits_to_same_outer,
+              map(repeat(ascii_to_string), {String, :to_integer, []})
 
     test "returns ok/error" do
       assert repeat_digits("123") == {:ok, [?1, ?2, ?3], "", 1, 4}
@@ -443,20 +469,101 @@ defmodule NimbleParsecTest do
     end
   end
 
+  describe "choice/2 combinator" do
+    defparsec :simple_choices,
+              choice([ascii_char([?a..?z]), ascii_char([?A..?Z]), ascii_char([?0..?9])])
+
+    defparsec :choices_inner_repeat,
+              choice([repeat(ascii_char([?a..?z])), repeat(ascii_char([?A..?Z]))])
+
+    defparsec :choices_outer_repeat, repeat(choice([ascii_char([?a..?z]), ascii_char([?A..?Z])]))
+
+    defparsec :choices_repeat_and_inner_map,
+              repeat(
+                choice([
+                  map(ascii_char([?a..?z]), {:to_string, []}),
+                  map(ascii_char([?A..?Z]), {:to_string, []})
+                ])
+              )
+
+    defparsec :choices_repeat_and_maps,
+              map(
+                repeat(
+                  choice([
+                    map(ascii_char([?a..?z]), {:to_string, []}),
+                    map(ascii_char([?A..?Z]), {:to_string, []})
+                  ])
+                ),
+                {String, :to_integer, []}
+              )
+
+    defparsec :choices_with_empty,
+              choice([
+                ascii_char([?a..?z]),
+                empty()
+              ])
+
+    @error "expected one of byte in the range ?a..?z, byte in the range ?A..?Z, byte in the range ?0..?9"
+
+    test "returns ok/error" do
+      assert simple_choices("a=") == {:ok, [?a], "=", 1, 2}
+      assert simple_choices("A=") == {:ok, [?A], "=", 1, 2}
+      assert simple_choices("0=") == {:ok, [?0], "=", 1, 2}
+      assert simple_choices("+=") == {:error, @error, "+=", 1, 1}
+    end
+
+    test "returns ok/error with repeat inside" do
+      assert choices_inner_repeat("az") == {:ok, [?a, ?z], "", 1, 3}
+      assert choices_inner_repeat("AZ") == {:ok, [], "AZ", 1, 1}
+    end
+
+    test "returns ok/error with repeat outside" do
+      assert choices_outer_repeat("az") == {:ok, [?a, ?z], "", 1, 3}
+      assert choices_outer_repeat("AZ") == {:ok, [?A, ?Z], "", 1, 3}
+      assert choices_outer_repeat("aAzZ") == {:ok, [?a, ?A, ?z, ?Z], "", 1, 5}
+    end
+
+    test "returns ok/error with repeat and inner map" do
+      assert choices_repeat_and_inner_map("az") == {:ok, ["97", "122"], "", 1, 3}
+      assert choices_repeat_and_inner_map("AZ") == {:ok, ["65", "90"], "", 1, 3}
+      assert choices_repeat_and_inner_map("aAzZ") == {:ok, ["97", "65", "122", "90"], "", 1, 5}
+    end
+
+    test "returns ok/error with repeat and maps" do
+      assert choices_repeat_and_maps("az") == {:ok, [?a, ?z], "", 1, 3}
+      assert choices_repeat_and_maps("AZ") == {:ok, [?A, ?Z], "", 1, 3}
+      assert choices_repeat_and_maps("aAzZ") == {:ok, [?a, ?A, ?z, ?Z], "", 1, 5}
+    end
+
+    test "returns ok/error on empty" do
+      assert choices_with_empty("az") == {:ok, [?a], "z", 1, 2}
+      assert choices_with_empty("AZ") == {:ok, [], "AZ", 1, 1}
+    end
+  end
+
+  describe "optional/2 combinator" do
+    defparsec :optional_ascii, optional(ascii_char([?a..?z]))
+
+    test "returns ok/error on empty" do
+      assert optional_ascii("az") == {:ok, [?a], "z", 1, 2}
+      assert optional_ascii("AZ") == {:ok, [], "AZ", 1, 1}
+    end
+  end
+
   describe "custom datetime/2 combinator" do
     date =
-      integer(4, 4)
+      integer(4)
       |> ignore(literal("-"))
-      |> integer(2, 2)
+      |> integer(2)
       |> ignore(literal("-"))
-      |> integer(2, 2)
+      |> integer(2)
 
     time =
-      integer(2, 2)
+      integer(2)
       |> ignore(literal(":"))
-      |> integer(2, 2)
+      |> integer(2)
       |> ignore(literal(":"))
-      |> integer(2, 2)
+      |> integer(2)
 
     defparsec :datetime, date |> ignore(literal("T")) |> concat(time)
 
