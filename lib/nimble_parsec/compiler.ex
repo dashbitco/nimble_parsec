@@ -113,24 +113,14 @@ defmodule NimbleParsec.Compiler do
     end
   end
 
-  defp compile_unbound_combinator({:choice, choices}, current, step, config) do
-    {done, step} = build_next(step, config)
+  defp compile_unbound_combinator({:choice, choices} = combinator, current, step, config) do
+    config = update_in(config.labels, &[label(combinator) | &1])
 
-    # We process choices in reverse order. The last order does not
-    # have any fallback besides the requirement to drop the stack
-    # this allows us to compose with repeat and traverse.
-    config = update_in(config.stack_depth, &(&1 + 2))
-    config = update_in(config.labels, &[label({:choice, choices}) | &1])
-
-    {first, defs, inline, step} =
-      compile_choice(Enum.reverse(choices), [], [], :unused, step, done, config)
-
-    head = quote(do: [rest, acc, stack, line, column])
-    args = quote(do: [rest, [], [{rest, line, column}, acc | stack], line, column])
-    body = {first, [], args}
-    def = {current, head, true, body}
-
-    {Enum.reverse([def | defs]), [{current, @arity} | inline], done, step, :catch_none}
+    if Enum.all?(choices, &all_bound_combinators?/1) do
+      compile_bound_choice(choices, current, step, config)
+    else
+      compile_unbound_choice(choices, current, step, config)
+    end
   end
 
   ## Repeat
@@ -172,12 +162,48 @@ defmodule NimbleParsec.Compiler do
 
   ## Choice
 
-  defp compile_choice([], defs, inline, previous, step, _success, _config) do
+  defp compile_bound_choice(choices, current, step, config) do
+    {next_name, next_step} = build_next(step, config)
+
+    defs =
+      for choice <- choices do
+        if choice == [] do
+          build_proxy_to(current, next_name, 0)
+        else
+          {[_, def], [], ^next_name, ^next_step} = compile(choice, [], [], current, step, config)
+          def
+        end
+      end
+
+    catch_all = if [] in choices, do: :catch_none, else: :catch_all
+    {defs, [], next_name, next_step, catch_all}
+  end
+
+  defp compile_unbound_choice(choices, current, step, config) do
+    {done, step} = build_next(step, config)
+
+    # We process choices in reverse order. The last order does not
+    # have any fallback besides the requirement to drop the stack
+    # this allows us to compose with repeat and traverse.
+    config = update_in(config.stack_depth, &(&1 + 2))
+
+    {first, defs, inline, step} =
+      compile_unbound_choice(Enum.reverse(choices), [], [], :unused, step, done, config)
+
+    head = quote(do: [rest, acc, stack, line, column])
+    args = quote(do: [rest, [], [{rest, line, column}, acc | stack], line, column])
+    body = {first, [], args}
+    def = {current, head, true, body}
+
+    {Enum.reverse([def | defs]), [{current, @arity} | inline], done, step, :catch_none}
+  end
+
+  defp compile_unbound_choice([], defs, inline, previous, step, _success, _config) do
     # Discard the last failure definition that won't be used.
     {previous, tl(defs), tl(inline), step - 1}
   end
 
-  defp compile_choice([choice | choices], defs, inline, _previous, step, done, config) do
+  defp compile_unbound_choice([choice | choices], defs, inline, _previous, step, done, config) do
     {current, step} = build_next(step, config)
     {defs, inline, success, step} = compile(choice, defs, inline, current, step, config)
 
@@ -195,7 +221,7 @@ defmodule NimbleParsec.Compiler do
     defs = [failure_def, success_def | defs]
     inline = [{failure, @arity}, {success, @arity} | inline]
     config = %{config | catch_all: failure, stack_depth: 0}
-    compile_choice(choices, defs, inline, current, step, done, config)
+    compile_unbound_choice(choices, defs, inline, current, step, done, config)
   end
 
   ## Bound combinators

@@ -19,7 +19,9 @@ defmodule NimbleParsec do
     * `:inline` - when true, inlines clauses that work as redirection for
       other clauses. It is disabled by default because of a bug in Elixir
       v1.5 and v1.6 where unused functions that are inlined cause a
-      compilation error.
+      compilation error
+
+    * `:debug` - when true, writes generated clauses to stderr for debugging
 
   """
   defmacro defparsec(name, combinator, opts \\ []) do
@@ -34,12 +36,19 @@ defmodule NimbleParsec do
         @compile {:inline, inline}
       end
 
+      debug? = Keyword.get(opts, :debug, false)
+
       for {name, args, guards, body} <- defs do
         defp unquote(name)(unquote_splicing(args)) when unquote(guards), do: unquote(body)
 
-        # IO.puts(Macro.to_string(quote do
-        #   defp unquote(name)(unquote_splicing(args)) when unquote(guards), do: unquote(body)
-        # end))
+        if debug? do
+          IO.puts(:stderr, """
+          defp #{Macro.to_string(quote(do: unquote(name)(unquote_splicing(args))))}
+               when #{Macro.to_string(guards)} do
+            #{Macro.to_string(body)}
+          end
+          """)
+        end
       end
 
       :ok
