@@ -17,7 +17,37 @@ defmodule NimbleParsec.Compiler do
     raise ArgumentError, "cannot compile #{inspect(name)} with an empty parser combinator"
   end
 
-  def compile(name, combinators, _opts) when is_list(combinators) do
+  def compile(name, combinators, opts) when is_list(combinators) do
+    debug? = Keyword.get(opts, :debug, false)
+    inline? = Keyword.get(opts, :inline, false)
+
+    {defs, inline} = compile(name, combinators)
+
+    if debug? do
+      if inline? do
+        IO.puts(:stderr, """
+        @compile {:inline, #{inspect(inline)}}
+        """)
+      end
+
+      for {name, args, guards, body} <- defs do
+        IO.puts(:stderr, """
+        defp #{Macro.to_string(quote(do: unquote(name)(unquote_splicing(args))))}
+             when #{Macro.to_string(guards)} do
+          #{Macro.to_string(body)}
+        end
+        """)
+      end
+    end
+
+    if inline? do
+      {defs, inline}
+    else
+      {defs, []}
+    end
+  end
+
+  defp compile(name, combinators) do
     config = %{
       acc_depth: 0,
       catch_all: nil,
@@ -32,13 +62,7 @@ defmodule NimbleParsec.Compiler do
       |> Enum.reverse()
       |> compile([], [], next, step, config)
 
-    {Enum.reverse([compile_ok(last) | defs]), [{last, @arity} | inline]}
-  end
-
-  defp compile_ok(current) do
-    head = quote(do: [rest, acc, _stack, line, column])
-    body = quote(do: {:ok, :lists.reverse(acc), rest, line, column})
-    {current, head, true, body}
+    {Enum.reverse([build_ok(last) | defs]), [{last, @arity} | inline]}
   end
 
   defp compile([], defs, inline, current, step, _config) do
@@ -679,6 +703,12 @@ defmodule NimbleParsec.Compiler do
 
   defp build_next(step, %{name: name}) do
     {:"#{name}__#{step}", step + 1}
+  end
+
+  defp build_ok(current) do
+    head = quote(do: [rest, acc, _stack, line, column])
+    body = quote(do: {:ok, :lists.reverse(acc), rest, line, column})
+    {current, head, true, body}
   end
 
   defp build_catch_all(name, combinators, %{catch_all: nil, labels: labels}) do

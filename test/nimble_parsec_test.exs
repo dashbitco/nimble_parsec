@@ -532,6 +532,111 @@ defmodule NimbleParsecTest do
     end
   end
 
+  describe "repeat_while/3 combinator" do
+    defparsec :repeat_while_digits,
+              repeat_while(ascii_char([?0..?9]) |> ascii_char([?0..?9]), {__MODULE__, :not_3, []})
+
+    ascii_to_string = map(ascii_char([?0..?9]), {:to_string, []})
+    defparsec :repeat_while_digits_to_string, repeat_while(ascii_to_string, {:not_3, []})
+
+    defparsec :repeat_while_digits_to_same_inner,
+              repeat_while(map(ascii_to_string, {String, :to_integer, []}), {:not_3, []})
+
+    defparsec :repeat_while_digits_to_same_outer,
+              map(repeat_while(ascii_to_string, {:not_3, []}), {String, :to_integer, []})
+
+    defparsec :repeat_while_double_digits_to_string,
+              repeat_while(
+                concat(
+                  map(ascii_char([?0..?9]), {:to_string, []}),
+                  map(ascii_char([?0..?9]), {:to_string, []})
+                ),
+                {:not_3, []}
+              )
+
+    test "returns ok/error" do
+      assert repeat_while_digits("1245") == {:ok, [?1, ?2, ?4, ?5], "", 1, 5}
+      assert repeat_while_digits("12345") == {:ok, [?1, ?2], "345", 1, 3}
+      assert repeat_while_digits("135") == {:ok, [?1, ?3], "5", 1, 3}
+      assert repeat_while_digits("312") == {:ok, [], "312", 1, 1}
+      assert repeat_while_digits("a123") == {:ok, [], "a123", 1, 1}
+    end
+
+    test "returns ok/error with map" do
+      assert repeat_while_digits_to_string("123") == {:ok, ["49", "50"], "3", 1, 3}
+      assert repeat_while_digits_to_string("321") == {:ok, [], "321", 1, 1}
+    end
+
+    test "returns ok/error with inner and outer map" do
+      assert repeat_while_digits_to_same_inner("123") == {:ok, [?1, ?2], "3", 1, 3}
+      assert repeat_while_digits_to_same_outer("123") == {:ok, [?1, ?2], "3", 1, 3}
+
+      assert repeat_while_digits_to_same_inner("321") == {:ok, [], "321", 1, 1}
+      assert repeat_while_digits_to_same_outer("321") == {:ok, [], "321", 1, 1}
+    end
+
+    test "returns ok/error with concat map" do
+      assert repeat_while_double_digits_to_string("12345") == {:ok, ["49", "50"], "345", 1, 3}
+      assert repeat_while_double_digits_to_string("135") == {:ok, ["49", "51"], "5", 1, 3}
+      assert repeat_while_double_digits_to_string("312") == {:ok, [], "312", 1, 1}
+      assert repeat_while_double_digits_to_string("a123") == {:ok, [], "a123", 1, 1}
+    end
+
+    def not_3(<<?3, _::binary>>), do: false
+    def not_3(_), do: true
+  end
+
+  describe "repeat_until/3 combinator" do
+    defparsec :repeat_until_digits,
+              repeat_until(ascii_char([?0..?9]) |> ascii_char([?0..?9]), [literal("3")])
+
+    ascii_to_string = map(ascii_char([?0..?9]), {:to_string, []})
+    defparsec :repeat_until_digits_to_string, repeat_until(ascii_to_string, [ascii_char([?3])])
+
+    defparsec :repeat_until_digits_to_same_inner,
+              repeat_until(map(ascii_to_string, {String, :to_integer, []}), [ascii_char([?3])])
+
+    defparsec :repeat_until_digits_to_same_outer,
+              map(repeat_until(ascii_to_string, [ascii_char([?3])]), {String, :to_integer, []})
+
+    defparsec :repeat_until_double_digits_to_string,
+              repeat_until(
+                concat(
+                  map(ascii_char([?0..?9]), {:to_string, []}),
+                  map(ascii_char([?0..?9]), {:to_string, []})
+                ),
+                [ascii_char([?3])]
+              )
+
+    test "returns ok/error" do
+      assert repeat_until_digits("1245") == {:ok, [?1, ?2, ?4, ?5], "", 1, 5}
+      assert repeat_until_digits("12345") == {:ok, [?1, ?2], "345", 1, 3}
+      assert repeat_until_digits("135") == {:ok, [?1, ?3], "5", 1, 3}
+      assert repeat_until_digits("312") == {:ok, [], "312", 1, 1}
+      assert repeat_until_digits("a123") == {:ok, [], "a123", 1, 1}
+    end
+
+    test "returns ok/error with map" do
+      assert repeat_until_digits_to_string("123") == {:ok, ["49", "50"], "3", 1, 3}
+      assert repeat_until_digits_to_string("321") == {:ok, [], "321", 1, 1}
+    end
+
+    test "returns ok/error with inner and outer map" do
+      assert repeat_until_digits_to_same_inner("123") == {:ok, [?1, ?2], "3", 1, 3}
+      assert repeat_until_digits_to_same_outer("123") == {:ok, [?1, ?2], "3", 1, 3}
+
+      assert repeat_until_digits_to_same_inner("321") == {:ok, [], "321", 1, 1}
+      assert repeat_until_digits_to_same_outer("321") == {:ok, [], "321", 1, 1}
+    end
+
+    test "returns ok/error with concat map" do
+      assert repeat_until_double_digits_to_string("12345") == {:ok, ["49", "50"], "345", 1, 3}
+      assert repeat_until_double_digits_to_string("135") == {:ok, ["49", "51"], "5", 1, 3}
+      assert repeat_until_double_digits_to_string("312") == {:ok, [], "312", 1, 1}
+      assert repeat_until_double_digits_to_string("a123") == {:ok, [], "a123", 1, 1}
+    end
+  end
+
   describe "times/2 combinator" do
     defparsec :times_digits, times(ascii_char([?0..?9]) |> ascii_char([?0..?9]), max: 4)
     defparsec :times_choice, times(choice([ascii_char([?0..?4]), ascii_char([?5..?9])]), max: 4)

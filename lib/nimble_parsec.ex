@@ -1,5 +1,4 @@
 # TODO: runtime_composition() and private parsecs
-# TODO: repeat_until()
 # TODO: Docs
 
 defmodule NimbleParsec do
@@ -30,23 +29,12 @@ defmodule NimbleParsec do
 
       {defs, inline} = NimbleParsec.Compiler.compile(name, combinator, opts)
 
-      if Keyword.get(opts, :inline, false) do
+      if inline != [] do
         @compile {:inline, inline}
       end
 
-      debug? = Keyword.get(opts, :debug, false)
-
       for {name, args, guards, body} <- defs do
         defp unquote(name)(unquote_splicing(args)) when unquote(guards), do: unquote(body)
-
-        if debug? do
-          IO.puts(:stderr, """
-          defp #{Macro.to_string(quote(do: unquote(name)(unquote_splicing(args))))}
-               when #{Macro.to_string(guards)} do
-            #{Macro.to_string(body)}
-          end
-          """)
-        end
       end
 
       :ok
@@ -191,8 +179,8 @@ defmodule NimbleParsec do
   """
   def label(combinator \\ empty(), to_label, label)
       when is_combinator(combinator) and is_combinator(to_label) and is_binary(label) do
-    to_label = reverse_combinators!(to_label, "label")
-    [{:label, to_label, label} | combinator]
+    non_empty!(to_label, "label")
+    [{:label, Enum.reverse(to_label), label} | combinator]
   end
 
   @doc ~S"""
@@ -337,23 +325,25 @@ defmodule NimbleParsec do
 
       MyParser.letters_to_chars("abc")
       #=> {:ok, ["99-98-97"], "", 1, 4}
+
   """
   @spec traverse(t, t, call) :: t
   def traverse(combinator \\ empty(), to_traverse, call)
       when is_combinator(combinator) and is_combinator(to_traverse) and is_tuple(call) do
     compile_call!(:ok, call, "traverse")
-    quoted_traverse(combinator, to_traverse, {__MODULE__, :__traverse__, [call]})
+    quoted_traverse(combinator, to_traverse, {__MODULE__, :__call__, [call, "traverse"]})
   end
 
   @doc """
-  Emits the AST to traverse the `to_traverse` combinator
-  results at compile time with `call`.
+  Invokes `call` to emit the AST that traverses the `to_traverse`
+  combinator results.
 
   `call` is a `{module, function, args}` where the AST argument
-  will be prended to `args`. `call` is invoked at compile time
-  and is useful in combinators that avoid injecting runtime
-  dependencies.
+  that will represent the combinator results will be prended to
+  `args`. `call` is invoked at compile time and is useful in
+  combinators that avoid injecting runtime dependencies.
   """
+  @spec quoted_traverse(t, t, mfargs) :: t
   def quoted_traverse(combinator, to_traverse, {_, _, _} = call)
       when is_combinator(combinator) and is_combinator(to_traverse) do
     [{:traverse, Enum.reverse(to_traverse), call} | combinator]
@@ -538,8 +528,122 @@ defmodule NimbleParsec do
   @spec repeat(t, t) :: t
   def repeat(combinator \\ empty(), to_repeat)
       when is_combinator(combinator) and is_combinator(to_repeat) do
-    to_repeat = reverse_combinators!(to_repeat, "repeat")
-    [{:repeat, to_repeat, {__MODULE__, :__constant__, [true]}} | combinator]
+    non_empty!(to_repeat, "repeat")
+    quoted_repeat_while(combinator, to_repeat, {__MODULE__, :__constant__, [true]})
+  end
+
+  @doc ~S"""
+  Repeats while the given remote or local function `call` returns true.
+
+  `call` is either a `{module, function, args}` representing
+  a remote call or `{function, args}` representing a local call.
+
+  The `rest` of the binary to be parsed will be prepended to the
+  given `args`. The `args` will be injected at the compile site
+  and therefore must be escapable via `Macro.escape/1`.
+
+  ## Examples
+
+      defmodule MyParser do
+        import NimbleParsec
+
+        defparsec :string,
+                  ascii_char([?"])
+                  |> repeat_while(
+                    choice([
+                      ~S(\") |> literal() |> replace(?"),
+                      utf8_char([])
+                    ]),
+                    {:not_quote, []}
+                  )
+                  |> ascii_char([?"])
+                  |> reduce({List, :to_string, []})
+
+        defp not_quote(<<?", _::binary>>), do: false
+        defp not_quote(_), do: true
+      end
+
+      MyParser.string(~S("string with quotes \" inside"))
+      {:ok, ["\"string with quotes \" inside\""], "", 1, 31}
+
+  """
+  @spec repeat_while(t, t, call) :: t
+  def repeat_while(combinator \\ empty(), to_repeat, call)
+      when is_combinator(combinator) and is_combinator(to_repeat) and is_tuple(call) do
+    non_empty!(to_repeat, "repeat_while")
+    compile_call!(:ok, call, "repeat_while")
+    quoted_repeat_while(combinator, to_repeat, {__MODULE__, :__call__, [call, "repeat_while"]})
+  end
+
+  @doc ~S"""
+  Repeats `to_repeat` until one of the combinators in `choices` match.
+
+  Each of the combinators given in choice must be optimizable into
+  a single pattern, otherwise this function will refuse to compile.
+  Use `repeat_while/3` for a general mechanism for repeating.
+
+  ## Examples
+
+      defmodule MyParser do
+        import NimbleParsec
+
+        defparsec :string,
+                  ascii_char([?"])
+                  |> repeat_until(
+                    choice([
+                      ~S(\") |> literal() |> replace(?"),
+                      utf8_char([])
+                    ]),
+                    [ascii_char(?")]
+                  )
+                  |> ascii_char([?"])
+                  |> reduce({List, :to_string, []})
+
+        defp not_quote(<<?", _::binary>>), do: false
+        defp not_quote(_), do: true
+      end
+
+      MyParser.string(~S("string with quotes \" inside"))
+      {:ok, ["\"string with quotes \" inside\""], "", 1, 31}
+
+  """
+  def repeat_until(combinator \\ empty(), to_repeat, [_ | _] = choices)
+      when is_combinator(combinator) and is_combinator(to_repeat) and is_list(choices) do
+    non_empty!(to_repeat, "repeat_until")
+
+    clauses =
+      for choice <- choices do
+        if choice == [] do
+          raise "cannot pass empty combinator as choice in repeat_until"
+        end
+
+        case NimbleParsec.Compiler.compile_pattern(choice) do
+          {inputs, guards} ->
+            hd(quote(do: (<<unquote_splicing(inputs), _::binary>> when unquote(guards) -> false)))
+
+          :error ->
+            raise "cannot compile combinator as choice given in repeat_until"
+        end
+      end
+
+    clauses = clauses ++ quote(do: (_ -> true))
+    quoted_repeat_while(combinator, to_repeat, {__MODULE__, :__repeat_until__, [clauses]})
+  end
+
+  @doc """
+  Invokes `call` to emit the AST that will repeat `to_repeat`
+  while the AST code returns true.
+
+  `call` is a `{module, function, args}` where the AST argument
+  that represents the binary to be parsed  will be prended to
+  `args`. `call` is invoked at compile time and is useful in
+  combinators that avoid injecting runtime dependencies.
+  """
+  @spec quoted_repeat_while(t, t, mfargs) :: t
+  def quoted_repeat_while(combinator \\ empty(), to_repeat, {_, _, _} = call)
+      when is_combinator(combinator) and is_combinator(to_repeat) do
+    non_empty!(to_repeat, "quoted_repeat_while")
+    [{:repeat, Enum.reverse(to_repeat), call} | combinator]
   end
 
   @doc """
@@ -569,12 +673,14 @@ defmodule NimbleParsec do
 
   def times(combinator, to_repeat, n)
       when is_combinator(combinator) and is_combinator(to_repeat) and is_integer(n) and n >= 1 do
+    non_empty!(to_repeat, "times")
     duplicate(combinator, to_repeat, n)
   end
 
   def times(combinator, to_repeat, opts)
       when is_combinator(combinator) and is_combinator(to_repeat) and is_list(opts) do
     {min, max} = validate_min_and_max!(opts)
+    non_empty!(to_repeat, "times")
 
     combinator =
       if min do
@@ -583,7 +689,7 @@ defmodule NimbleParsec do
         combinator
       end
 
-    to_repeat = reverse_combinators!(to_repeat, "times")
+    to_repeat = Enum.reverse(to_repeat)
 
     combinator =
       if max do
@@ -711,13 +817,10 @@ defmodule NimbleParsec do
     raise ArgumentError, "unknown call given to #{context}, got: #{inspect(unknown)}"
   end
 
-  defp reverse_combinators!([], action) do
-    raise ArgumentError, "cannot #{action} empty combinator"
-  end
+  defp non_empty!([], action),
+    do: raise(ArgumentError, "cannot call #{action} on empty combinator")
 
-  defp reverse_combinators!(combinator, _action) when is_combinator(combinator) do
-    Enum.reverse(combinator)
-  end
+  defp non_empty!(combinator, _action), do: combinator
 
   ## Inner combinators
 
@@ -733,8 +836,8 @@ defmodule NimbleParsec do
   end
 
   @doc false
-  def __traverse__(quoted, call) do
-    compile_call!(quoted, call, "traverse")
+  def __call__(quoted, call, context) do
+    compile_call!(quoted, call, context)
   end
 
   @doc false
@@ -747,6 +850,13 @@ defmodule NimbleParsec do
   @doc false
   def __reduce__(arg, call) do
     [compile_call!(quote(do: :lists.reverse(unquote(arg))), call, "reduce")]
+  end
+
+  @doc false
+  def __repeat_until__(arg, clauses) do
+    quote do
+      case unquote(arg), do: unquote(clauses)
+    end
   end
 
   @doc false
