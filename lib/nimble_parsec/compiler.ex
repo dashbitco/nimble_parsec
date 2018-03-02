@@ -107,6 +107,35 @@ defmodule NimbleParsec.Compiler do
 
   ## Unbound combinators
 
+  defp compile_unbound_combinator({:parsec, parsec}, current, step, config) do
+    {next, step} = build_next(step, config)
+    head = quote(do: [rest, acc, stack, line, column])
+
+    catch_all =
+      case config do
+        %{catch_all: nil} ->
+          quote(do: error)
+
+        %{catch_all: catch_all, acc_depth: n} ->
+          {_, ^head, _, body} = build_proxy_to(current, catch_all, n)
+          body
+      end
+
+    body =
+      quote do
+        case unquote(:"#{parsec}__0")(rest, acc, [], line, column) do
+          {:ok, acc, rest, line, column} ->
+            unquote(next)(rest, acc, stack, line, column)
+
+          {:error, _, _, _, _} = error ->
+            unquote(catch_all)
+        end
+      end
+
+    def = {current, head, true, body}
+    {[def], [{current, @arity}], next, step, :catch_none}
+  end
+
   defp compile_unbound_combinator({:traverse, [], traversal}, current, step, config) do
     {next, step} = build_next(step, config)
     user_acc = apply_mfa(traversal, [])
@@ -607,11 +636,15 @@ defmodule NimbleParsec.Compiler do
   end
 
   defp label({:choice, choices}) do
-    "one of " <> Enum.map_join(choices, ", ", &labels/1)
+    Enum.map_join(choices, " or ", &labels/1)
   end
 
   defp label({:traverse, combinators, _}) do
     labels(combinators)
+  end
+
+  defp label({:parsec, name}) do
+    Atom.to_string(name)
   end
 
   ## Bin segments
@@ -707,7 +740,7 @@ defmodule NimbleParsec.Compiler do
 
   defp build_ok(current) do
     head = quote(do: [rest, acc, _stack, line, column])
-    body = quote(do: {:ok, :lists.reverse(acc), rest, line, column})
+    body = quote(do: {:ok, acc, rest, line, column})
     {current, head, true, body}
   end
 
@@ -732,10 +765,15 @@ defmodule NimbleParsec.Compiler do
   end
 
   defp build_proxy_to(name, next, n) do
-    vars = quote(do: [rest, acc, stack, line, column])
-    [rest, acc, stack, line, column] = vars
-    args = [rest, quote(do: _), build_acc_depth(n, acc, stack), line, column]
-    body = {next, [], vars}
+    args = quote(do: [rest, acc, stack, line, column])
+    [_, acc, stack, _, _] = args
+
+    body =
+      quote do
+        unquote(build_acc_depth(n, acc, stack)) = stack
+        unquote(next)(rest, acc, stack, line, column)
+      end
+
     {name, args, true, body}
   end
 

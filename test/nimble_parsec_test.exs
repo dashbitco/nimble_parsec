@@ -664,7 +664,7 @@ defmodule NimbleParsecTest do
       assert times_choice("o") == {:ok, [], "o", 1, 1}
     end
 
-    @error "expected one of byte in the range ?0..?9, followed by byte in the range ?0..?9, byte in the range ?a..?z, followed by byte in the range ?a..?z"
+    @error "expected byte in the range ?0..?9, followed by byte in the range ?0..?9 or byte in the range ?a..?z, followed by byte in the range ?a..?z"
 
     test "returns ok/error with outer choice" do
       assert choice_times("12") == {:ok, [?1, ?2], "", 1, 3}
@@ -711,7 +711,7 @@ defmodule NimbleParsecTest do
                 empty()
               ])
 
-    @error "expected one of byte in the range ?a..?z, byte in the range ?A..?Z, byte in the range ?0..?9"
+    @error "expected byte in the range ?a..?z or byte in the range ?A..?Z or byte in the range ?0..?9"
 
     test "returns ok/error" do
       assert simple_choice("a=") == {:ok, [?a], "=", 1, 2}
@@ -755,6 +755,53 @@ defmodule NimbleParsecTest do
     test "returns ok/error on empty" do
       assert optional_ascii("az") == {:ok, [?a], "z", 1, 2}
       assert optional_ascii("AZ") == {:ok, [], "AZ", 1, 1}
+    end
+  end
+
+  describe "parsec/2 combinator" do
+    defparsecp :parsec_inner,
+               choice([
+                 map(ascii_char([?a..?z]), {:to_string, []}),
+                 map(ascii_char([?A..?Z]), {:to_string, []})
+               ])
+
+    defparsec :parsec_literal, literal("T") |> parsec(:parsec_inner) |> literal("O")
+    defparsec :parsec_repeat, repeat(parsec(:parsec_inner))
+    defparsec :parsec_map, map(parsec(:parsec_inner), {String, :to_integer, []})
+    defparsec :parsec_choice, choice([parsec(:parsec_inner), literal("+")])
+
+    test "returns ok/error with literal" do
+      assert parsec_literal("TaO") == {:ok, ["T", "97", "O"], "", 1, 4}
+
+      error = "expected literal \"T\""
+      assert parsec_literal("ZaO") == {:error, error, "ZaO", 1, 1}
+
+      error = "expected byte in the range ?a..?z or byte in the range ?A..?Z"
+      assert parsec_literal("T1O") == {:error, error, "1O", 1, 2}
+
+      error = "expected literal \"O\""
+      assert parsec_literal("TaA") == {:error, error, "A", 1, 3}
+    end
+
+    test "returns ok/error with choice" do
+      assert parsec_choice("+O") == {:ok, ["+"], "O", 1, 2}
+      assert parsec_choice("O+") == {:ok, ["79"], "+", 1, 2}
+      assert parsec_choice("==") == {:error, "expected parsec_inner or literal \"+\"", "==", 1, 1}
+    end
+
+    test "returns ok/error with repeat" do
+      assert parsec_repeat("az") == {:ok, ["97", "122"], "", 1, 3}
+      assert parsec_repeat("AZ") == {:ok, ["65", "90"], "", 1, 3}
+      assert parsec_repeat("aAzZ") == {:ok, ["97", "65", "122", "90"], "", 1, 5}
+      assert parsec_repeat("1aAzZ") == {:ok, [], "1aAzZ", 1, 1}
+    end
+
+    @error "expected byte in the range ?a..?z or byte in the range ?A..?Z"
+
+    test "returns ok/error with map" do
+      assert parsec_map("az") == {:ok, [?a], "z", 1, 2}
+      assert parsec_map("AZ") == {:ok, [?A], "Z", 1, 2}
+      assert parsec_map("1aAzZ") == {:error, @error, "1aAzZ", 1, 1}
     end
   end
 

@@ -1,7 +1,9 @@
-# TODO: runtime_composition() and private parsecs
-# TODO: Docs
-
 defmodule NimbleParsec do
+  @moduledoc "README.md"
+             |> File.read!()
+             |> String.split("<!-- MDOC !-->")
+             |> Enum.fetch!(1)
+
   defmacrop is_combinator(combinator) do
     quote do
       is_list(unquote(combinator))
@@ -22,11 +24,54 @@ defmodule NimbleParsec do
 
   """
   defmacro defparsec(name, combinator, opts \\ []) do
-    quote bind_quoted: [name: name, combinator: combinator, opts: opts] do
-      def unquote(name)(binary, opts \\ []) when is_binary(binary) do
-        unquote(:"#{name}__0")(binary, [], [], 1, 1)
+    fun =
+      quote bind_quoted: [name: name] do
+        @doc """
+        Parses the given `binary` as #{name}.
+
+        ## Options
+
+          * `:line` - the initial line, defaults to 1
+          * `:column` - the initial column, defaults to 1
+
+        """
+        @spec unquote(name)(binary, keyword) ::
+                {:ok, [term], rest, line, column}
+                | {:error, reason, rest, line, column}
+              when line: pos_integer, column: pos_integer, rest: binary, reason: String.t()
+        def unquote(name)(binary, opts \\ []) when is_binary(binary) do
+          line = Keyword.get(opts, :line, 1)
+          column = Keyword.get(opts, :column, 1)
+
+          case unquote(:"#{name}__0")(binary, [], [], line, column) do
+            {:ok, acc, rest, line, column} ->
+              {:ok, :lists.reverse(acc), rest, line, column}
+
+            {:error, _, _, _, _} = error ->
+              error
+          end
+        end
       end
 
+    quote do
+      unquote(fun)
+      unquote(compile(name, combinator, opts))
+    end
+  end
+
+  @doc """
+  Defines a private parser combinator.
+
+  It cannot be invoked directly, only via `parsec/2`.
+
+  Receives the same options as `defparsec/3`.
+  """
+  defmacro defparsecp(name, combinator, opts \\ []) do
+    compile(name, combinator, opts)
+  end
+
+  defp compile(name, combinator, opts) do
+    quote bind_quoted: [name: name, combinator: combinator, opts: opts] do
       {defs, inline} = NimbleParsec.Compiler.compile(name, combinator, opts)
 
       if inline != [] do
@@ -69,6 +114,7 @@ defmodule NimbleParsec do
 
   @typep unbound_combinator ::
            {:choice, [t]}
+           | {:parsec, atom}
            | {:repeat, t, mfargs}
            | {:repeat_up_to, t, pos_integer}
 
@@ -79,6 +125,23 @@ defmodule NimbleParsec do
   """
   def empty() do
     []
+  end
+
+  @doc """
+  Invokes an already compiled parsec with name `name` in the
+  same module.
+
+  It is useful for implementing recursive parsers.
+
+  It can also be used to exchange compilation time by runtime
+  performance. If you have a parser used over and over again,
+  you can compile it using `defparsecp` and rely on it via
+  this function. The tree size built at compile time will be
+  reduce although runtime performance is degraded as every time
+  this function is invoked it introduces a stacktrace entry.
+  """
+  def parsec(combinator \\ empty(), name) when is_combinator(combinator) and is_atom(name) do
+    [{:parsec, name} | combinator]
   end
 
   @doc ~S"""

@@ -1,23 +1,115 @@
 # NimbleParsec
 
-**TODO: Add description**
+<!-- MDOC !-->
 
-## Installation
+`NimbleParsec` is a simple and fast library for parser combinators.
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `nimble_parsec` to your list of dependencies in `mix.exs`:
+Combinators are built during runtime and compile into multiple
+clauses with binary matching. This provides the following benefits:
+
+  * Performance: since it compiles to binary matching, it leverages
+    many Erlang VM optimizations to generate extremely fast parser
+    code with low memory usage
+
+  * Composable: this library does not rely on macros for building and
+    composing parsers, therefore they are fully composable. The only
+    macros are `defparsec/3` and `defparsecp/3` which emit the compiled
+    clauses with  binary matching
+
+  * No runtime dependency: after compile, the generated parser clauses
+    have no runtime dependency on `NimbleParsec`. This opens up the
+    possibility to compile parsers and do not impose a dependency on
+    users of your library
+
+  * No footprint: `NimbleParsec` only needs to be imported in your modules.
+    Leaving no footprint on your modules.
+
+## Examples
 
 ```elixir
-def deps do
-  [
-    {:nimble_parsec, "~> 0.1.0"}
-  ]
+defmodule MyParser do
+  import NimbleParsec
+
+  date =
+    integer(4)
+    |> ignore(literal("-"))
+    |> integer(2)
+    |> ignore(literal("-"))
+    |> integer(2)
+
+  time =
+    integer(2)
+    |> ignore(literal(":"))
+    |> integer(2)
+    |> ignore(literal(":"))
+    |> integer(2)
+    |> optional(literal("Z"))
+
+  defparsec :datetime, date |> ignore(literal("T")) |> concat(time), debug: true
+end
+
+MyParser.datetime("2010-04-17T14:12:34Z")
+#=> {:ok, [2010, 4, 17, 14, 12, 34, "Z"], "", 1, 21}
+```
+
+If you add `debug: true` to `defparsec/3`, it will print the generated
+clauses, which are shown below:
+
+```elixir
+defp datetime__0(<<x0, x1, x2, x3, "-", x4, x5, "-", x6, x7, "T",
+                   x8, x9, ":", x10, x11, ":", x12, x13, rest::binary>>,
+                 acc, stack, combinator__line, combinator__column)
+     when x0 >= 48 and x0 <= 57 and (x1 >= 48 and x1 <= 57) and
+         (x2 >= 48 and x2 <= 57) and (x3 >= 48 and x3 <= 57) and
+         (x4 >= 48 and x4 <= 57) and (x5 >= 48 and x5 <= 57) and
+         (x6 >= 48 and x6 <= 57) and (x7 >= 48 and x7 <= 57) and
+         (x8 >= 48 and x8 <= 57) and (x9 >= 48 and x9 <= 57) and
+         (x10 >= 48 and x10 <= 57) and (x11 >= 48 and x11 <= 57) and
+         (x12 >= 48 and x12 <= 57) and (x13 >= 48 and x13 <= 57) do
+  datetime__1(
+    rest,
+    [(x13 - 48) * 1 + (x12 - 48) * 10, (x11 - 48) * 1 + (x10 - 48) * 10,
+     (x9 - 48) * 1 + (x8 - 48) * 10, (x7 - 48) * 1 + (x6 - 48) * 10, (x5 - 48) * 1 + (x4 - 48) * 10,
+     (x3 - 48) * 1 + (x2 - 48) * 10 + (x1 - 48) * 100 + (x0 - 48) * 1000] ++ acc,
+    stack,
+    combinator__line,
+    combinator__column + 19
+  )
+end
+
+defp datetime__0(rest, acc, stack, line, column) do
+  {:error, "...", rest, line, column}
+end
+
+defp datetime__1(<<"Z", rest::binary>>, acc, stack, combinator__line, combinator__column) do
+  datetime__2(rest, ["Z"] ++ acc, stack, combinator__line, combinator__column + 1)
+end
+
+defp datetime__1(rest, acc, stack, line, column) do
+  datetime__2(rest, acc, stack, line, column)
+end
+
+defp datetime__2(rest, acc, _stack, line, column) do
+  {:ok, acc, rest, line, column}
 end
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at [https://hexdocs.pm/nimble_parsec](https://hexdocs.pm/nimble_parsec).
+As you can see, it generates highly inlined code, comparable to
+hand-written parsers. This gives `NimbleParsec` an order of magnitude
+performance gains compared to other parser combinators. Further performance
+can be gained by giving the `inline: true` option to `defparsec/3`.
+
+<!-- MDOC !-->
+
+## Instalation
+
+Add `nimble_parsec` to your list of dependencies in `mix.exs`:
+
+```elixir
+def deps do
+  [{:nimble_parsec, "~> 0.1"}]
+end
+```
 
 ## License
 
