@@ -161,22 +161,17 @@ defmodule NimbleParsecTest do
   describe "ignore/2 combinator at runtime" do
     defparsec :runtime_ignore,
               ascii_char([?a..?z])
-              |> ascii_char([?a..?z])
-              |> ascii_char([?a..?z])
-              |> map({:to_string, []})
+              |> times(min: 1)
               |> ignore()
 
     test "returns ok/error" do
       assert runtime_ignore("abc") == {:ok, [], "", 1, 4}
-
-      error =
-        "expected byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z"
-
+      error = "expected byte in the range ?a..?z"
       assert runtime_ignore("1bc") == {:error, error, "1bc", 1, 1}
     end
 
     test "is not bound" do
-      assert not_bound?(ascii_char([?a..?z]) |> map({:to_string, []}) |> ignore())
+      assert not_bound?(ascii_char([?a..?z]) |> times(min: 1) |> ignore())
     end
   end
 
@@ -212,22 +207,17 @@ defmodule NimbleParsecTest do
   describe "replace/2 combinator at runtime" do
     defparsec :runtime_replace,
               ascii_char([?a..?z])
-              |> ascii_char([?a..?z])
-              |> ascii_char([?a..?z])
-              |> map({:to_string, []})
+              |> times(min: 1)
               |> replace("OTHER")
 
     test "returns ok/error" do
       assert runtime_replace("abc") == {:ok, ["OTHER"], "", 1, 4}
-
-      error =
-        "expected byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z"
-
+      error = "expected byte in the range ?a..?z"
       assert runtime_replace("1bc") == {:error, error, "1bc", 1, 1}
     end
 
     test "is not bound" do
-      assert not_bound?(ascii_char([?a..?z]) |> map({:to_string, []}) |> replace("OTHER"))
+      assert not_bound?(ascii_char([?a..?z]) |> times(min: 1) |> replace("OTHER"))
     end
   end
 
@@ -254,31 +244,30 @@ defmodule NimbleParsecTest do
 
   describe "label/3 combinator at runtime" do
     defparsec :runtime_label,
-              label(ascii_char([?a..?z]), "first label")
-              |> label(ascii_char([?a..?z]) |> map({:to_string, []}), "second label")
-              |> ascii_char([?a..?z])
-              |> map({:to_string, []})
+              label(times(ascii_char([?a..?z]), min: 1), "first label")
+              |> label(times(ascii_char([?A..?Z]), min: 1), "second label")
+              |> times(ascii_char([?0..?9]), min: 1)
               |> label("third label")
 
     test "returns ok/error" do
-      assert runtime_label("abc") == {:ok, ["97", "98", "99"], "", 1, 4}
+      assert runtime_label("aA0") == {:ok, [?a, ?A, ?0], "", 1, 4}
 
-      error = "expected third label"
-      assert runtime_label("1bc") == {:error, error, "1bc", 1, 1}
+      error = "expected first label while processing third label"
+      assert runtime_label("+A0") == {:error, error, "+A0", 1, 1}
 
       error = "expected second label while processing third label"
-      assert runtime_label("a1c") == {:error, error, "1c", 1, 2}
+      assert runtime_label("a+0") == {:error, error, "+0", 1, 2}
 
       error = "expected third label"
-      assert runtime_label("ab1") == {:error, error, "1", 1, 3}
+      assert runtime_label("aA+") == {:error, error, "+", 1, 3}
     end
 
     test "is not bound" do
-      assert not_bound?(ascii_char([?a..?z]) |> map({:to_string, []}) |> label("label"))
+      assert not_bound?(ascii_char([?a..?z]) |> repeat() |> label("label"))
     end
   end
 
-  describe "remote traverse/3 combinator" do
+  describe "remote traverse/3 compile combinator" do
     @three_ascii_letters ascii_char([?a..?z])
                          |> ascii_char([?a..?z])
                          |> ascii_char([?a..?z])
@@ -289,35 +278,54 @@ defmodule NimbleParsecTest do
               |> traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]})
               |> integer(2)
 
+    @error "expected literal \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
+
     test "returns ok/error" do
       assert remote_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", 1, 9}
+      assert remote_traverse("Tabc34") == {:error, @error, "Tabc34", 1, 1}
+      assert remote_traverse("T12abcdf") == {:error, @error, "T12abcdf", 1, 1}
+      assert remote_traverse("T12ab34") == {:error, @error, "T12ab34", 1, 1}
+    end
+
+    test "is bound" do
+      assert bound?(traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]}))
+    end
+  end
+
+  describe "remote traverse/3 runtime combinator" do
+    @three_ascii_letters times(ascii_char([?a..?z]), min: 3)
+
+    defparsec :remote_runtime_traverse,
+              literal("T")
+              |> integer(2)
+              |> traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]})
+              |> integer(2)
+
+    test "returns ok/error" do
+      assert remote_runtime_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", 1, 9}
 
       error =
         "expected literal \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
-      assert remote_traverse("Tabc34") == {:error, error, "Tabc34", 1, 1}
+      assert remote_runtime_traverse("Tabc34") == {:error, error, "Tabc34", 1, 1}
 
       error = "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
-      assert remote_traverse("T12abcdf") == {:error, error, "df", 1, 7}
+      assert remote_runtime_traverse("T12abcdf") == {:error, error, "", 1, 9}
 
       error =
         "expected byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z"
 
-      assert remote_traverse("T12ab34") == {:error, error, "ab34", 1, 4}
+      assert remote_runtime_traverse("T12ab34") == {:error, error, "ab34", 1, 4}
     end
 
-    test "is not bound" do
+    test "is bound" do
       assert not_bound?(
                traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]})
              )
     end
-
-    def public_join_and_wrap(args, joiner) do
-      args |> Enum.join(joiner) |> List.wrap()
-    end
   end
 
-  describe "local traverse/3 combinator" do
+  describe "local traverse/3 compile combinator" do
     @three_ascii_letters ascii_char([?a..?z])
                          |> ascii_char([?a..?z])
                          |> ascii_char([?a..?z])
@@ -328,29 +336,48 @@ defmodule NimbleParsecTest do
               |> traverse(@three_ascii_letters, {:private_join_and_wrap, ["-"]})
               |> integer(2)
 
+    @error "expected literal \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
+
     test "returns ok/error" do
       assert local_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", 1, 9}
+      assert local_traverse("Tabc34") == {:error, @error, "Tabc34", 1, 1}
+      assert local_traverse("T12abcdf") == {:error, @error, "T12abcdf", 1, 1}
+      assert local_traverse("T12ab34") == {:error, @error, "T12ab34", 1, 1}
+    end
+
+    test "is bound" do
+      assert bound?(traverse(@three_ascii_letters, {:public_join_and_wrap, ["-"]}))
+    end
+  end
+
+  describe "local traverse/3 runtime combinator" do
+    @three_ascii_letters times(ascii_char([?a..?z]), min: 3)
+
+    defparsec :local_runtime_traverse,
+              literal("T")
+              |> integer(2)
+              |> traverse(@three_ascii_letters, {:private_join_and_wrap, ["-"]})
+              |> integer(2)
+
+    test "returns ok/error" do
+      assert local_runtime_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", 1, 9}
 
       error =
         "expected literal \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
-      assert local_traverse("Tabc34") == {:error, error, "Tabc34", 1, 1}
+      assert local_runtime_traverse("Tabc34") == {:error, error, "Tabc34", 1, 1}
 
       error = "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
-      assert local_traverse("T12abcdf") == {:error, error, "df", 1, 7}
+      assert local_runtime_traverse("T12abcdf") == {:error, error, "", 1, 9}
 
       error =
         "expected byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z"
 
-      assert local_traverse("T12ab34") == {:error, error, "ab34", 1, 4}
+      assert local_runtime_traverse("T12ab34") == {:error, error, "ab34", 1, 4}
     end
 
-    test "is not bound" do
-      assert not_bound?(traverse(@three_ascii_letters, {:public_join_and_wrap, ["-"]}))
-    end
-
-    defp private_join_and_wrap(args, joiner) do
-      args |> Enum.join(joiner) |> List.wrap()
+    test "is bound" do
+      assert not_bound?(traverse(@three_ascii_letters, {:private_join_and_wrap, ["-"]}))
     end
   end
 
@@ -443,7 +470,7 @@ defmodule NimbleParsecTest do
   end
 
   describe "repeat/2 combinator" do
-    defparsec :repeat_digits, repeat(ascii_char([?0..?9]))
+    defparsec :repeat_digits, repeat(ascii_char([?0..?9]) |> ascii_char([?0..?9]))
 
     ascii_to_string = map(ascii_char([?0..?9]), {:to_string, []})
     defparsec :repeat_digits_to_string, repeat(ascii_to_string)
@@ -454,8 +481,17 @@ defmodule NimbleParsecTest do
     defparsec :repeat_digits_to_same_outer,
               map(repeat(ascii_to_string), {String, :to_integer, []})
 
+    defparsec :repeat_double_digits_to_string,
+              repeat(
+                concat(
+                  map(ascii_char([?0..?9]), {:to_string, []}),
+                  map(ascii_char([?0..?9]), {:to_string, []})
+                )
+              )
+
     test "returns ok/error" do
-      assert repeat_digits("123") == {:ok, [?1, ?2, ?3], "", 1, 4}
+      assert repeat_digits("12") == {:ok, [?1, ?2], "", 1, 3}
+      assert repeat_digits("123") == {:ok, [?1, ?2], "3", 1, 3}
       assert repeat_digits("a123") == {:ok, [], "a123", 1, 1}
     end
 
@@ -466,6 +502,12 @@ defmodule NimbleParsecTest do
     test "returns ok/error with inner and outer map" do
       assert repeat_digits_to_same_inner("123") == {:ok, [?1, ?2, ?3], "", 1, 4}
       assert repeat_digits_to_same_outer("123") == {:ok, [?1, ?2, ?3], "", 1, 4}
+    end
+
+    test "returns ok/error with concat map" do
+      assert repeat_double_digits_to_string("12") == {:ok, ["49", "50"], "", 1, 3}
+      assert repeat_double_digits_to_string("123") == {:ok, ["49", "50"], "3", 1, 3}
+      assert repeat_double_digits_to_string("a123") == {:ok, [], "a123", 1, 1}
     end
   end
 
@@ -583,5 +625,13 @@ defmodule NimbleParsecTest do
     {defs, _} = NimbleParsec.Compiler.compile(:not_used, document, [])
 
     assert length(defs) != 3, "Expected #{inspect(document)} to contain more than 3 clauses"
+  end
+
+  def public_join_and_wrap(args, joiner) do
+    args |> Enum.join(joiner) |> List.wrap()
+  end
+
+  defp private_join_and_wrap(args, joiner) do
+    args |> Enum.join(joiner) |> List.wrap()
   end
 end

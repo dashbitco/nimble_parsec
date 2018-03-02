@@ -70,9 +70,12 @@ defmodule NimbleParsec do
 
   @typep maybe_bound_combinator ::
            {:label, t, binary}
-           | {:traverse, t, (Macro.t() -> Macro.t()), (Macro.t() -> Macro.t())}
+           | {:traverse, t, (Macro.t() -> Macro.t())}
 
-  @typep unbound_combinator :: {:traverse, t, (Macro.t() -> Macro.t())}
+  @typep unbound_combinator ::
+           {:choice, [t]}
+           | {:repeat, t}
+           | {:repeat_up_to, t, pos_integer}
 
   @doc ~S"""
   Returns an empty combinator.
@@ -115,7 +118,7 @@ defmodule NimbleParsec do
   def ascii_char(combinator \\ empty(), ranges)
       when is_combinator(combinator) and is_list(ranges) do
     {inclusive, exclusive} = split_ranges!(ranges, "ascii_char")
-    compile_bin_segment(combinator, inclusive, exclusive, [])
+    inner_bin_segment(combinator, inclusive, exclusive, [])
   end
 
   @doc ~S"""
@@ -154,7 +157,7 @@ defmodule NimbleParsec do
   def utf8_char(combinator \\ empty(), ranges)
       when is_combinator(combinator) and is_list(ranges) do
     {inclusive, exclusive} = split_ranges!(ranges, "utf8_char")
-    compile_bin_segment(combinator, inclusive, exclusive, [:utf8])
+    inner_bin_segment(combinator, inclusive, exclusive, [:utf8])
   end
 
   @doc ~S"""
@@ -229,15 +232,15 @@ defmodule NimbleParsec do
       when is_combinator(combinator) and is_integer(count) and count > 0 do
     integer =
       Enum.reduce(1..count, empty(), fn _, acc ->
-        compile_bin_segment(acc, [?0..?9], [], [])
+        inner_bin_segment(acc, [?0..?9], [], [])
       end)
 
-    compile_traverse(combinator, integer, &quoted_ascii_to_integer/1)
+    inner_traverse(combinator, integer, &quoted_ascii_to_integer/1)
   end
 
   def integer(combinator, opts) when is_combinator(combinator) and is_list(opts) do
     {min, max} = validate_min_and_max!(opts)
-    to_repeat = compile_bin_segment(empty(), [?0..?9], [], [])
+    to_repeat = inner_bin_segment(empty(), [?0..?9], [], [])
 
     combinator =
       if min do
@@ -256,7 +259,7 @@ defmodule NimbleParsec do
     combinator
   end
 
-  defp quoted_ascii_to_integer(vars) do
+  defp quoted_ascii_to_integer(vars) when is_list(vars) do
     vars
     |> quoted_ascii_to_integer(1)
     |> Enum.reduce(&{:+, [], [&2, &1]})
@@ -342,7 +345,7 @@ defmodule NimbleParsec do
   def traverse(combinator \\ empty(), to_traverse, call)
       when is_combinator(combinator) and is_combinator(to_traverse) and is_tuple(call) do
     compile_call!(:ok, call, "traverse")
-    runtime_traverse(combinator, Enum.reverse(to_traverse), &compile_call!(&1, call, "traverse"))
+    inner_traverse(combinator, Enum.reverse(to_traverse), &compile_call!(&1, call, "traverse"))
   end
 
   @doc ~S"""
@@ -379,7 +382,7 @@ defmodule NimbleParsec do
     var = Macro.var(:var, __MODULE__)
     call = compile_call!(var, call, "map")
 
-    runtime_traverse(combinator, Enum.reverse(to_map), fn arg ->
+    inner_traverse(combinator, Enum.reverse(to_map), fn arg ->
       quote do
         Enum.map(unquote(arg), fn unquote(var) -> unquote(call) end)
       end
@@ -418,7 +421,7 @@ defmodule NimbleParsec do
       when is_combinator(combinator) and is_combinator(to_reduce) and is_tuple(call) do
     compile_call!(:ok, call, "reduce")
 
-    runtime_traverse(combinator, Enum.reverse(to_reduce), fn arg ->
+    inner_traverse(combinator, Enum.reverse(to_reduce), fn arg ->
       [compile_call!(quote(do: :lists.reverse(unquote(arg))), call, "reduce")]
     end)
   end
@@ -468,7 +471,7 @@ defmodule NimbleParsec do
     if to_ignore == empty() do
       to_ignore
     else
-      compile_traverse(combinator, to_ignore, fn _ -> [] end, fn _ -> [] end)
+      inner_traverse(combinator, Enum.reverse(to_ignore), fn _ -> [] end)
     end
   end
 
@@ -494,10 +497,7 @@ defmodule NimbleParsec do
   def replace(combinator \\ empty(), to_replace, value)
       when is_combinator(combinator) and is_combinator(to_replace) do
     value = Macro.escape(value)
-
-    compile_traverse(combinator, Enum.reverse(to_replace), fn _ -> [value] end, fn _ ->
-      [value]
-    end)
+    inner_traverse(combinator, Enum.reverse(to_replace), fn _ -> [value] end)
   end
 
   @doc """
@@ -573,7 +573,6 @@ defmodule NimbleParsec do
 
   def times(combinator, to_repeat, opts)
       when is_combinator(combinator) and is_combinator(to_repeat) and is_list(opts) do
-    to_repeat = reverse_combinators!(to_repeat, "times")
     {min, max} = validate_min_and_max!(opts)
 
     combinator =
@@ -582,6 +581,8 @@ defmodule NimbleParsec do
       else
         combinator
       end
+
+    to_repeat = reverse_combinators!(to_repeat, "times")
 
     combinator =
       if max do
@@ -693,32 +694,6 @@ defmodule NimbleParsec do
     raise ArgumentError, "unknown call given to #{context}, got: #{inspect(unknown)}"
   end
 
-  ## Inner combinators
-
-  # A runtime traverse. Notice the `to_traverse` inside the
-  # combinator is already expected to be reversed.
-  defp runtime_traverse(combinator, to_traverse, traversal) when is_function(traversal, 1) do
-    [{:traverse, to_traverse, traversal} | combinator]
-  end
-
-  # A compile traverse may or may not be expanded at runtime
-  # as it depends if `to_traverse` is also bound. For this
-  # reason, some operators may pass a runtime_fun/1. If one
-  # is not passed, it is assumed that the behaviour is
-  # guaranteed to be bound.
-  #
-  # Notice the `to_traverse` inside the combinator is already
-  # expected to be reversed.
-  defp compile_traverse(combinator, to_traverse, compile_fun, runtime_fun \\ &always_raise!/1) do
-    [{:traverse, to_traverse, compile_fun, runtime_fun} | combinator]
-  end
-
-  # A compile bit integer is verified to not have a newline on it
-  # and is always bound.
-  defp compile_bin_segment(combinator, inclusive, exclusive, modifiers) do
-    [{:bin_segment, inclusive, exclusive, modifiers} | combinator]
-  end
-
   defp reverse_combinators!([], action) do
     raise ArgumentError, "cannot #{action} empty combinator"
   end
@@ -727,7 +702,13 @@ defmodule NimbleParsec do
     Enum.reverse(combinator)
   end
 
-  defp always_raise!(_) do
-    raise "this function must never be invoked"
+  ## Inner combinators
+
+  defp inner_traverse(combinator, to_traverse, traversal) when is_function(traversal, 1) do
+    [{:traverse, to_traverse, traversal} | combinator]
+  end
+
+  defp inner_bin_segment(combinator, inclusive, exclusive, modifiers) do
+    [{:bin_segment, inclusive, exclusive, modifiers} | combinator]
   end
 end
