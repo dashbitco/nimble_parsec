@@ -2,6 +2,17 @@ defmodule NimbleParsec.Compiler do
   @moduledoc false
   @arity 5
 
+  def compile_pattern([]) do
+    raise ArgumentError, "cannot compile empty parser combinator"
+  end
+
+  def compile_pattern(combinators) do
+    case take_bound_combinators(Enum.reverse(combinators)) do
+      {[], inputs, guards, _, _, _, _} -> {inputs, guards_list_to_quoted(guards)}
+      _ -> :error
+    end
+  end
+
   def compile(name, [], _opts) do
     raise ArgumentError, "cannot compile #{inspect(name)} with an empty parser combinator"
   end
@@ -74,7 +85,7 @@ defmodule NimbleParsec.Compiler do
 
   defp compile_unbound_combinator({:traverse, [], traversal}, current, step, config) do
     {next, step} = build_next(step, config)
-    user_acc = traversal.([])
+    user_acc = apply_mfa(traversal, [])
     head = quote(do: [arg, acc, stack, line, column])
     args = quote(do: [arg, unquote(user_acc) ++ acc, stack, line, column])
     body = {next, [], args}
@@ -95,7 +106,7 @@ defmodule NimbleParsec.Compiler do
     # No we need to traverse the accumulator with the user code and
     # concatenate with the previous accumulator at the top of the stack.
     {next, step} = build_next(step, config)
-    user_acc = traversal.(quote(do: user_acc))
+    user_acc = apply_mfa(traversal, quote(do: user_acc))
     head = quote(do: [arg, user_acc, [acc | stack], line, column])
     args = quote(do: [arg, unquote(user_acc) ++ acc, stack, line, column])
     body = {next, [], args}
@@ -113,11 +124,11 @@ defmodule NimbleParsec.Compiler do
     end
   end
 
-  defp compile_unbound_combinator({:repeat, combinators}, current, step, config) do
+  defp compile_unbound_combinator({:repeat, combinators, while}, current, step, config) do
     if all_bound_combinators?(combinators) do
-      compile_bound_repeat(combinators, current, step, config)
+      compile_bound_repeat(combinators, while, current, step, config)
     else
-      compile_unbound_repeat(combinators, current, step, config)
+      compile_unbound_repeat(combinators, while, current, step, config)
     end
   end
 
@@ -133,30 +144,34 @@ defmodule NimbleParsec.Compiler do
 
   ## Repeat
 
-  defp compile_bound_repeat(combinators, current, step, config) do
+  defp compile_bound_repeat(combinators, while, current, step, config) do
     {failure, step} = build_next(step, config)
     config = %{config | catch_all: failure, acc_depth: 0}
-    {defs, inline, success, step} = compile(combinators, [], [], current, step, config)
-    def = build_proxy_to(success, current, 0)
+
+    {defs, recur, next, step} =
+      case apply_mfa(while, quote(do: rest)) do
+        true ->
+          {[], current, current, step}
+
+        quoted ->
+          {next, step} = build_next(step, config)
+          head = args = quote(do: [rest, acc, stack, line, column])
+          body = repeat_while(quoted, next, args, failure, args)
+          {[{current, head, true, body}], current, next, step}
+      end
+
+    {defs, inline, success, step} = compile(combinators, defs, [], next, step, config)
+    def = build_proxy_to(success, recur, 0)
     {Enum.reverse([def | defs]), [{success, @arity} | inline], failure, step, :catch_none}
   end
 
-  defp compile_unbound_repeat(combinators, current, step, config) do
+  defp compile_unbound_repeat(combinators, while, current, step, config) do
     {failure, step} = build_next(step, config)
     {recur, step} = build_next(step, config)
-
-    head = quote(do: [rest, acc, stack, line, column])
-    args = quote(do: [rest, [], [{rest, acc, line, column} | stack], line, column])
-    body = {recur, [], args}
-    current_def = {current, head, true, body}
+    while = apply_mfa(while, quote(do: rest))
 
     config = %{config | catch_all: failure, acc_depth: 0}
-    {defs, inline, success, step} = compile(combinators, [current_def], [], recur, step, config)
-
-    head = quote(do: [rest, user_acc, [{_, acc, _, _} | stack], line, column])
-    args = quote(do: [rest, [], [{rest, user_acc ++ acc, line, column} | stack], line, column])
-    body = {recur, [], args}
-    success_def = {success, head, true, body}
+    {defs, inline, success, step} = compile(combinators, [], [], recur, step, config)
 
     {next, step} = build_next(step, config)
     head = quote(do: [_, _, [{rest, acc, line, column} | stack], _, _])
@@ -164,8 +179,40 @@ defmodule NimbleParsec.Compiler do
     body = {next, [], args}
     failure_def = {failure, head, true, body}
 
+    cont = quote(do: {rest, acc, line, column})
+    head = quote(do: [inner_rest, inner_acc, [unquote(cont) | stack], inner_line, inner_column])
+    cont = quote(do: {inner_rest, inner_acc ++ acc, inner_line, inner_column})
+    true_args = quote(do: [inner_rest, [], [unquote(cont) | stack], inner_line, inner_column])
+    false_args = quote(do: [rest, acc, stack, line, column])
+    body = repeat_while(while, recur, true_args, next, false_args)
+    success_def = {success, head, true, body}
+
+    head = quote(do: [rest, acc, stack, line, column])
+    true_args = quote(do: [rest, [], [{rest, acc, line, column} | stack], line, column])
+    false_args = quote(do: [rest, acc, stack, line, column])
+    body = repeat_while(while, recur, true_args, next, false_args)
+    current_def = {current, head, true, body}
+
+    defs = [current_def | Enum.reverse([success_def, failure_def | defs])]
     inline = [{current, @arity}, {success, @arity}, {failure, @arity} | inline]
-    {Enum.reverse([success_def, failure_def | defs]), inline, next, step, :catch_none}
+    {defs, inline, next, step, :catch_none}
+  end
+
+  defp repeat_while(true, true_name, true_args, _false_name, _false_args) do
+    {true_name, [], true_args}
+  end
+
+  defp repeat_while(false, _true_name, _true_args, false_name, false_args) do
+    {false_name, [], false_args}
+  end
+
+  defp repeat_while(quoted, true_name, true_args, false_name, false_args) do
+    quote do
+      case unquote(quoted) do
+        true -> unquote({true_name, [], true_args})
+        false -> unquote({false_name, [], false_args})
+      end
+    end
   end
 
   ## Repeat up to
@@ -208,7 +255,8 @@ defmodule NimbleParsec.Compiler do
     {recur, step} = build_next(step, config)
 
     head = quote(do: [rest, acc, stack, line, column])
-    args = quote(do: [rest, [], [{unquote(count), rest, acc, line, column} | stack], line, column])
+    cont = quote(do: {unquote(count), rest, acc, line, column})
+    args = quote(do: [rest, [], [unquote(cont) | stack], line, column])
     body = {recur, [], args}
     current_def = {current, head, true, body}
 
@@ -320,12 +368,7 @@ defmodule NimbleParsec.Compiler do
         {next, [], args}
       end)
 
-    guards =
-      case guards do
-        [] -> true
-        _ -> Enum.reduce(guards, &{:and, [], [&2, &1]})
-      end
-
+    guards = guards_list_to_quoted(guards)
     def = {current, head, guards, body}
     {[def], [], next, step, :catch_all}
   end
@@ -417,7 +460,7 @@ defmodule NimbleParsec.Compiler do
   defp bound_combinator({:traverse, combinators, fun}, cursor, counter) do
     case take_bound_combinators(combinators, [], [], [], [], cursor, counter) do
       {[], inputs, guards, outputs, _, cursor, counter} ->
-        {:ok, inputs, guards, fun.(outputs), cursor, counter}
+        {:ok, inputs, guards, apply_mfa(fun, outputs), cursor, counter}
 
       {_, _, _, _, _, _, _} ->
         :error
@@ -531,7 +574,7 @@ defmodule NimbleParsec.Compiler do
     prefix <> Enum.join([Enum.join(inclusive, " or") | exclusive], ", and not")
   end
 
-  defp label({:repeat, combinators}) do
+  defp label({:repeat, combinators, _}) do
     labels(combinators)
   end
 
@@ -622,6 +665,13 @@ defmodule NimbleParsec.Compiler do
   end
 
   ## Helpers
+
+  defp apply_mfa({mod, fun, args}, arg) do
+    apply(mod, fun, [arg | args])
+  end
+
+  defp guards_list_to_quoted([]), do: true
+  defp guards_list_to_quoted(guards), do: Enum.reduce(guards, &{:and, [], [&2, &1]})
 
   defp build_var(counter) do
     {{:"x#{counter}", [], __MODULE__}, counter + 1}

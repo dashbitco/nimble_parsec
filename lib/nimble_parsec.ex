@@ -1,5 +1,4 @@
 # TODO: runtime_composition() and private parsecs
-# TODO: Benchmark integer(opts)
 # TODO: repeat_until()
 # TODO: Docs
 
@@ -20,7 +19,7 @@ defmodule NimbleParsec do
       v1.5 and v1.6 where unused functions that are inlined cause a
       compilation error
 
-    * `:debug` - when true, writes generated clauses to stderr for debugging
+    * `:debug` - when true, writes generated clauses to `:stderr` for debugging
 
   """
   defmacro defparsec(name, combinator, opts \\ []) do
@@ -60,9 +59,9 @@ defmodule NimbleParsec do
   @type inclusive_range :: Range.t() | char()
   @type exclusive_range :: {:not, Range.t()} | {:not, char()}
   @type min_and_max :: {:min, pos_integer()} | {:max, pos_integer()}
-  @type call ::
-          {module :: atom(), function :: atom(), args :: [term]}
-          | {function :: atom(), args :: [term]}
+  @type call :: mfargs | fargs
+  @type mfargs :: {module, atom, args :: [term]}
+  @type fargs :: {atom, args :: [term]}
 
   # Steps to add a new bound combinator:
   #
@@ -78,11 +77,11 @@ defmodule NimbleParsec do
 
   @typep maybe_bound_combinator ::
            {:label, t, binary}
-           | {:traverse, t, (Macro.t() -> Macro.t())}
+           | {:traverse, t, mfargs}
 
   @typep unbound_combinator ::
            {:choice, [t]}
-           | {:repeat, t}
+           | {:repeat, t, mfargs}
            | {:repeat_up_to, t, pos_integer}
 
   @doc ~S"""
@@ -239,7 +238,7 @@ defmodule NimbleParsec do
   def integer(combinator, count)
       when is_combinator(combinator) and is_integer(count) and count > 0 do
     integer = duplicate(ascii_char([?0..?9]), count)
-    quoted_traverse(combinator, integer, &quoted_ascii_to_integer/1)
+    quoted_traverse(combinator, integer, {__MODULE__, :__compile_integer__, []})
   end
 
   def integer(combinator, opts) when is_combinator(combinator) and is_list(opts) do
@@ -260,27 +259,7 @@ defmodule NimbleParsec do
         repeat(integer, to_repeat)
       end
 
-    quoted_traverse(combinator, integer, fn x ->
-      quote do
-        [head | tail] = :lists.reverse(unquote(x))
-        [:lists.foldl(fn x, acc -> x - ?0 + acc * 10 end, head, tail)]
-      end
-    end)
-  end
-
-  defp quoted_ascii_to_integer(vars) when is_list(vars) do
-    vars
-    |> quoted_ascii_to_integer(1)
-    |> Enum.reduce(&{:+, [], [&2, &1]})
-    |> List.wrap()
-  end
-
-  defp quoted_ascii_to_integer([var | vars], index) do
-    [quote(do: (unquote(var) - ?0) * unquote(index)) | quoted_ascii_to_integer(vars, index * 10)]
-  end
-
-  defp quoted_ascii_to_integer([], _index) do
-    []
+    quoted_traverse(combinator, integer, {__MODULE__, :__runtime_integer__, []})
   end
 
   @doc ~S"""
@@ -363,23 +342,21 @@ defmodule NimbleParsec do
   def traverse(combinator \\ empty(), to_traverse, call)
       when is_combinator(combinator) and is_combinator(to_traverse) and is_tuple(call) do
     compile_call!(:ok, call, "traverse")
-    quoted_traverse(combinator, to_traverse, &compile_call!(&1, call, "traverse"))
+    quoted_traverse(combinator, to_traverse, {__MODULE__, :__traverse__, [call]})
   end
 
   @doc """
-  Traverses the quoted `to_traverse` combinator results at
-  compile time with `fun`.
+  Emits the AST to traverse the `to_traverse` combinator
+  results at compile time with `call`.
 
-  `fun` is an anonymous function that receives an AST and
-  returns the traversed AST.
-
-  This is a low-level function that is invoked at compile time
-  and is useful in combinators to avoid injecting runtime
+  `call` is a `{module, function, args}` where the AST argument
+  will be prended to `args`. `call` is invoked at compile time
+  and is useful in combinators that avoid injecting runtime
   dependencies.
   """
-  def quoted_traverse(combinator, to_traverse, fun)
-      when is_combinator(combinator) and is_combinator(to_traverse) and is_function(fun, 1) do
-    [{:traverse, Enum.reverse(to_traverse), fun} | combinator]
+  def quoted_traverse(combinator, to_traverse, {_, _, _} = call)
+      when is_combinator(combinator) and is_combinator(to_traverse) do
+    [{:traverse, Enum.reverse(to_traverse), call} | combinator]
   end
 
   @doc ~S"""
@@ -415,12 +392,7 @@ defmodule NimbleParsec do
       when is_combinator(combinator) and is_combinator(to_map) and is_tuple(call) do
     var = Macro.var(:var, __MODULE__)
     call = compile_call!(var, call, "map")
-
-    quoted_traverse(combinator, to_map, fn arg ->
-      quote do
-        Enum.map(unquote(arg), fn unquote(var) -> unquote(call) end)
-      end
-    end)
+    quoted_traverse(combinator, to_map, {__MODULE__, :__map__, [var, call]})
   end
 
   @doc ~S"""
@@ -454,10 +426,7 @@ defmodule NimbleParsec do
   def reduce(combinator \\ empty(), to_reduce, call)
       when is_combinator(combinator) and is_combinator(to_reduce) and is_tuple(call) do
     compile_call!(:ok, call, "reduce")
-
-    quoted_traverse(combinator, to_reduce, fn arg ->
-      [compile_call!(quote(do: :lists.reverse(unquote(arg))), call, "reduce")]
-    end)
+    quoted_traverse(combinator, to_reduce, {__MODULE__, :__reduce__, [call]})
   end
 
   @doc ~S"""
@@ -505,7 +474,7 @@ defmodule NimbleParsec do
     if to_ignore == empty() do
       to_ignore
     else
-      quoted_traverse(combinator, to_ignore, fn _ -> [] end)
+      quoted_traverse(combinator, to_ignore, {__MODULE__, :__constant__, [[]]})
     end
   end
 
@@ -531,7 +500,7 @@ defmodule NimbleParsec do
   def replace(combinator \\ empty(), to_replace, value)
       when is_combinator(combinator) and is_combinator(to_replace) do
     value = Macro.escape(value)
-    quoted_traverse(combinator, to_replace, fn _ -> [value] end)
+    quoted_traverse(combinator, to_replace, {__MODULE__, :__constant__, [[value]]})
   end
 
   @doc """
@@ -570,7 +539,7 @@ defmodule NimbleParsec do
   def repeat(combinator \\ empty(), to_repeat)
       when is_combinator(combinator) and is_combinator(to_repeat) do
     to_repeat = reverse_combinators!(to_repeat, "repeat")
-    [{:repeat, to_repeat} | combinator]
+    [{:repeat, to_repeat, {__MODULE__, :__constant__, [true]}} | combinator]
   end
 
   @doc """
@@ -620,7 +589,7 @@ defmodule NimbleParsec do
       if max do
         [{:repeat_up_to, to_repeat, max - (min || 0)} | combinator]
       else
-        [{:repeat, to_repeat} | combinator]
+        [{:repeat, to_repeat, {__MODULE__, :__constant__, [true]}} | combinator]
       end
 
     combinator
@@ -754,5 +723,53 @@ defmodule NimbleParsec do
 
   defp bin_segment(combinator, inclusive, exclusive, modifiers) do
     [{:bin_segment, inclusive, exclusive, modifiers} | combinator]
+  end
+
+  ## Callbacks functions
+
+  @doc false
+  def __constant__(_, constant) do
+    constant
+  end
+
+  @doc false
+  def __traverse__(quoted, call) do
+    compile_call!(quoted, call, "traverse")
+  end
+
+  @doc false
+  def __map__(arg, var, call) do
+    quote do
+      Enum.map(unquote(arg), fn unquote(var) -> unquote(call) end)
+    end
+  end
+
+  @doc false
+  def __reduce__(arg, call) do
+    [compile_call!(quote(do: :lists.reverse(unquote(arg))), call, "reduce")]
+  end
+
+  @doc false
+  def __runtime_integer__(acc) do
+    quote do
+      [head | tail] = :lists.reverse(unquote(acc))
+      [:lists.foldl(fn x, acc -> x - ?0 + acc * 10 end, head, tail)]
+    end
+  end
+
+  @doc false
+  def __compile_integer__(vars) when is_list(vars) do
+    vars
+    |> quoted_ascii_to_integer(1)
+    |> Enum.reduce(&{:+, [], [&2, &1]})
+    |> List.wrap()
+  end
+
+  defp quoted_ascii_to_integer([var | vars], index) do
+    [quote(do: (unquote(var) - ?0) * unquote(index)) | quoted_ascii_to_integer(vars, index * 10)]
+  end
+
+  defp quoted_ascii_to_integer([], _index) do
+    []
   end
 end
