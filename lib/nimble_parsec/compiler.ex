@@ -8,10 +8,10 @@ defmodule NimbleParsec.Compiler do
 
   def compile(name, combinators, _opts) when is_list(combinators) do
     config = %{
+      acc_depth: 0,
       catch_all: nil,
       labels: [],
-      name: name,
-      stack_depth: 0
+      name: name
     }
 
     {next, step} = build_next(0, config)
@@ -89,7 +89,7 @@ defmodule NimbleParsec.Compiler do
     body = {next, [], args}
     first_def = {current, head, true, body}
 
-    config = update_in(config.stack_depth, &(&1 + 1))
+    config = update_in(config.acc_depth, &(&1 + 1))
     {defs, inline, last, step} = compile(combinators, [first_def], [], next, step, config)
 
     # No we need to traverse the accumulator with the user code and
@@ -103,6 +103,14 @@ defmodule NimbleParsec.Compiler do
 
     inline = [{current, @arity}, {last, @arity} | inline]
     {Enum.reverse([last_def | defs]), inline, next, step, :catch_none}
+  end
+
+  defp compile_unbound_combinator({:repeat_up_to, combinators, count}, current, step, config) do
+    if all_bound_combinators?(combinators) do
+      compile_bound_repeat_up_to(combinators, count, current, step, config)
+    else
+      compile_unbound_repeat_up_to(combinators, count, current, step, config)
+    end
   end
 
   defp compile_unbound_combinator({:repeat, combinators}, current, step, config) do
@@ -127,7 +135,7 @@ defmodule NimbleParsec.Compiler do
 
   defp compile_bound_repeat(combinators, current, step, config) do
     {failure, step} = build_next(step, config)
-    config = %{config | catch_all: failure, stack_depth: 0}
+    config = %{config | catch_all: failure, acc_depth: 0}
     {defs, inline, success, step} = compile(combinators, [], [], current, step, config)
     def = build_proxy_to(success, current, 0)
     {Enum.reverse([def | defs]), [{success, @arity} | inline], failure, step, :catch_none}
@@ -135,19 +143,19 @@ defmodule NimbleParsec.Compiler do
 
   defp compile_unbound_repeat(combinators, current, step, config) do
     {failure, step} = build_next(step, config)
-    {next, step} = build_next(step, config)
+    {recur, step} = build_next(step, config)
 
     head = quote(do: [rest, acc, stack, line, column])
     args = quote(do: [rest, [], [{rest, acc, line, column} | stack], line, column])
-    body = {next, [], args}
+    body = {recur, [], args}
     current_def = {current, head, true, body}
 
-    config = %{config | catch_all: failure, stack_depth: 0}
-    {defs, inline, success, step} = compile(combinators, [current_def], [], next, step, config)
+    config = %{config | catch_all: failure, acc_depth: 0}
+    {defs, inline, success, step} = compile(combinators, [current_def], [], recur, step, config)
 
     head = quote(do: [rest, user_acc, [{_, acc, _, _} | stack], line, column])
     args = quote(do: [rest, [], [{rest, user_acc ++ acc, line, column} | stack], line, column])
-    body = {next, [], args}
+    body = {recur, [], args}
     success_def = {success, head, true, body}
 
     {next, step} = build_next(step, config)
@@ -158,6 +166,75 @@ defmodule NimbleParsec.Compiler do
 
     inline = [{current, @arity}, {success, @arity}, {failure, @arity} | inline]
     {Enum.reverse([success_def, failure_def | defs]), inline, next, step, :catch_none}
+  end
+
+  ## Repeat up to
+
+  defp compile_bound_repeat_up_to(combinators, count, current, step, config) do
+    {failure, step} = build_next(step, config)
+    {recur, step} = build_next(step, config)
+
+    head = quote(do: [rest, acc, stack, line, column])
+    args = quote(do: [rest, acc, [unquote(count) | stack], line, column])
+    body = {recur, [], args}
+    current_def = {current, head, true, body}
+
+    config = %{config | catch_all: failure, acc_depth: 0}
+    {defs, inline, success, step} = compile(combinators, [current_def], [], recur, step, config)
+
+    {next, step} = build_next(step, config)
+    head = quote(do: [rest, acc, [1 | stack], line, column])
+    args = quote(do: [rest, acc, stack, line, column])
+    body = {next, [], args}
+    success_def0 = {success, head, true, body}
+
+    head = quote(do: [rest, acc, [count | stack], line, column])
+    args = quote(do: [rest, acc, [count - 1 | stack], line, column])
+    body = {recur, [], args}
+    success_def1 = {success, head, true, body}
+
+    head = quote(do: [rest, acc, [_ | stack], line, column])
+    args = quote(do: [rest, acc, stack, line, column])
+    body = {next, [], args}
+    failure_def = {failure, head, true, body}
+
+    defs = Enum.reverse([success_def1, success_def0, failure_def | defs])
+    inline = [{current, @arity}, {success, @arity}, {failure, @arity} | inline]
+    {defs, inline, next, step, :catch_none}
+  end
+
+  defp compile_unbound_repeat_up_to(combinators, count, current, step, config) do
+    {failure, step} = build_next(step, config)
+    {recur, step} = build_next(step, config)
+
+    head = quote(do: [rest, acc, stack, line, column])
+    args = quote(do: [rest, [], [{unquote(count), rest, acc, line, column} | stack], line, column])
+    body = {recur, [], args}
+    current_def = {current, head, true, body}
+
+    config = %{config | catch_all: failure, acc_depth: 0}
+    {defs, inline, success, step} = compile(combinators, [current_def], [], recur, step, config)
+
+    {next, step} = build_next(step, config)
+    head = quote(do: [rest, user_acc, [{1, _, acc, _, _} | stack], line, column])
+    args = quote(do: [rest, user_acc ++ acc, stack, line, column])
+    body = {next, [], args}
+    success_def0 = {success, head, true, body}
+
+    head = quote(do: [rest, user_acc, [{count, _, acc, _, _} | stack], line, column])
+    cont = quote(do: {count - 1, rest, user_acc ++ acc, line, column})
+    args = quote(do: [rest, [], [unquote(cont) | stack], line, column])
+    body = {recur, [], args}
+    success_def1 = {success, head, true, body}
+
+    head = quote(do: [_, _, [{_, rest, acc, line, column} | stack], _, _])
+    args = quote(do: [rest, acc, stack, line, column])
+    body = {next, [], args}
+    failure_def = {failure, head, true, body}
+
+    defs = Enum.reverse([success_def1, success_def0, failure_def | defs])
+    inline = [{current, @arity}, {success, @arity}, {failure, @arity} | inline]
+    {defs, inline, next, step, :catch_none}
   end
 
   ## Choice
@@ -185,7 +262,7 @@ defmodule NimbleParsec.Compiler do
     # We process choices in reverse order. The last order does not
     # have any fallback besides the requirement to drop the stack
     # this allows us to compose with repeat and traverse.
-    config = update_in(config.stack_depth, &(&1 + 2))
+    config = update_in(config.acc_depth, &(&1 + 2))
 
     {first, defs, inline, step} =
       compile_unbound_choice(Enum.reverse(choices), [], [], :unused, step, done, config)
@@ -195,7 +272,7 @@ defmodule NimbleParsec.Compiler do
     body = {first, [], args}
     def = {current, head, true, body}
 
-    {Enum.reverse([def | defs]), [{current, @arity} | inline], done, step, :catch_none}
+    {[def | Enum.reverse(defs)], [{current, @arity} | inline], done, step, :catch_none}
   end
 
   defp compile_unbound_choice([], defs, inline, previous, step, _success, _config) do
@@ -220,7 +297,7 @@ defmodule NimbleParsec.Compiler do
 
     defs = [failure_def, success_def | defs]
     inline = [{failure, @arity}, {success, @arity} | inline]
-    config = %{config | catch_all: failure, stack_depth: 0}
+    config = %{config | catch_all: failure, acc_depth: 0}
     compile_unbound_choice(choices, defs, inline, current, step, done, config)
   end
 
@@ -561,12 +638,12 @@ defmodule NimbleParsec.Compiler do
     {name, args, true, body}
   end
 
-  defp build_catch_all(name, _combinators, %{catch_all: next, stack_depth: n}) do
+  defp build_catch_all(name, _combinators, %{catch_all: next, acc_depth: n}) do
     build_proxy_to(name, next, n)
   end
 
-  defp build_stack_depth(1, acc, stack), do: [{:|, [], [acc, stack]}]
-  defp build_stack_depth(n, acc, stack), do: [quote(do: _) | build_stack_depth(n - 1, acc, stack)]
+  defp build_acc_depth(1, acc, stack), do: [{:|, [], [acc, stack]}]
+  defp build_acc_depth(n, acc, stack), do: [quote(do: _) | build_acc_depth(n - 1, acc, stack)]
 
   defp build_proxy_to(name, next, 0) do
     args = quote(do: [rest, acc, stack, line, column])
@@ -577,7 +654,7 @@ defmodule NimbleParsec.Compiler do
   defp build_proxy_to(name, next, n) do
     vars = quote(do: [rest, acc, stack, line, column])
     [rest, acc, stack, line, column] = vars
-    args = [rest, quote(do: _), build_stack_depth(n, acc, stack), line, column]
+    args = [rest, quote(do: _), build_acc_depth(n, acc, stack), line, column]
     body = {next, [], vars}
     {name, args, true, body}
   end

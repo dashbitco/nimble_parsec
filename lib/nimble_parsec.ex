@@ -1,7 +1,6 @@
 # TODO: runtime_composition() and private parsecs
-# TODO: integer() and integer(min, max) (and benchmark)
+# TODO: Benchmark integer(opts)
 # TODO: repeat_until()
-# TODO: repeat_up_to()
 # TODO: Docs
 
 defmodule NimbleParsec do
@@ -127,7 +126,7 @@ defmodule NimbleParsec do
   def ascii_char(combinator \\ empty(), ranges)
       when is_combinator(combinator) and is_list(ranges) do
     {inclusive, exclusive} = split_ranges!(ranges, "ascii_char")
-    inner_bin_segment(combinator, inclusive, exclusive, [])
+    bin_segment(combinator, inclusive, exclusive, [])
   end
 
   @doc ~S"""
@@ -166,7 +165,7 @@ defmodule NimbleParsec do
   def utf8_char(combinator \\ empty(), ranges)
       when is_combinator(combinator) and is_list(ranges) do
     {inclusive, exclusive} = split_ranges!(ranges, "utf8_char")
-    inner_bin_segment(combinator, inclusive, exclusive, [:utf8])
+    bin_segment(combinator, inclusive, exclusive, [:utf8])
   end
 
   @doc ~S"""
@@ -241,31 +240,36 @@ defmodule NimbleParsec do
       when is_combinator(combinator) and is_integer(count) and count > 0 do
     integer =
       Enum.reduce(1..count, empty(), fn _, acc ->
-        inner_bin_segment(acc, [?0..?9], [], [])
+        bin_segment(acc, [?0..?9], [], [])
       end)
 
-    inner_traverse(combinator, integer, &quoted_ascii_to_integer/1)
+    quoted_traverse(combinator, integer, &quoted_ascii_to_integer/1)
   end
 
   def integer(combinator, opts) when is_combinator(combinator) and is_list(opts) do
     {min, max} = validate_min_and_max!(opts)
-    to_repeat = inner_bin_segment(empty(), [?0..?9], [], [])
+    to_repeat = bin_segment(empty(), [?0..?9], [], [])
 
-    combinator =
+    integer =
       if min do
-        integer(combinator, min)
+        integer(min)
       else
-        combinator
+        empty()
       end
 
-    combinator =
+    integer =
       if max do
-        [{:repeat_up_to, to_repeat, max - min} | combinator]
+        [{:repeat_up_to, to_repeat, max - (min || 0)} | integer]
       else
-        [{:repeat, to_repeat} | combinator]
+        [{:repeat, to_repeat} | integer]
       end
 
-    combinator
+    quoted_traverse(combinator, integer, fn x ->
+      quote do
+        [head | tail] = :lists.reverse(unquote(x))
+        [:lists.foldl(fn x, acc -> x - ?0 + acc * 10 end, head, tail)]
+      end
+    end)
   end
 
   defp quoted_ascii_to_integer(vars) when is_list(vars) do
@@ -354,7 +358,23 @@ defmodule NimbleParsec do
   def traverse(combinator \\ empty(), to_traverse, call)
       when is_combinator(combinator) and is_combinator(to_traverse) and is_tuple(call) do
     compile_call!(:ok, call, "traverse")
-    inner_traverse(combinator, Enum.reverse(to_traverse), &compile_call!(&1, call, "traverse"))
+    quoted_traverse(combinator, to_traverse, &compile_call!(&1, call, "traverse"))
+  end
+
+  @doc """
+  Traverses the quoted `to_traverse` combinator results at
+  compile time with `fun`.
+
+  `fun` is an anonymous function that receives an AST and
+  returns the traversed AST.
+
+  This is a low-level function that is invoked at compile time
+  and is useful in combinators to avoid injecting runtime
+  dependencies.
+  """
+  def quoted_traverse(combinator, to_traverse, fun)
+      when is_combinator(combinator) and is_combinator(to_traverse) and is_function(fun, 1) do
+    [{:traverse, Enum.reverse(to_traverse), fun} | combinator]
   end
 
   @doc ~S"""
@@ -391,7 +411,7 @@ defmodule NimbleParsec do
     var = Macro.var(:var, __MODULE__)
     call = compile_call!(var, call, "map")
 
-    inner_traverse(combinator, Enum.reverse(to_map), fn arg ->
+    quoted_traverse(combinator, to_map, fn arg ->
       quote do
         Enum.map(unquote(arg), fn unquote(var) -> unquote(call) end)
       end
@@ -430,7 +450,7 @@ defmodule NimbleParsec do
       when is_combinator(combinator) and is_combinator(to_reduce) and is_tuple(call) do
     compile_call!(:ok, call, "reduce")
 
-    inner_traverse(combinator, Enum.reverse(to_reduce), fn arg ->
+    quoted_traverse(combinator, to_reduce, fn arg ->
       [compile_call!(quote(do: :lists.reverse(unquote(arg))), call, "reduce")]
     end)
   end
@@ -480,7 +500,7 @@ defmodule NimbleParsec do
     if to_ignore == empty() do
       to_ignore
     else
-      inner_traverse(combinator, Enum.reverse(to_ignore), fn _ -> [] end)
+      quoted_traverse(combinator, to_ignore, fn _ -> [] end)
     end
   end
 
@@ -506,7 +526,7 @@ defmodule NimbleParsec do
   def replace(combinator \\ empty(), to_replace, value)
       when is_combinator(combinator) and is_combinator(to_replace) do
     value = Macro.escape(value)
-    inner_traverse(combinator, Enum.reverse(to_replace), fn _ -> [value] end)
+    quoted_traverse(combinator, to_replace, fn _ -> [value] end)
   end
 
   @doc """
@@ -515,9 +535,8 @@ defmodule NimbleParsec do
   Beware! Since `repeat/2` allows zero entries, it cannot be used inside
   `choice/2`, because it will always succeed and may lead to unused function
   warnings since any further choice won't ever be attempted. For example,
-  because `repeat/2` always suceeds, the combinator below won't ever
-  parse "OK", since the first combinator will succeed even when parsing
-  nothing:
+  because `repeat/2` always succeeds, the `literal/2` combinator below it
+  won't ever run:
 
       choice([
         repeat(ascii_char([?a..?z])),
@@ -595,7 +614,7 @@ defmodule NimbleParsec do
 
     combinator =
       if max do
-        [{:repeat_up_to, to_repeat, max - min} | combinator]
+        [{:repeat_up_to, to_repeat, max - (min || 0)} | combinator]
       else
         [{:repeat, to_repeat} | combinator]
       end
@@ -608,12 +627,28 @@ defmodule NimbleParsec do
 
   Expects at leasts two choices.
 
-  Beware! If a combinator that always succeeds is given as a choice,
-  that choice will always succeed which may lead to unused function
-  warnings since any further choice won't ever be attempted. For example,
-  because `repeat` always suceeds, the combinator below won't ever
-  parse "OK", since the first combinator will succeed even when parsing
-  nothing:
+  ## Beware! Char combinators
+
+  Note both `utf8_char/2` and `ascii_char/2` allow multiple ranges to
+  be given. Therefore, instead this:
+
+      choice([
+        ascii_char([?a..?z]),
+        ascii_char([?A..?Z]),
+      ])
+
+  One should simply prefer:
+
+      ascii_char([?a..?z, ?A..?Z])
+
+  As the latter is compiled more efficiently by `NimbleParser`.
+
+  ## Beware! Always successful combinators
+
+  If a combinator that always succeeds is given as a choice, that choice
+  will always succeed which may lead to unused function warnings since
+  any further choice won't ever be attempted. For example, because `repeat/2`
+  always succeeds, the `literal/2` combinator below it won't ever run:
 
       choice([
         repeat(ascii_char([?0..?9])),
@@ -713,11 +748,7 @@ defmodule NimbleParsec do
 
   ## Inner combinators
 
-  defp inner_traverse(combinator, to_traverse, traversal) when is_function(traversal, 1) do
-    [{:traverse, to_traverse, traversal} | combinator]
-  end
-
-  defp inner_bin_segment(combinator, inclusive, exclusive, modifiers) do
+  defp bin_segment(combinator, inclusive, exclusive, modifiers) do
     [{:bin_segment, inclusive, exclusive, modifiers} | combinator]
   end
 end

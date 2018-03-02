@@ -85,7 +85,7 @@ defmodule NimbleParsecTest do
     end
   end
 
-  describe "integer/3 combinator with exact length" do
+  describe "integer/2 combinator with exact length" do
     defparsec :only_integer, integer(2)
     defparsec :prefixed_integer, literal("T") |> integer(2)
 
@@ -109,6 +109,27 @@ defmodule NimbleParsecTest do
       assert bound?(integer(2))
       assert bound?(literal("T") |> integer(2))
       assert bound?(literal("T") |> integer(2) |> literal("E"))
+    end
+  end
+
+  describe "integer/2 combinator with min/max" do
+    defparsec :min_integer, integer(min: 3)
+    defparsec :max_integer, integer(max: 3)
+    defparsec :min_max_integer, integer(min: 1, max: 3)
+
+    @error "expected byte in the range ?0..?9, followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
+
+    test "returns ok/error with min" do
+      assert min_integer("123") == {:ok, [123], "", 1, 4}
+      assert min_integer("123o") == {:ok, [123], "o", 1, 4}
+      assert min_integer("1234") == {:ok, [1234], "", 1, 5}
+      assert min_integer("12") == {:error, @error, "12", 1, 1}
+    end
+
+    test "is not bound" do
+      assert not_bound?(integer(min: 3))
+      assert not_bound?(integer(max: 3))
+      assert not_bound?(integer(min: 1, max: 3))
     end
   end
 
@@ -511,16 +532,56 @@ defmodule NimbleParsecTest do
     end
   end
 
+  describe "times/2 combinator" do
+    defparsec :times_digits, times(ascii_char([?0..?9]) |> ascii_char([?0..?9]), max: 4)
+    defparsec :times_choice, times(choice([ascii_char([?0..?4]), ascii_char([?5..?9])]), max: 4)
+
+    defparsec :choice_times,
+              choice([
+                times(ascii_char([?0..?9]), min: 1, max: 4),
+                times(ascii_char([?a..?z]), min: 1, max: 4)
+              ])
+
+    test "returns ok/error when bound" do
+      assert times_digits("12") == {:ok, [?1, ?2], "", 1, 3}
+      assert times_digits("123") == {:ok, [?1, ?2], "3", 1, 3}
+      assert times_digits("123456789") == {:ok, [?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8], "9", 1, 9}
+      assert times_digits("1234567890") == {:ok, [?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8], "90", 1, 9}
+      assert times_digits("12o") == {:ok, [?1, ?2], "o", 1, 3}
+      assert times_digits("o") == {:ok, [], "o", 1, 1}
+    end
+
+    test "returns ok/error with choice" do
+      assert times_choice("12") == {:ok, [?1, ?2], "", 1, 3}
+      assert times_choice("123") == {:ok, [?1, ?2, ?3], "", 1, 4}
+      assert times_choice("12345") == {:ok, [?1, ?2, ?3, ?4], "5", 1, 5}
+      assert times_choice("12o") == {:ok, [?1, ?2], "o", 1, 3}
+      assert times_choice("o") == {:ok, [], "o", 1, 1}
+    end
+
+    @error "expected one of byte in the range ?0..?9, followed by byte in the range ?0..?9, byte in the range ?a..?z, followed by byte in the range ?a..?z"
+
+    test "returns ok/error with outer choice" do
+      assert choice_times("12") == {:ok, [?1, ?2], "", 1, 3}
+      assert choice_times("12a") == {:ok, [?1, ?2], "a", 1, 3}
+      assert choice_times("12345") == {:ok, [?1, ?2, ?3, ?4], "5", 1, 5}
+      assert choice_times("ab") == {:ok, [?a, ?b], "", 1, 3}
+      assert choice_times("ab1") == {:ok, [?a, ?b], "1", 1, 3}
+      assert choice_times("abcde") == {:ok, [?a, ?b, ?c, ?d], "e", 1, 5}
+      assert choice_times("+") == {:error, @error, "+", 1, 1}
+    end
+  end
+
   describe "choice/2 combinator" do
-    defparsec :simple_choices,
+    defparsec :simple_choice,
               choice([ascii_char([?a..?z]), ascii_char([?A..?Z]), ascii_char([?0..?9])])
 
-    defparsec :choices_inner_repeat,
+    defparsec :choice_inner_repeat,
               choice([repeat(ascii_char([?a..?z])), repeat(ascii_char([?A..?Z]))])
 
-    defparsec :choices_outer_repeat, repeat(choice([ascii_char([?a..?z]), ascii_char([?A..?Z])]))
+    defparsec :choice_outer_repeat, repeat(choice([ascii_char([?a..?z]), ascii_char([?A..?Z])]))
 
-    defparsec :choices_repeat_and_inner_map,
+    defparsec :choice_repeat_and_inner_map,
               repeat(
                 choice([
                   map(ascii_char([?a..?z]), {:to_string, []}),
@@ -528,7 +589,7 @@ defmodule NimbleParsecTest do
                 ])
               )
 
-    defparsec :choices_repeat_and_maps,
+    defparsec :choice_repeat_and_maps,
               map(
                 repeat(
                   choice([
@@ -539,7 +600,7 @@ defmodule NimbleParsecTest do
                 {String, :to_integer, []}
               )
 
-    defparsec :choices_with_empty,
+    defparsec :choice_with_empty,
               choice([
                 ascii_char([?a..?z]),
                 empty()
@@ -548,38 +609,38 @@ defmodule NimbleParsecTest do
     @error "expected one of byte in the range ?a..?z, byte in the range ?A..?Z, byte in the range ?0..?9"
 
     test "returns ok/error" do
-      assert simple_choices("a=") == {:ok, [?a], "=", 1, 2}
-      assert simple_choices("A=") == {:ok, [?A], "=", 1, 2}
-      assert simple_choices("0=") == {:ok, [?0], "=", 1, 2}
-      assert simple_choices("+=") == {:error, @error, "+=", 1, 1}
+      assert simple_choice("a=") == {:ok, [?a], "=", 1, 2}
+      assert simple_choice("A=") == {:ok, [?A], "=", 1, 2}
+      assert simple_choice("0=") == {:ok, [?0], "=", 1, 2}
+      assert simple_choice("+=") == {:error, @error, "+=", 1, 1}
     end
 
     test "returns ok/error with repeat inside" do
-      assert choices_inner_repeat("az") == {:ok, [?a, ?z], "", 1, 3}
-      assert choices_inner_repeat("AZ") == {:ok, [], "AZ", 1, 1}
+      assert choice_inner_repeat("az") == {:ok, [?a, ?z], "", 1, 3}
+      assert choice_inner_repeat("AZ") == {:ok, [], "AZ", 1, 1}
     end
 
     test "returns ok/error with repeat outside" do
-      assert choices_outer_repeat("az") == {:ok, [?a, ?z], "", 1, 3}
-      assert choices_outer_repeat("AZ") == {:ok, [?A, ?Z], "", 1, 3}
-      assert choices_outer_repeat("aAzZ") == {:ok, [?a, ?A, ?z, ?Z], "", 1, 5}
+      assert choice_outer_repeat("az") == {:ok, [?a, ?z], "", 1, 3}
+      assert choice_outer_repeat("AZ") == {:ok, [?A, ?Z], "", 1, 3}
+      assert choice_outer_repeat("aAzZ") == {:ok, [?a, ?A, ?z, ?Z], "", 1, 5}
     end
 
     test "returns ok/error with repeat and inner map" do
-      assert choices_repeat_and_inner_map("az") == {:ok, ["97", "122"], "", 1, 3}
-      assert choices_repeat_and_inner_map("AZ") == {:ok, ["65", "90"], "", 1, 3}
-      assert choices_repeat_and_inner_map("aAzZ") == {:ok, ["97", "65", "122", "90"], "", 1, 5}
+      assert choice_repeat_and_inner_map("az") == {:ok, ["97", "122"], "", 1, 3}
+      assert choice_repeat_and_inner_map("AZ") == {:ok, ["65", "90"], "", 1, 3}
+      assert choice_repeat_and_inner_map("aAzZ") == {:ok, ["97", "65", "122", "90"], "", 1, 5}
     end
 
     test "returns ok/error with repeat and maps" do
-      assert choices_repeat_and_maps("az") == {:ok, [?a, ?z], "", 1, 3}
-      assert choices_repeat_and_maps("AZ") == {:ok, [?A, ?Z], "", 1, 3}
-      assert choices_repeat_and_maps("aAzZ") == {:ok, [?a, ?A, ?z, ?Z], "", 1, 5}
+      assert choice_repeat_and_maps("az") == {:ok, [?a, ?z], "", 1, 3}
+      assert choice_repeat_and_maps("AZ") == {:ok, [?A, ?Z], "", 1, 3}
+      assert choice_repeat_and_maps("aAzZ") == {:ok, [?a, ?A, ?z, ?Z], "", 1, 5}
     end
 
     test "returns ok/error on empty" do
-      assert choices_with_empty("az") == {:ok, [?a], "z", 1, 2}
-      assert choices_with_empty("AZ") == {:ok, [], "AZ", 1, 1}
+      assert choice_with_empty("az") == {:ok, [?a], "z", 1, 2}
+      assert choice_with_empty("AZ") == {:ok, [], "AZ", 1, 1}
     end
   end
 
