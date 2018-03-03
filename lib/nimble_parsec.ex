@@ -219,10 +219,10 @@ defmodule NimbleParsec do
       end
 
       MyParser.digit_and_lowercase("1a")
-      #=> {:ok, [?1, ?a], "", 1, 3}
+      #=> {:ok, [?1, ?a], "", %{}, {1, 0}, 2}
 
       MyParser.digit_and_lowercase("a1")
-      #=> {:error, "expected a byte in the range ?0..?9, followed by a byte in the range ?a..?z", "a1", 1, 1}
+      #=> {:error, "expected a byte in the range ?0..?9, followed by a byte in the range ?a..?z", "a1", %{}, 1, 1}
 
   """
   @spec ascii_char(t, [range]) :: t
@@ -254,10 +254,10 @@ defmodule NimbleParsec do
       end
 
       MyParser.digit_and_utf8("1é")
-      #=> {:ok, [?1, ?é], "", 1, 3}
+      #=> {:ok, [?1, ?é], "", %{}, {1, 0}, 2}
 
       MyParser.digit_and_utf8("a1")
-      #=> {:error, "expected a utf8 codepoint in the range ?0..?9, followed by a utf8 codepoint", "a1", 1, 1}
+      #=> {:error, "expected a utf8 codepoint in the range ?0..?9, followed by a utf8 codepoint", "a1", %{}, {1, 0}, 0}
 
   """
   @spec utf8_char(t, [range]) :: t
@@ -283,10 +283,10 @@ defmodule NimbleParsec do
       end
 
       MyParser.digit_and_lowercase("1a")
-      #=> {:ok, [?1, ?a], "", 1, 3}
+      #=> {:ok, [?1, ?a], "", %{}, {1, 0}, 2}
 
       MyParser.digit_and_lowercase("a1")
-      #=> {:error, "expected a digit followed by lowercase letter", "a1", 1, 1}
+      #=> {:error, "expected a digit followed by lowercase letter", "a1", %{}, {1, 0}, 0}
 
   """
   def label(combinator \\ empty(), to_label, label)
@@ -314,10 +314,10 @@ defmodule NimbleParsec do
       end
 
       MyParser.two_digits_integer("123")
-      #=> {:ok, [12], "3", 1, 3}
+      #=> {:ok, [12], "3", %{}, {1, 0}, 2}
 
       MyParser.two_digits_integer("1a3")
-      #=> {:error, "expected a two digits integer", "1a3", 1, 1}
+      #=> {:error, "expected a two digits integer", "1a3", %{}, {1, 0}, 0}
 
   With min and max:
 
@@ -328,10 +328,10 @@ defmodule NimbleParsec do
       end
 
       MyParser.two_digits_integer("123")
-      #=> {:ok, [12], "3", 1, 3}
+      #=> {:ok, [123], "", %{}, {1, 0}, 2}
 
       MyParser.two_digits_integer("1a3")
-      #=> {:error, "expected a two digits integer", "1a3", 1, 1}
+      #=> {:error, "expected a two digits integer", "1a3", %{}, {1, 0}, 0}
 
   """
   @spec integer(t, pos_integer | [min_and_max]) :: t
@@ -380,7 +380,7 @@ defmodule NimbleParsec do
       end
 
       MyParser.digit_upper_lower_plus("1Az+")
-      #=> {:ok, [?1, ?A, ?z, ?+], "", 1, 5}
+      #=> {:ok, [?1, ?A, ?z, ?+], "", %{}, {1, 0}, 4}
 
   """
   @spec concat(t, t) :: t
@@ -469,7 +469,7 @@ defmodule NimbleParsec do
       end
 
       MyParser.letters_to_chars("abc")
-      #=> {:ok, ["99-98-97"], "", 1, 4}
+      #=> {:ok, ["99-98-97"], "", %{}, {1, 0}, 3}
 
   """
   @spec traverse(t, t, call) :: t
@@ -534,7 +534,7 @@ defmodule NimbleParsec do
       end
 
       MyParser.letters_to_string_chars("abc")
-      #=> {:ok, ["97", "98", "99"], "", 1, 4}
+      #=> {:ok, ["97", "98", "99"], "", %{}, {1, 0}, 3}
   """
   @spec map(t, t, call) :: t
   def map(combinator \\ empty(), to_map, call)
@@ -570,7 +570,7 @@ defmodule NimbleParsec do
       end
 
       MyParser.letters_to_reduced_chars("abc")
-      #=> {:ok, ["97-98-99"], "", 1, 4}
+      #=> {:ok, ["97-98-99"], "", %{}, {1, 0}, 3}
   """
   @spec reduce(t, t, call) :: t
   def reduce(combinator \\ empty(), to_reduce, call)
@@ -619,10 +619,10 @@ defmodule NimbleParsec do
       end
 
       MyParser.string_t("T")
-      #=> {:ok, ["T"], "", 1, 2}
+      #=> {:ok, ["T"], "", %{}, {1, 0}, 1}
 
       MyParser.string_t("not T")
-      #=> {:error, "expected a string \"T\"", "not T", 1, 1}
+      #=> {:error, "expected a string \"T\"", "not T", %{}, {1, 0}, 0}
 
   """
   @spec string(t, binary) :: t
@@ -643,7 +643,7 @@ defmodule NimbleParsec do
       end
 
       MyParser.ignorable("T12")
-      #=> {:ok, [12], "", 1, 3}
+      #=> {:ok, [12], "", %{}, {1, 0}, 2}
 
   """
   @spec ignore(t, t) :: t
@@ -671,7 +671,7 @@ defmodule NimbleParsec do
       end
 
       MyParser.replaceable("T12")
-      #=> {:ok, ["OTHER", 12], "", 1, 3}
+      #=> {:ok, ["OTHER", 12], "", %{}, {1, 0}, 2}
 
   """
   @spec replace(t, t, term) :: t
@@ -707,10 +707,10 @@ defmodule NimbleParsec do
       end
 
       MyParser.repeat_lower("abcd")
-      #=> {:ok, [?a, ?b, ?c, ?d], "", 1, 5}
+      #=> {:ok, [?a, ?b, ?c, ?d], "", %{}, {1, 0}, 4}
 
       MyParser.repeat_lower("1234")
-      #=> {:ok, [], "1234", 1, 1}
+      #=> {:ok, [], "1234", %{}, {1, 0}, 0}
 
   """
   @spec repeat(t, t) :: t
@@ -757,7 +757,7 @@ defmodule NimbleParsec do
       end
 
       MyParser.string(~S("string with quotes \" inside"))
-      {:ok, ["\"string with quotes \" inside\""], "", 1, 31}
+      {:ok, ["\"string with quotes \" inside\""], "", %{}, {1, 0}, 30}
 
   """
   @spec repeat_while(t, t, call) :: t
@@ -797,7 +797,7 @@ defmodule NimbleParsec do
       end
 
       MyParser.string(~S("string with quotes \" inside"))
-      {:ok, ["\"string with quotes \" inside\""], "", 1, 31}
+      {:ok, ["\"string with quotes \" inside\""], "", %{}, {1, 0}, 30}
 
   """
   @spec repeat_until(t, t, [t]) :: t
@@ -839,13 +839,13 @@ defmodule NimbleParsec do
       end
 
       MyParser.minimum_lower("abcd")
-      #=> {:ok, [?a, ?b, ?c, ?d], "", 1, 5}
+      #=> {:ok, [?a, ?b, ?c, ?d], "", %{}, {1, 0}, 4}
 
       MyParser.minimum_lower("ab12")
-      #=> {:ok, [?a, ?b], "12", 1, 3}
+      #=> {:ok, [?a, ?b], "12", %{}, {1, 0}, 2}
 
       MyParser.minimum_lower("a123")
-      #=> {:ok, [], "a123", 1, 1}
+      #=> {:ok, [], "a123", %{}, {1, 0}, 0}
 
   """
   @spec times(t, t, pos_integer | [min_and_max]) :: t

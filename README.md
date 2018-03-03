@@ -4,7 +4,7 @@
 
 `NimbleParsec` is a simple and fast library for parser combinators.
 
-Combinators are built during runtime and compile into multiple
+Combinators are built during runtime and compiled into multiple
 clauses with binary matching. This provides the following benefits:
 
   * Performance: since it compiles to binary matching, it leverages
@@ -16,13 +16,14 @@ clauses with binary matching. This provides the following benefits:
     macros are `defparsec/3` and `defparsecp/3` which emit the compiled
     clauses with  binary matching
 
-  * No runtime dependency: after compile, the generated parser clauses
-    have no runtime dependency on `NimbleParsec`. This opens up the
-    possibility to compile parsers and do not impose a dependency on
+  * No runtime dependency: after compilation, the generated parser
+    clauses have no runtime dependency on `NimbleParsec`. This opens up
+    the possibility to compile parsers and do not impose a dependency on
     users of your library
 
-  * No footprint: `NimbleParsec` only needs to be imported in your modules.
-    Leaving no footprint on your modules.
+  * No footprints: `NimbleParsec` only needs to be imported in your modules.
+    There is no need for `use NimbleParsec`, leaving no footprints on your
+    modules
 
 ## Examples
 
@@ -49,7 +50,7 @@ defmodule MyParser do
 end
 
 MyParser.datetime("2010-04-17T14:12:34Z")
-#=> {:ok, [2010, 4, 17, 14, 12, 34, "Z"], "", 1, 21}
+#=> {:ok, [2010, 4, 17, 14, 12, 34, "Z"], "", %{}, 1, 21}
 ```
 
 If you add `debug: true` to `defparsec/3`, it will print the generated
@@ -78,8 +79,8 @@ defp datetime__0(<<x0, x1, x2, x3, "-", x4, x5, "-", x6, x7, "T",
   )
 end
 
-defp datetime__0(rest, acc, _stack, _context, line, column) do
-  {:error, "...", rest, line, column}
+defp datetime__0(rest, acc, _stack, context, line, column) do
+  {:error, "...", rest, context, line, column}
 end
 
 defp datetime__1(<<"Z", rest::binary>>, acc, stack, comb__context, comb__line, comb__column) do
@@ -90,8 +91,8 @@ defp datetime__1(rest, acc, stack, context, line, column) do
   datetime__2(rest, acc, stack, context, line, column)
 end
 
-defp datetime__2(rest, acc, _stack, _context, line, column) do
-  {:ok, acc, rest, line, column}
+defp datetime__2(rest, acc, _stack, context, line, column) do
+  {:ok, acc, rest, context, line, column}
 end
 ```
 
