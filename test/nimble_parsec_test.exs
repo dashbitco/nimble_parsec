@@ -519,7 +519,7 @@ defmodule NimbleParsecTest do
   describe "repeat/2 combinator" do
     defparsec :repeat_digits, repeat(ascii_char([?0..?9]) |> ascii_char([?0..?9]))
 
-    ascii_to_string = map(ascii_char([?0..?9]), {:to_string, []})
+    ascii_to_string = map(ascii_char([?0..?9]), :to_string)
     defparsec :repeat_digits_to_string, repeat(ascii_to_string)
 
     defparsec :repeat_digits_to_same_inner,
@@ -531,8 +531,8 @@ defmodule NimbleParsecTest do
     defparsec :repeat_double_digits_to_string,
               repeat(
                 concat(
-                  map(ascii_char([?0..?9]), {:to_string, []}),
-                  map(ascii_char([?0..?9]), {:to_string, []})
+                  map(ascii_char([?0..?9]), :to_string),
+                  map(ascii_char([?0..?9]), :to_string)
                 )
               )
 
@@ -562,7 +562,7 @@ defmodule NimbleParsecTest do
     defparsec :repeat_while_digits,
               repeat_while(ascii_char([?0..?9]) |> ascii_char([?0..?9]), {__MODULE__, :not_3, []})
 
-    ascii_to_string = map(ascii_char([?0..?9]), {:to_string, []})
+    ascii_to_string = map(ascii_char([?0..?9]), :to_string)
     defparsec :repeat_while_digits_to_string, repeat_while(ascii_to_string, {:not_3, []})
 
     defparsec :repeat_while_digits_to_same_inner,
@@ -574,8 +574,8 @@ defmodule NimbleParsecTest do
     defparsec :repeat_while_double_digits_to_string,
               repeat_while(
                 concat(
-                  map(ascii_char([?0..?9]), {:to_string, []}),
-                  map(ascii_char([?0..?9]), {:to_string, []})
+                  map(ascii_char([?0..?9]), :to_string),
+                  map(ascii_char([?0..?9]), :to_string)
                 ),
                 {:not_3, []}
               )
@@ -616,7 +616,7 @@ defmodule NimbleParsecTest do
     defparsec :repeat_until_digits,
               repeat_until(ascii_char([?0..?9]) |> ascii_char([?0..?9]), [string("3")])
 
-    ascii_to_string = map(ascii_char([?0..?9]), {:to_string, []})
+    ascii_to_string = map(ascii_char([?0..?9]), :to_string)
     defparsec :repeat_until_digits_to_string, repeat_until(ascii_to_string, [ascii_char([?3])])
 
     defparsec :repeat_until_digits_to_same_inner,
@@ -628,8 +628,8 @@ defmodule NimbleParsecTest do
     defparsec :repeat_until_double_digits_to_string,
               repeat_until(
                 concat(
-                  map(ascii_char([?0..?9]), {:to_string, []}),
-                  map(ascii_char([?0..?9]), {:to_string, []})
+                  map(ascii_char([?0..?9]), :to_string),
+                  map(ascii_char([?0..?9]), :to_string)
                 ),
                 [ascii_char([?3])]
               )
@@ -715,8 +715,8 @@ defmodule NimbleParsecTest do
     defparsec :choice_repeat_and_inner_map,
               repeat(
                 choice([
-                  map(ascii_char([?a..?z]), {:to_string, []}),
-                  map(ascii_char([?A..?Z]), {:to_string, []})
+                  map(ascii_char([?a..?z]), :to_string),
+                  map(ascii_char([?A..?Z]), :to_string)
                 ])
               )
 
@@ -724,8 +724,8 @@ defmodule NimbleParsecTest do
               map(
                 repeat(
                   choice([
-                    map(ascii_char([?a..?z]), {:to_string, []}),
-                    map(ascii_char([?A..?Z]), {:to_string, []})
+                    map(ascii_char([?a..?z]), :to_string),
+                    map(ascii_char([?A..?Z]), :to_string)
                   ])
                 ),
                 {String, :to_integer, []}

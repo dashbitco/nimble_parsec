@@ -135,7 +135,7 @@ defmodule NimbleParsec do
   @type inclusive_range :: Range.t() | char()
   @type exclusive_range :: {:not, Range.t()} | {:not, char()}
   @type min_and_max :: {:min, pos_integer()} | {:max, pos_integer()}
-  @type call :: mfargs | fargs
+  @type call :: mfargs | fargs | atom
   @type mfargs :: {module, atom, args :: [term]}
   @type fargs :: {atom, args :: [term]}
 
@@ -417,7 +417,8 @@ defmodule NimbleParsec do
   Traverses the combinator results with the remote or local function `call`.
 
   `call` is either a `{module, function, args}` representing
-  a remote call or `{function, args}` representing a local call.
+  a remote call, a `{function, args}` representing a local call
+  or an atom `function` representing `{function, []}`.
 
   The parser results to be traversed, the current line and the
   current offset will be prepended to the given `args`. The `args`
@@ -460,7 +461,7 @@ defmodule NimbleParsec do
   """
   @spec traverse(t, t, call) :: t
   def traverse(combinator \\ empty(), to_traverse, call)
-      when is_combinator(combinator) and is_combinator(to_traverse) and is_tuple(call) do
+      when is_combinator(combinator) and is_combinator(to_traverse) do
     compile_call!([], call, "traverse")
     quoted_traverse(combinator, to_traverse, {__MODULE__, :__traverse__, [call, "traverse"]})
   end
@@ -490,7 +491,8 @@ defmodule NimbleParsec do
   Maps over the combinator results with the remote or local function in `call`.
 
   `call` is either a `{module, function, args}` representing
-  a remote call or `{function, args}` representing a local call.
+  a remote call, a `{function, args}` representing a local call
+  or an atom `function` representing `{function, []}`.
 
   Each parser result will be invoked individually for the `call`.
   Each result  be prepended to the given `args`. The `args` will
@@ -516,7 +518,7 @@ defmodule NimbleParsec do
   """
   @spec map(t, t, call) :: t
   def map(combinator \\ empty(), to_map, call)
-      when is_combinator(combinator) and is_combinator(to_map) and is_tuple(call) do
+      when is_combinator(combinator) and is_combinator(to_map) do
     var = Macro.var(:var, __MODULE__)
     call = compile_call!([var], call, "map")
     quoted_traverse(combinator, to_map, {__MODULE__, :__map__, [var, call]})
@@ -526,7 +528,8 @@ defmodule NimbleParsec do
   Reduces over the combinator results with the remote or local function in `call`.
 
   `call` is either a `{module, function, args}` representing
-  a remote call or `{function, args}` representing a local call.
+  a remote call, a `{function, args}` representing a local call
+  or an atom `function` representing `{function, []}`.
 
   The parser results to be reduced will be prepended to the
   given `args`. The `args` will be injected at the compile site
@@ -551,7 +554,7 @@ defmodule NimbleParsec do
   """
   @spec reduce(t, t, call) :: t
   def reduce(combinator \\ empty(), to_reduce, call)
-      when is_combinator(combinator) and is_combinator(to_reduce) and is_tuple(call) do
+      when is_combinator(combinator) and is_combinator(to_reduce) do
     compile_call!([], call, "reduce")
     quoted_traverse(combinator, to_reduce, {__MODULE__, :__reduce__, [call]})
   end
@@ -673,7 +676,8 @@ defmodule NimbleParsec do
   Repeats while the given remote or local function `call` returns true.
 
   `call` is either a `{module, function, args}` representing
-  a remote call or `{function, args}` representing a local call.
+  a remote call, a `{function, args}` representing a local call
+  or an atom `function` representing `{function, []}`.
 
   The `rest` of the binary to be parsed will be prepended to the
   given `args`. The `args` will be injected at the compile site
@@ -706,7 +710,7 @@ defmodule NimbleParsec do
   """
   @spec repeat_while(t, t, call) :: t
   def repeat_while(combinator \\ empty(), to_repeat, call)
-      when is_combinator(combinator) and is_combinator(to_repeat) and is_tuple(call) do
+      when is_combinator(combinator) and is_combinator(to_repeat) do
     non_empty!(to_repeat, "repeat_while")
     compile_call!([], call, "repeat_while")
     quoted_repeat_while(combinator, to_repeat, {__MODULE__, :__call__, [call, "repeat_while"]})
@@ -951,6 +955,12 @@ defmodule NimbleParsec do
        when is_atom(function) and is_list(args) do
     quote do
       unquote(function)(unquote_splicing(extra), unquote_splicing(Macro.escape(args)))
+    end
+  end
+
+  defp compile_call!(extra, function, _context) when is_atom(function) do
+    quote do
+      unquote(function)(unquote_splicing(extra))
     end
   end
 
