@@ -402,6 +402,32 @@ defmodule NimbleParsecTest do
     end
   end
 
+  describe "line/2 combinator" do
+    defparsec :ascii_line,
+              ascii_char([])
+              |> ascii_char([])
+              |> ascii_char([])
+              |> line()
+
+    test "returns ok/error" do
+      assert ascii_line("abc") == {:ok, [{[?a, ?b, ?c], {1, 0}}], "", {1, 0}, 3}
+      assert ascii_line("a\nc") == {:ok, [{[?a, ?\n, ?c], {2, 2}}], "", {2, 2}, 3}
+    end
+  end
+
+  describe "byte_offset/2 combinator" do
+    defparsec :ascii_byte_offset,
+              ascii_char([])
+              |> ascii_char([])
+              |> ascii_char([])
+              |> byte_offset()
+
+    test "returns ok/error" do
+      assert ascii_byte_offset("abc") == {:ok, [{[?a, ?b, ?c], 3}], "", {1, 0}, 3}
+      assert ascii_byte_offset("a\nc") == {:ok, [{[?a, ?\n, ?c], 3}], "", {2, 2}, 3}
+    end
+  end
+
   describe "remote map/3 combinator" do
     defparsec :remote_map,
               ascii_char([?a..?z])

@@ -387,6 +387,32 @@ defmodule NimbleParsec do
     Enum.reduce(1..n, combinator, fn _, acc -> to_duplicate ++ acc end)
   end
 
+  @doc """
+  Puts the result of the given combinator as the first element
+  of a tuple with the `byte_offset` as second element.
+
+  `byte_offset` is a non-negative integer.
+  """
+  @spec byte_offset(t, t) :: t
+  def byte_offset(combinator \\ empty(), to_wrap)
+      when is_combinator(combinator) and is_combinator(to_wrap) do
+    quoted_traverse(combinator, to_wrap, {__MODULE__, :__byte_offset__, []})
+  end
+
+  @doc """
+  Puts the result of the given combinator as the first element
+  of a tuple with the `line` as second element.
+
+  `line` is a tuple where the first element is the current line
+  and the second element is the byte offset immediately after
+  the newline.
+  """
+  @spec line(t, t) :: t
+  def line(combinator \\ empty(), to_wrap)
+      when is_combinator(combinator) and is_combinator(to_wrap) do
+    quoted_traverse(combinator, to_wrap, {__MODULE__, :__line__, []})
+  end
+
   @doc ~S"""
   Traverses the combinator results with the remote or local function `call`.
 
@@ -971,6 +997,16 @@ defmodule NimbleParsec do
   end
 
   @doc false
+  def __line__(quoted, line, _offset) do
+    [{reverse_now_or_later(quoted), line}]
+  end
+
+  @doc false
+  def __byte_offset__(quoted, _line, offset) do
+    [{reverse_now_or_later(quoted), offset}]
+  end
+
+  @doc false
   def __map__(arg, _line, _offset, var, call) do
     quote do
       Enum.map(unquote(arg), fn unquote(var) -> unquote(call) end)
@@ -1004,6 +1040,9 @@ defmodule NimbleParsec do
     |> Enum.reduce(&{:+, [], [&2, &1]})
     |> List.wrap()
   end
+
+  defp reverse_now_or_later(list) when is_list(list), do: :lists.reverse(list)
+  defp reverse_now_or_later(expr), do: quote(do: :lists.reverse(unquote(expr)))
 
   defp quoted_ascii_to_integer([var | vars], index) do
     [quote(do: (unquote(var) - ?0) * unquote(index)) | quoted_ascii_to_integer(vars, index * 10)]
