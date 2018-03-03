@@ -142,7 +142,7 @@ defmodule NimbleParsec.Compiler do
     head = quote(do: [arg, acc, stack, line, offset])
     [_, _, _, line, offset] = head
 
-    user_acc = apply_mfa(traversal, [[], line, offset])
+    user_acc = apply_traverse(traversal, [], line, offset)
     args = quote(do: [arg, unquote(user_acc) ++ acc, stack, line, offset])
     body = {next, [], args}
     def = {current, head, true, body}
@@ -165,7 +165,7 @@ defmodule NimbleParsec.Compiler do
     head = quote(do: [arg, user_acc, [acc | stack], line, offset])
     [_, user_acc, _, line, offset] = head
 
-    user_acc = apply_mfa(traversal, [user_acc, line, offset])
+    user_acc = apply_traverse(traversal, user_acc, line, offset)
     args = quote(do: [arg, unquote(user_acc) ++ acc, stack, line, offset])
     body = {next, [], args}
     last_def = {last, head, true, body}
@@ -523,7 +523,7 @@ defmodule NimbleParsec.Compiler do
     case take_bound_combinators(combinators, [], [], [], [], line, offset, counter) do
       {[], inputs, guards, outputs, _, line, offset, counter} ->
         # TODO: Remove hardcoded positions.
-        {:ok, inputs, guards, apply_mfa(fun, [outputs, line, offset]), line, offset, counter}
+        {:ok, inputs, guards, apply_traverse(fun, outputs, line, offset), line, offset, counter}
 
       {_, _, _, _, _, _, _, _} ->
         :error
@@ -695,6 +695,12 @@ defmodule NimbleParsec.Compiler do
   end
 
   ## Helpers
+
+  defp apply_traverse(mfargs, arg, line, offset) do
+    mfargs
+    |> Enum.reverse()
+    |> Enum.reduce(arg, &apply_mfa(&1, [&2, line, offset]))
+  end
 
   defp apply_mfa({mod, fun, args}, extra) do
     apply(mod, fun, extra ++ args)

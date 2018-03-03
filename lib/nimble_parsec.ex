@@ -153,7 +153,7 @@ defmodule NimbleParsec do
 
   @typep maybe_bound_combinator ::
            {:label, t, binary}
-           | {:traverse, t, mfargs}
+           | {:traverse, t, [mfargs]}
 
   @typep unbound_combinator ::
            {:choice, [t]}
@@ -451,7 +451,13 @@ defmodule NimbleParsec do
   @spec quoted_traverse(t, t, mfargs) :: t
   def quoted_traverse(combinator, to_traverse, {_, _, _} = call)
       when is_combinator(combinator) and is_combinator(to_traverse) do
-    [{:traverse, Enum.reverse(to_traverse), call} | combinator]
+    case to_traverse do
+      [{:traverse, inner_traverse, inner_call}] ->
+        [{:traverse, inner_traverse, [call | inner_call]} | combinator]
+
+      _ ->
+        [{:traverse, Enum.reverse(to_traverse), [call]} | combinator]
+    end
   end
 
   @doc ~S"""
@@ -915,7 +921,8 @@ defmodule NimbleParsec do
     end
   end
 
-  defp compile_call!(extra, {function, args}, _context) when is_atom(function) and is_list(args) do
+  defp compile_call!(extra, {function, args}, _context)
+       when is_atom(function) and is_list(args) do
     quote do
       unquote(function)(unquote_splicing(extra), unquote_splicing(Macro.escape(args)))
     end
