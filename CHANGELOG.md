@@ -1,11 +1,12 @@
 # Changelog for NimbleParsec
 
-## v0.2.0
+## v0.2.0-dev
 
+  * Support parser combinator contexts
   * Rename `literal/2` to `string/2`
   * Add `line/2` and `byte_offset/2` combinators
-  * The MFA given to `traverse/3` now receives the current line and byte_offset values
-  * The MFA given to `quoted_traverse/3` now receives the current line and byte_offset expressions
+  * The MFA given to `traverse/3` now receives the accumulator, context, line and byte_offset values
+  * The MFA given to `quoted_traverse/3` now receives the ASTs for the accumulator, context, line and byte_offset
   * Instead of `line` as a positive integer, we now track `{line, line_offset}` where `line` is the same as before and `line_offset` is the byte_offset after the new line
   * Instead of `column` as a positive integer, we now track `byte_offset` as a non-negative integer
 

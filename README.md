@@ -58,7 +58,7 @@ clauses, which are shown below:
 ```elixir
 defp datetime__0(<<x0, x1, x2, x3, "-", x4, x5, "-", x6, x7, "T",
                    x8, x9, ":", x10, x11, ":", x12, x13, rest::binary>>,
-                 acc, stack, combinator__line, combinator__column)
+                 acc, stack, comb__context, comb__line, comb__column)
      when x0 >= 48 and x0 <= 57 and (x1 >= 48 and x1 <= 57) and
          (x2 >= 48 and x2 <= 57) and (x3 >= 48 and x3 <= 57) and
          (x4 >= 48 and x4 <= 57) and (x5 >= 48 and x5 <= 57) and
@@ -72,24 +72,25 @@ defp datetime__0(<<x0, x1, x2, x3, "-", x4, x5, "-", x6, x7, "T",
      (x9 - 48) * 1 + (x8 - 48) * 10, (x7 - 48) * 1 + (x6 - 48) * 10, (x5 - 48) * 1 + (x4 - 48) * 10,
      (x3 - 48) * 1 + (x2 - 48) * 10 + (x1 - 48) * 100 + (x0 - 48) * 1000] ++ acc,
     stack,
-    combinator__line,
-    combinator__column + 19
+    comb__context,
+    comb__line,
+    comb__column + 19
   )
 end
 
-defp datetime__0(rest, acc, stack, line, column) do
+defp datetime__0(rest, acc, _stack, _context, line, column) do
   {:error, "...", rest, line, column}
 end
 
-defp datetime__1(<<"Z", rest::binary>>, acc, stack, combinator__line, combinator__column) do
-  datetime__2(rest, ["Z"] ++ acc, stack, combinator__line, combinator__column + 1)
+defp datetime__1(<<"Z", rest::binary>>, acc, stack, comb__context, comb__line, comb__column) do
+  datetime__2(rest, ["Z"] ++ acc, stack, comb__context, comb__line, comb__column + 1)
 end
 
-defp datetime__1(rest, acc, stack, line, column) do
-  datetime__2(rest, acc, stack, line, column)
+defp datetime__1(rest, acc, stack, context, line, column) do
+  datetime__2(rest, acc, stack, context, line, column)
 end
 
-defp datetime__2(rest, acc, _stack, line, column) do
+defp datetime__2(rest, acc, _stack, _context, line, column) do
   {:ok, acc, rest, line, column}
 end
 ```

@@ -423,10 +423,10 @@ defmodule NimbleParsec do
   a remote call, a `{function, args}` representing a local call
   or an atom `function` representing `{function, []}`.
 
-  The parser results to be traversed, the current line and the
-  current offset will be prepended to the given `args`. The `args`
-  will be injected at the compile site and therefore must be
-  escapable via `Macro.escape/1`.
+  The parser results to be traversed, the parser context, the
+  current line and the current offset will be prepended to the
+  given `args`. The `args` will be injected at the compile site
+  and therefore must be escapable via `Macro.escape/1`.
 
   Notice the results are received in reverse order and
   must be returned in reverse order.
@@ -474,8 +474,8 @@ defmodule NimbleParsec do
   combinator results.
 
   `call` is a `{module, function, args}`. The AST representation
-  of the parser results, line and offset will be prepended to
-  `args`. `call` is invoked at compile time and is useful in
+  of the parser results, context, line and offset will be prepended
+  to `args`. `call` is invoked at compile time and is useful in
   combinators that avoid injecting runtime dependencies.
   """
   @spec quoted_traverse(t, t, mfargs) :: t
@@ -990,44 +990,44 @@ defmodule NimbleParsec do
   end
 
   @doc false
-  def __constant__(_quoted, _line, _offset, constant) do
+  def __constant__(_quoted, _context, _line, _offset, constant) do
     constant
   end
 
   @doc false
-  def __call__(quoted, call, context) do
-    compile_call!([quoted], call, context)
+  def __call__(quoted, call, combinator) do
+    compile_call!([quoted], call, combinator)
   end
 
   @doc false
-  def __call__(quoted, _line, _offset, call, context) do
-    compile_call!([quoted], call, context)
+  def __call__(quoted, _context, _line, _offset, call, combinator) do
+    compile_call!([quoted], call, combinator)
   end
 
   @doc false
-  def __traverse__(quoted, line, offset, call, context) do
-    compile_call!([quoted, line, offset], call, context)
+  def __traverse__(quoted, context, line, offset, call, combinator) do
+    compile_call!([quoted, context, line, offset], call, combinator)
   end
 
   @doc false
-  def __line__(quoted, line, _offset) do
+  def __line__(quoted, _context, line, _offset) do
     [{reverse_now_or_later(quoted), line}]
   end
 
   @doc false
-  def __byte_offset__(quoted, _line, offset) do
+  def __byte_offset__(quoted, _context, _line, offset) do
     [{reverse_now_or_later(quoted), offset}]
   end
 
   @doc false
-  def __map__(arg, _line, _offset, var, call) do
+  def __map__(arg, _context, _line, _offset, var, call) do
     quote do
       Enum.map(unquote(arg), fn unquote(var) -> unquote(call) end)
     end
   end
 
   @doc false
-  def __reduce__(arg, _line, _offset, call) do
+  def __reduce__(arg, _context, _line, _offset, call) do
     [compile_call!([quote(do: :lists.reverse(unquote(arg)))], call, "reduce")]
   end
 
@@ -1039,7 +1039,7 @@ defmodule NimbleParsec do
   end
 
   @doc false
-  def __runtime_integer__(acc, _line, _offset) do
+  def __runtime_integer__(acc, _context, _line, _offset) do
     quote do
       [head | tail] = :lists.reverse(unquote(acc))
       [:lists.foldl(fn x, acc -> x - ?0 + acc * 10 end, head, tail)]
@@ -1047,7 +1047,7 @@ defmodule NimbleParsec do
   end
 
   @doc false
-  def __compile_integer__(vars, _line, _offset) when is_list(vars) do
+  def __compile_integer__(vars, _context, _line, _offset) when is_list(vars) do
     vars
     |> quoted_ascii_to_integer(1)
     |> Enum.reduce(&{:+, [], [&2, &1]})

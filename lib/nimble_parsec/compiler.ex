@@ -140,10 +140,9 @@ defmodule NimbleParsec.Compiler do
     {next, step} = build_next(step, config)
 
     head = quote(do: [arg, acc, stack, context, line, offset])
-    [_, _, _, _, line, offset] = head
+    [_, _, _, context, line, offset] = head
 
-    # TODO: Add context to traverse and while
-    user_acc = apply_traverse(traversal, [], line, offset)
+    user_acc = apply_traverse(traversal, [], context, line, offset)
     args = quote(do: [arg, unquote(user_acc) ++ acc, stack, context, line, offset])
     body = {next, [], args}
     def = {current, head, true, body}
@@ -164,9 +163,9 @@ defmodule NimbleParsec.Compiler do
     # concatenate with the previous accumulator at the top of the stack.
     {next, step} = build_next(step, config)
     head = quote(do: [arg, user_acc, [acc | stack], context, line, offset])
-    [_, user_acc, _, _, line, offset] = head
+    [_, user_acc, _, context, line, offset] = head
 
-    user_acc = apply_traverse(traversal, user_acc, line, offset)
+    user_acc = apply_traverse(traversal, user_acc, context, line, offset)
     args = quote(do: [arg, unquote(user_acc) ++ acc, stack, context, line, offset])
     body = {next, [], args}
     last_def = {last, head, true, body}
@@ -437,8 +436,8 @@ defmodule NimbleParsec.Compiler do
     bin = {:<<>>, [], inputs ++ [quote(do: rest :: binary)]}
     acc = quote(do: unquote(outputs) ++ acc)
 
-    head = quote(do: [unquote(bin), acc, stack, context, combinator__line, combinator__offset])
-    args = quote(do: [rest, unquote(acc), stack, context, unquote(line), unquote(offset)])
+    head = quote(do: [unquote(bin), acc, stack, comb__context, comb__line, comb__offset])
+    args = quote(do: [rest, unquote(acc), stack, comb__context, unquote(line), unquote(offset)])
     body = {next, [], args}
 
     guards = guards_list_to_quoted(guards)
@@ -540,8 +539,8 @@ defmodule NimbleParsec.Compiler do
   defp bound_combinator({:traverse, combinators, fun}, line, offset, counter) do
     case take_bound_combinators(combinators, [], [], [], [], line, offset, counter) do
       {[], inputs, guards, outputs, _, line, offset, counter} ->
-        # TODO: Remove hardcoded positions.
-        {:ok, inputs, guards, apply_traverse(fun, outputs, line, offset), line, offset, counter}
+        outputs = apply_traverse(fun, outputs, quote(do: comb__context), line, offset)
+        {:ok, inputs, guards, outputs, line, offset, counter}
 
       {_, _, _, _, _, _, _, _} ->
         :error
@@ -555,7 +554,7 @@ defmodule NimbleParsec.Compiler do
   ## Line and offset handling
 
   defp line_offset_pair() do
-    quote(do: {combinator__line, combinator__offset})
+    quote(do: {comb__line, comb__offset})
   end
 
   defp add_offset({:+, _, [var, current]}, extra)
@@ -714,10 +713,10 @@ defmodule NimbleParsec.Compiler do
 
   ## Helpers
 
-  defp apply_traverse(mfargs, arg, line, offset) do
+  defp apply_traverse(mfargs, arg, context, line, offset) do
     mfargs
     |> Enum.reverse()
-    |> Enum.reduce(arg, &apply_mfa(&1, [&2, line, offset]))
+    |> Enum.reduce(arg, &apply_mfa(&1, [&2, context, line, offset]))
   end
 
   defp apply_mfa({mod, fun, args}, extra) do

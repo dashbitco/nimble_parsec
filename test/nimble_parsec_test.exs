@@ -878,12 +878,12 @@ defmodule NimbleParsecTest do
     assert length(defs) != 3, "Expected #{inspect(document)} to contain more than 3 clauses"
   end
 
-  def public_join_and_wrap(args, {line, line_offset}, byte_offset, joiner)
+  def public_join_and_wrap(args, %{}, {line, line_offset}, byte_offset, joiner)
       when is_integer(line) and is_integer(line_offset) and is_integer(byte_offset) do
     args |> Enum.join(joiner) |> List.wrap()
   end
 
-  defp private_join_and_wrap(args, {line, line_offset}, byte_offset, joiner)
+  defp private_join_and_wrap(args, %{}, {line, line_offset}, byte_offset, joiner)
        when is_integer(line) and is_integer(line_offset) and is_integer(byte_offset) do
     args |> Enum.join(joiner) |> List.wrap()
   end
