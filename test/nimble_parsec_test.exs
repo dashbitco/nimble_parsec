@@ -865,7 +865,7 @@ defmodule NimbleParsecTest do
       |> ignore(string(":"))
       |> integer(2)
 
-    defparsec :datetime, date |> ignore(string("T")) |> concat(time)
+    defparsec :datetime, date |> ignore(string("T")) |> concat(time), inline: true
 
     test "returns ok/error by itself" do
       assert datetime("2010-04-17T14:12:34") == {:ok, [2010, 4, 17, 14, 12, 34], "", {1, 0}, 19}

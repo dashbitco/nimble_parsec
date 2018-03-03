@@ -161,8 +161,10 @@ defmodule NimbleParsec do
   @typep unbound_combinator ::
            {:choice, [t]}
            | {:parsec, atom}
-           | {:repeat, t, mfargs}
+           | {:repeat, mfargs, t, t, mfargs}
            | {:repeat_up_to, t, pos_integer}
+
+  @ok_context {__MODULE__, :__ok_context__, []}
 
   @doc ~S"""
   Returns an empty combinator.
@@ -795,7 +797,7 @@ defmodule NimbleParsec do
   def quoted_repeat_while(combinator \\ empty(), to_repeat, {_, _, _} = call)
       when is_combinator(combinator) and is_combinator(to_repeat) do
     non_empty!(to_repeat, "quoted_repeat_while")
-    [{:repeat, Enum.reverse(to_repeat), call} | combinator]
+    [{:repeat, @ok_context, [], Enum.reverse(to_repeat), call} | combinator]
   end
 
   @doc """
@@ -847,7 +849,7 @@ defmodule NimbleParsec do
       if max do
         [{:repeat_up_to, to_repeat, max - (min || 0)} | combinator]
       else
-        [{:repeat, to_repeat, {__MODULE__, :__ok_context__, []}} | combinator]
+        [{:repeat, @ok_context, [], to_repeat, @ok_context} | combinator]
       end
 
     combinator

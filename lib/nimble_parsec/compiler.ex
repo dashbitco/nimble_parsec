@@ -1,6 +1,6 @@
 defmodule NimbleParsec.Compiler do
   @moduledoc false
-  @arity 5
+  @arity 6
 
   def compile_pattern([]) do
     raise ArgumentError, "cannot compile empty parser combinator"
@@ -182,11 +182,33 @@ defmodule NimbleParsec.Compiler do
     end
   end
 
-  defp compile_unbound_combinator({:repeat, combinators, while}, current, step, config) do
+  defp compile_unbound_combinator(
+         {:repeat, init, prelude, combinators, while},
+         current,
+         step,
+         config
+       ) do
+    {failure, step} = build_next(step, config)
+    config = %{config | catch_all: failure, acc_depth: 0}
+
+    {defs, inline, next, step} =
+      case apply_mfa(init, quote(do: [rest, context, line, offset])) do
+        {:ok, quote(do: context)} ->
+          {[], [], current, step}
+
+        quoted ->
+          {next, step} = build_next(step, config)
+          head = args = quote(do: [rest, acc, stack, context, line, offset])
+          body = repeat_while(quoted, next, args, failure, args)
+          {[{current, head, true, body}], [{current, @arity}], next, step}
+      end
+
+    {defs, inline, next, step} = compile(prelude, defs, inline, next, step, config)
+
     if all_bound_combinators?(combinators) do
-      compile_bound_repeat(combinators, while, current, step, config)
+      compile_bound_repeat(combinators, while, defs, inline, next, failure, step, config)
     else
-      compile_unbound_repeat(combinators, while, current, step, config)
+      compile_unbound_repeat(combinators, while, defs, inline, next, failure, step, config)
     end
   end
 
@@ -202,34 +224,27 @@ defmodule NimbleParsec.Compiler do
 
   ## Repeat
 
-  defp compile_bound_repeat(combinators, while, current, step, config) do
-    {failure, step} = build_next(step, config)
-    config = %{config | catch_all: failure, acc_depth: 0}
-
+  defp compile_bound_repeat(combinators, while, defs, inline, current, failure, step, config) do
     {defs, recur, next, step} =
       case apply_mfa(while, quote(do: [rest, context, line, offset])) do
         {:ok, quote(do: context)} ->
-          {[], current, current, step}
+          {defs, current, current, step}
 
         quoted ->
           {next, step} = build_next(step, config)
           head = args = quote(do: [rest, acc, stack, context, line, offset])
           body = repeat_while(quoted, next, args, failure, args)
-          {[{current, head, true, body}], current, next, step}
+          {[{current, head, true, body} | defs], current, next, step}
       end
 
-    {defs, inline, success, step} = compile(combinators, defs, [], next, step, config)
+    {defs, inline, success, step} = compile(combinators, defs, inline, next, step, config)
     def = build_proxy_to(success, recur, 0)
     {Enum.reverse([def | defs]), [{success, @arity} | inline], failure, step, :catch_none}
   end
 
-  defp compile_unbound_repeat(combinators, while, current, step, config) do
-    {failure, step} = build_next(step, config)
+  defp compile_unbound_repeat(combinators, while, defs, inline, current, failure, step, config) do
     {recur, step} = build_next(step, config)
-    while = apply_mfa(while, quote(do: [rest, context, line, offset]))
-
-    config = %{config | catch_all: failure, acc_depth: 0}
-    {defs, inline, success, step} = compile(combinators, [], [], recur, step, config)
+    {defs, inline, success, step} = compile(combinators, defs, inline, recur, step, config)
 
     {next, step} = build_next(step, config)
     head = quote(do: [_, _, [{rest, acc, context, line, offset} | stack], _, _, _])
@@ -237,6 +252,7 @@ defmodule NimbleParsec.Compiler do
     body = {next, [], args}
     failure_def = {failure, head, true, body}
 
+    while = apply_mfa(while, quote(do: [rest, context, line, offset]))
     cont = quote(do: {rest, acc, context, line, offset})
 
     head =
@@ -617,8 +633,12 @@ defmodule NimbleParsec.Compiler do
     prefix <> Enum.join([Enum.join(inclusive, " or") | exclusive], ", and not")
   end
 
-  defp label({:repeat, combinators, _}) do
+  defp label({:repeat, _, [], combinators, _}) do
     labels(combinators)
+  end
+
+  defp label({:repeat, _, prelude, _, _}) do
+    labels(prelude)
   end
 
   defp label({:repeat_up_to, combinators, _}) do
