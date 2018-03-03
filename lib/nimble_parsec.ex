@@ -1,5 +1,5 @@
 # TODO: Make ignore cascade up.
-# TODO: Test debug, wrap, tag, repeat_until/6, repeat_while/6, traverse with error.
+# TODO: Test debug, wrap, tag, and traverse with error
 # TODO: Add ascii_string / utf8_string
 
 defmodule NimbleParsec do
@@ -166,7 +166,7 @@ defmodule NimbleParsec do
   @typep unbound_combinator ::
            {:choice, [t]}
            | {:parsec, atom}
-           | {:repeat, mfargs, t, t, mfargs}
+           | {:repeat, t, mfargs}
            | {:repeat_up_to, t, pos_integer}
 
   @cont_context {__MODULE__, :__cont_context__, []}
@@ -823,56 +823,7 @@ defmodule NimbleParsec do
   def quoted_repeat_while(combinator \\ empty(), to_repeat, {_, _, _} = while)
       when is_combinator(combinator) and is_combinator(to_repeat) do
     non_empty!(to_repeat, "quoted_repeat_while")
-    [{:repeat, @cont_context, [], Enum.reverse(to_repeat), while} | combinator]
-  end
-
-  @spec repeat_while(t, call, t, t, call) :: t
-  def repeat_while(combinator \\ empty(), init, prelude, to_repeat, while)
-      when is_combinator(combinator) and is_combinator(prelude) and is_combinator(to_repeat) do
-    non_empty!(prelude, "repeat_while")
-    non_empty!(to_repeat, "repeat_while")
-    compile_call!([], init, "repeat_while")
-    compile_call!([], while, "repeat_while")
-
-    quoted_repeat_while(
-      combinator,
-      {__MODULE__, :__call__, [init, "repeat_while"]},
-      prelude,
-      to_repeat,
-      {__MODULE__, :__call__, [while, "repeat_while"]}
-    )
-  end
-
-  @spec repeat_until(t, call, t, t, [t]) :: t
-  def repeat_until(combinator \\ empty(), init, prelude, to_repeat, [_ | _] = choices)
-      when is_combinator(combinator) and is_combinator(prelude) and is_combinator(to_repeat) and
-             is_list(choices) do
-    compile_call!([], init, "repeat_until")
-    non_empty!(prelude, "repeat_until")
-    non_empty!(to_repeat, "repeat_until")
-    clauses = check_until_choices!(choices)
-
-    quoted_repeat_while(
-      combinator,
-      {__MODULE__, :__call__, [init, "repeat_until"]},
-      prelude,
-      to_repeat,
-      {__MODULE__, :__repeat_until__, [clauses]}
-    )
-  end
-
-  @spec quoted_repeat_while(t, mfargs, t, t, mfargs) :: t
-  def quoted_repeat_while(
-        combinator \\ empty(),
-        {_, _, _} = init,
-        prelude,
-        to_repeat,
-        {_, _, _} = while
-      )
-      when is_combinator(combinator) and is_combinator(prelude) and is_combinator(to_repeat) do
-    non_empty!(prelude, "quoted_repeat_while")
-    non_empty!(to_repeat, "quoted_repeat_while")
-    [{:repeat, init, Enum.reverse(prelude), Enum.reverse(to_repeat), while} | combinator]
+    [{:repeat, Enum.reverse(to_repeat), while} | combinator]
   end
 
   @doc """
@@ -924,7 +875,7 @@ defmodule NimbleParsec do
       if max do
         [{:repeat_up_to, to_repeat, max - (min || 0)} | combinator]
       else
-        [{:repeat, @cont_context, [], to_repeat, @cont_context} | combinator]
+        [{:repeat, to_repeat, @cont_context} | combinator]
       end
 
     combinator

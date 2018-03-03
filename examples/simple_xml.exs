@@ -47,10 +47,9 @@ defmodule SimpleXML do
     |> ignore(string(">"))
 
   defparsec :__xml__,
-            empty()
+            opening_tag
+            |> traverse(:store_tag_in_context)
             |> repeat_until(
-              :opening_tag,
-              opening_tag,
               choice([
                 parsec(:__xml__),
                 text
@@ -61,13 +60,8 @@ defmodule SimpleXML do
             |> concat(closing_tag)
             |> traverse(:check_close_tag_and_emit_tag)
 
-  defp opening_tag("<" <> rest, %{tags: tags} = context, _line, _offset) do
-    [tag, _] = :binary.split(rest, ">")
-    {:cont, %{context | tags: [tag | tags]}}
-  end
-
-  defp opening_tag(_rest, context, _line, _offset) do
-    {:halt, context}
+  defp store_tag_in_context([tag], %{tags: tags} = context, _line, _offset) do
+    {[tag], %{context | tags: [tag | tags]}}
   end
 
   defp check_close_tag_and_emit_tag([closing, [opening | contents]], context, _line, _offset) do
