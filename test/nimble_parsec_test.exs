@@ -288,32 +288,7 @@ defmodule NimbleParsecTest do
     end
   end
 
-  describe "remote traverse/3 compile combinator" do
-    @three_ascii_letters ascii_char([?a..?z])
-                         |> ascii_char([?a..?z])
-                         |> ascii_char([?a..?z])
-
-    defparsec :remote_traverse,
-              string("T")
-              |> integer(2)
-              |> traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]})
-              |> integer(2)
-
-    @error "expected string \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
-
-    test "returns ok/error" do
-      assert remote_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", {1, 0}, 8}
-      assert remote_traverse("Tabc34") == {:error, @error, "Tabc34", {1, 0}, 0}
-      assert remote_traverse("T12abcdf") == {:error, @error, "T12abcdf", {1, 0}, 0}
-      assert remote_traverse("T12ab34") == {:error, @error, "T12ab34", {1, 0}, 0}
-    end
-
-    test "is bound" do
-      assert bound?(traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]}))
-    end
-  end
-
-  describe "remote traverse/3 runtime combinator" do
+  describe "remote traverse/3 combinator" do
     @three_ascii_letters times(ascii_char([?a..?z]), min: 3)
 
     defparsec :remote_runtime_traverse,
@@ -340,39 +315,13 @@ defmodule NimbleParsecTest do
       assert remote_runtime_traverse("T12ab34") == {:error, error, "ab34", {1, 0}, 3}
     end
 
-    test "is bound" do
-      assert not_bound?(
-               traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]})
-             )
+    test "is not bound" do
+      combinator = traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]})
+      assert not_bound?(combinator)
     end
   end
 
-  describe "local traverse/3 compile combinator" do
-    @three_ascii_letters ascii_char([?a..?z])
-                         |> ascii_char([?a..?z])
-                         |> ascii_char([?a..?z])
-
-    defparsec :local_traverse,
-              string("T")
-              |> integer(2)
-              |> traverse(@three_ascii_letters, {:private_join_and_wrap, ["-"]})
-              |> integer(2)
-
-    @error "expected string \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
-
-    test "returns ok/error" do
-      assert local_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", {1, 0}, 8}
-      assert local_traverse("Tabc34") == {:error, @error, "Tabc34", {1, 0}, 0}
-      assert local_traverse("T12abcdf") == {:error, @error, "T12abcdf", {1, 0}, 0}
-      assert local_traverse("T12ab34") == {:error, @error, "T12ab34", {1, 0}, 0}
-    end
-
-    test "is bound" do
-      assert bound?(traverse(@three_ascii_letters, {:public_join_and_wrap, ["-"]}))
-    end
-  end
-
-  describe "local traverse/3 runtime combinator" do
+  describe "local traverse/3 combinator" do
     @three_ascii_letters times(ascii_char([?a..?z]), min: 3)
 
     defparsec :local_runtime_traverse,
@@ -398,7 +347,7 @@ defmodule NimbleParsecTest do
       assert local_runtime_traverse("T12ab34") == {:error, error, "ab34", {1, 0}, 3}
     end
 
-    test "is bound" do
+    test "is not bound" do
       assert not_bound?(traverse(@three_ascii_letters, {:private_join_and_wrap, ["-"]}))
     end
   end
@@ -613,12 +562,12 @@ defmodule NimbleParsecTest do
 
     def not_3(<<?3, _::binary>>, %{} = context, {line, line_offset}, byte_offset)
         when is_integer(line) and is_integer(line_offset) and is_integer(byte_offset) do
-      {:error, context}
+      {:halt, context}
     end
 
     def not_3(<<_::binary>>, %{} = context, {line, line_offset}, byte_offset)
         when is_integer(line) and is_integer(line_offset) and is_integer(byte_offset) do
-      {:ok, context}
+      {:cont, context}
     end
   end
 
@@ -885,13 +834,13 @@ defmodule NimbleParsecTest do
     assert length(defs) != 3, "Expected #{inspect(document)} to contain more than 3 clauses"
   end
 
-  def public_join_and_wrap(args, %{}, {line, line_offset}, byte_offset, joiner)
+  def public_join_and_wrap(args, %{} = context, {line, line_offset}, byte_offset, joiner)
       when is_integer(line) and is_integer(line_offset) and is_integer(byte_offset) do
-    args |> Enum.join(joiner) |> List.wrap()
+    {args |> Enum.join(joiner) |> List.wrap(), context}
   end
 
-  defp private_join_and_wrap(args, %{}, {line, line_offset}, byte_offset, joiner)
+  defp private_join_and_wrap(args, %{} = context, {line, line_offset}, byte_offset, joiner)
        when is_integer(line) and is_integer(line_offset) and is_integer(byte_offset) do
-    args |> Enum.join(joiner) |> List.wrap()
+    {args |> Enum.join(joiner) |> List.wrap(), context}
   end
 end

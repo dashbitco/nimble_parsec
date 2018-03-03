@@ -1,3 +1,7 @@
+# TODO: Make ignore cascade up.
+# TODO: Test debug, wrap, tag, repeat_until/6, repeat_while/6, traverse with error.
+# TODO: Add ascii_string / utf8_string
+
 defmodule NimbleParsec do
   @moduledoc "README.md"
              |> File.read!()
@@ -164,7 +168,7 @@ defmodule NimbleParsec do
            | {:repeat, mfargs, t, t, mfargs}
            | {:repeat_up_to, t, pos_integer}
 
-  @ok_context {__MODULE__, :__ok_context__, []}
+  @cont_context {__MODULE__, :__cont_context__, []}
 
   @doc ~S"""
   Returns an empty combinator.
@@ -178,6 +182,8 @@ defmodule NimbleParsec do
   @doc """
   Invokes an already compiled parsec with name `name` in the
   same module.
+
+  It is useful to implement recursive definitions.
 
   It can also be used to exchange compilation time by runtime
   performance. If you have a parser used over and over again,
@@ -428,9 +434,11 @@ defmodule NimbleParsec do
   given `args`. The `args` will be injected at the compile site
   and therefore must be escapable via `Macro.escape/1`.
 
-  The `call` must return a list of results to be added to
-  the accumulator. Notice the received results are in reverse
-  order and must be returned in reverse order too.
+  The `call` must return a tuple with list of results to be added
+  to the accumulator as first argument and a context as second
+  argument. It may also return `{:error, reason}` to stop processing.
+  Notice the received results are in reverse order and must be
+  returned in reverse order too.
 
   The number of elements returned does not need to be
   the same as the number of elements given.
@@ -454,8 +462,8 @@ defmodule NimbleParsec do
                   |> ascii_char([?a..?z])
                   |> traverse({:join_and_wrap, ["-"]})
 
-        defp join_and_wrap(args, _line, _offset, joiner) do
-          args |> Enum.join(joiner) |> List.wrap()
+        defp join_and_wrap(args, context, _line, _offset, joiner) do
+          {args |> Enum.join(joiner) |> List.wrap(), context}
         end
       end
 
@@ -570,6 +578,34 @@ defmodule NimbleParsec do
     quoted_traverse(combinator, to_reduce, {__MODULE__, :__reduce__, [call]})
   end
 
+  @doc """
+  Wraps the results of the given combinator in `to_wrap` in a list.
+  """
+  @spec wrap(t, t) :: t
+  def wrap(combinator \\ empty(), to_wrap)
+      when is_combinator(combinator) and is_combinator(to_wrap) do
+    quoted_traverse(combinator, to_wrap, {__MODULE__, :__wrap__, []})
+  end
+
+  @doc """
+  Tags the result of the given combinator in `to_tag` in a tuple with
+  `tag` as first element.
+  """
+  @spec tag(t, t) :: t
+  def tag(combinator \\ empty(), to_tag, tag)
+      when is_combinator(combinator) and is_combinator(to_tag) do
+    quoted_traverse(combinator, to_tag, {__MODULE__, :__tag__, [Macro.escape(tag)]})
+  end
+
+  @doc """
+  Inspects the combinator state given to `to_debug` with the given `opts`.
+  """
+  @spec debug(t, t) :: t
+  def debug(combinator \\ empty(), to_debug)
+      when is_combinator(combinator) and is_combinator(to_debug) do
+    quoted_traverse(combinator, to_debug, {__MODULE__, :__debug__, []})
+  end
+
   @doc ~S"""
   Defines a string binary value.
 
@@ -680,16 +716,16 @@ defmodule NimbleParsec do
   def repeat(combinator \\ empty(), to_repeat)
       when is_combinator(combinator) and is_combinator(to_repeat) do
     non_empty!(to_repeat, "repeat")
-    quoted_repeat_while(combinator, to_repeat, {__MODULE__, :__ok_context__, []})
+    quoted_repeat_while(combinator, to_repeat, {__MODULE__, :__cont_context__, []})
   end
 
   @doc ~S"""
-  Repeats while the given remote or local function `call` returns
-  `{:ok, context}`.
+  Repeats while the given remote or local function `while` returns
+  `{:cont, context}`.
 
-  In case repetition should stop, `call` must return `{:error, context}`.
+  In case repetition should stop, `while` must return `{:break, context}`.
 
-  `call` is either a `{module, function, args}` representing
+  `while` is either a `{module, function, args}` representing
   a remote call, a `{function, args}` representing a local call
   or an atom `function` representing `{function, []}`.
 
@@ -715,8 +751,8 @@ defmodule NimbleParsec do
                   |> ascii_char([?"])
                   |> reduce({List, :to_string, []})
 
-        defp not_quote(<<?", _::binary>>), do: false
-        defp not_quote(_), do: true
+        defp not_quote(<<?", _::binary>>, context, _, _), do: {:stop, context}
+        defp not_quote(_, _, _, _), do: {:cont, context}
       end
 
       MyParser.string(~S("string with quotes \" inside"))
@@ -724,11 +760,11 @@ defmodule NimbleParsec do
 
   """
   @spec repeat_while(t, t, call) :: t
-  def repeat_while(combinator \\ empty(), to_repeat, call)
+  def repeat_while(combinator \\ empty(), to_repeat, while)
       when is_combinator(combinator) and is_combinator(to_repeat) do
     non_empty!(to_repeat, "repeat_while")
-    compile_call!([], call, "repeat_while")
-    quoted_repeat_while(combinator, to_repeat, {__MODULE__, :__call__, [call, "repeat_while"]})
+    compile_call!([], while, "repeat_while")
+    quoted_repeat_while(combinator, to_repeat, {__MODULE__, :__call__, [while, "repeat_while"]})
   end
 
   @doc ~S"""
@@ -763,41 +799,79 @@ defmodule NimbleParsec do
       {:ok, ["\"string with quotes \" inside\""], "", 1, 31}
 
   """
+  @spec repeat_until(t, t, [t]) :: t
   def repeat_until(combinator \\ empty(), to_repeat, [_ | _] = choices)
       when is_combinator(combinator) and is_combinator(to_repeat) and is_list(choices) do
     non_empty!(to_repeat, "repeat_until")
-
-    clauses =
-      for choice <- choices do
-        if choice == [] do
-          raise "cannot pass empty combinator as choice in repeat_until"
-        end
-
-        case NimbleParsec.Compiler.compile_pattern(choice) do
-          {_inputs, _guards} = pair -> pair
-          :error -> raise "cannot compile combinator as choice given in repeat_until"
-        end
-      end
-
+    clauses = check_until_choices!(choices)
     quoted_repeat_while(combinator, to_repeat, {__MODULE__, :__repeat_until__, [clauses]})
   end
 
   @doc """
-  Invokes `call` to emit the AST that will repeat `to_repeat`
-  while the AST code returns `{:ok, context}`.
+  Invokes `while` to emit the AST that will repeat `to_repeat`
+  while the AST code returns `{:cont, context}`.
 
-  In case repetition should stop, `call` must return `{:error, context}`.
+  In case repetition should stop, `while` must return `{:halt, context}`.
 
-  `call` is a `{module, function, args}` where the AST representations
+  `while` is a `{module, function, args}` where the AST representations
   of the binary to be parsed, context, line and offset will be
-  prended to `args`. `call` is invoked at compile time and is
+  prended to `args`. `while` is invoked at compile time and is
   useful in combinators that avoid injecting runtime dependencies.
   """
   @spec quoted_repeat_while(t, t, mfargs) :: t
-  def quoted_repeat_while(combinator \\ empty(), to_repeat, {_, _, _} = call)
+  def quoted_repeat_while(combinator \\ empty(), to_repeat, {_, _, _} = while)
       when is_combinator(combinator) and is_combinator(to_repeat) do
     non_empty!(to_repeat, "quoted_repeat_while")
-    [{:repeat, @ok_context, [], Enum.reverse(to_repeat), call} | combinator]
+    [{:repeat, @cont_context, [], Enum.reverse(to_repeat), while} | combinator]
+  end
+
+  @spec repeat_while(t, call, t, t, call) :: t
+  def repeat_while(combinator \\ empty(), init, prelude, to_repeat, while)
+      when is_combinator(combinator) and is_combinator(prelude) and is_combinator(to_repeat) do
+    non_empty!(prelude, "repeat_while")
+    non_empty!(to_repeat, "repeat_while")
+    compile_call!([], init, "repeat_while")
+    compile_call!([], while, "repeat_while")
+
+    quoted_repeat_while(
+      combinator,
+      {__MODULE__, :__call__, [init, "repeat_while"]},
+      prelude,
+      to_repeat,
+      {__MODULE__, :__call__, [while, "repeat_while"]}
+    )
+  end
+
+  @spec repeat_until(t, call, t, t, [t]) :: t
+  def repeat_until(combinator \\ empty(), init, prelude, to_repeat, [_ | _] = choices)
+      when is_combinator(combinator) and is_combinator(prelude) and is_combinator(to_repeat) and
+             is_list(choices) do
+    compile_call!([], init, "repeat_until")
+    non_empty!(prelude, "repeat_until")
+    non_empty!(to_repeat, "repeat_until")
+    clauses = check_until_choices!(choices)
+
+    quoted_repeat_while(
+      combinator,
+      {__MODULE__, :__call__, [init, "repeat_until"]},
+      prelude,
+      to_repeat,
+      {__MODULE__, :__repeat_until__, [clauses]}
+    )
+  end
+
+  @spec quoted_repeat_while(t, mfargs, t, t, mfargs) :: t
+  def quoted_repeat_while(
+        combinator \\ empty(),
+        {_, _, _} = init,
+        prelude,
+        to_repeat,
+        {_, _, _} = while
+      )
+      when is_combinator(combinator) and is_combinator(prelude) and is_combinator(to_repeat) do
+    non_empty!(prelude, "quoted_repeat_while")
+    non_empty!(to_repeat, "quoted_repeat_while")
+    [{:repeat, init, Enum.reverse(prelude), Enum.reverse(to_repeat), while} | combinator]
   end
 
   @doc """
@@ -849,7 +923,7 @@ defmodule NimbleParsec do
       if max do
         [{:repeat_up_to, to_repeat, max - (min || 0)} | combinator]
       else
-        [{:repeat, @ok_context, [], to_repeat, @ok_context} | combinator]
+        [{:repeat, @cont_context, [], to_repeat, @cont_context} | combinator]
       end
 
     combinator
@@ -986,6 +1060,19 @@ defmodule NimbleParsec do
 
   defp non_empty!(combinator, _action), do: combinator
 
+  defp check_until_choices!(choices) do
+    for choice <- choices do
+      if choice == [] do
+        raise "cannot pass empty combinator as choice in repeat_until"
+      end
+
+      case NimbleParsec.Compiler.compile_pattern(choice) do
+        {_inputs, _guards} = pair -> pair
+        :error -> raise "cannot compile combinator as choice given in repeat_until"
+      end
+    end
+  end
+
   ## Inner combinators
 
   defp bin_segment(combinator, inclusive, exclusive, modifiers) do
@@ -995,75 +1082,108 @@ defmodule NimbleParsec do
   ## Callbacks functions
 
   @doc false
-  def __constant__(_quoted, _context, _line, _offset, constant) do
-    constant
-  end
-
-   @doc false
-  def __ok_context__(_, context, _line, _offset) do
-    {:ok, context}
-  end
-
-  @doc false
   def __call__(quoted, context, line, offset, call, combinator) do
     compile_call!([quoted, context, line, offset], call, combinator)
   end
 
   @doc false
-  def __line__(quoted, _context, line, _offset) do
-    [{reverse_now_or_later(quoted), line}]
+  def __wrap__(acc, context, _line, _offset) do
+    {[reverse_now_or_later(acc)], context}
   end
 
   @doc false
-  def __byte_offset__(quoted, _context, _line, offset) do
-    [{reverse_now_or_later(quoted), offset}]
+  def __tag__(acc, context, _line, _offset, tag) do
+    {[{tag, reverse_now_or_later(acc)}], context}
   end
 
   @doc false
-  def __map__(arg, _context, _line, _offset, var, call) do
-    quote do
-      Enum.map(unquote(arg), fn unquote(var) -> unquote(call) end)
+  def __debug__(acc, context, line, offset) do
+    quote bind_quoted: [acc: acc, context: context, line: line, offset: offset] do
+      IO.puts("""
+      == DEBUG ==
+      Acc: #{inspect(:lists.reverse(acc))}
+      Ctx: #{inspect(context)}
+      Lin: #{inspect(line)}
+      Off: #{inspect(offset)}
+      """)
+
+      {acc, context}
     end
   end
 
   @doc false
-  def __reduce__(arg, _context, _line, _offset, call) do
-    [compile_call!([quote(do: :lists.reverse(unquote(arg)))], call, "reduce")]
+  def __constant__(_acc, context, _line, _offset, constant) do
+    {constant, context}
   end
 
   @doc false
-  def __repeat_until__(arg, context, _line, _offset, clauses) do
+  def __line__(acc, context, line, _offset) do
+    {[{reverse_now_or_later(acc), line}], context}
+  end
+
+  @doc false
+  def __byte_offset__(acc, context, _line, offset) do
+    {[{reverse_now_or_later(acc), offset}], context}
+  end
+
+  @doc false
+  def __map__(acc, context, _line, _offset, var, call) do
+    ast =
+      quote do
+        Enum.map(unquote(acc), fn unquote(var) -> unquote(call) end)
+      end
+
+    {ast, context}
+  end
+
+  @doc false
+  def __reduce__(acc, context, _line, _offset, call) do
+    {[compile_call!([reverse_now_or_later(acc)], call, "reduce")], context}
+  end
+
+  @doc false
+  def __cont_context__(_rest, context, _line, _offset) do
+    {:cont, context}
+  end
+
+  @doc false
+  def __repeat_until__(rest, context, _line, _offset, clauses) do
     clauses =
       for {inputs, guards} <- clauses do
         hd(
           quote do
             <<unquote_splicing(inputs), _::binary>> when unquote(guards) ->
-              {:error, unquote(context)}
+              {:halt, unquote(context)}
           end
         )
       end
 
-    clauses = clauses ++ quote(do: (_ -> {:ok, unquote(context)}))
+    clauses = clauses ++ quote(do: (_ -> {:cont, unquote(context)}))
 
     quote do
-      case unquote(arg), do: unquote(clauses)
+      case unquote(rest), do: unquote(clauses)
     end
   end
 
   @doc false
-  def __runtime_integer__(acc, _context, _line, _offset) do
-    quote do
-      [head | tail] = :lists.reverse(unquote(acc))
-      [:lists.foldl(fn x, acc -> x - ?0 + acc * 10 end, head, tail)]
-    end
+  def __runtime_integer__(acc, context, _line, _offset) do
+    ast =
+      quote do
+        [head | tail] = :lists.reverse(unquote(acc))
+        [:lists.foldl(fn x, acc -> x - ?0 + acc * 10 end, head, tail)]
+      end
+
+    {ast, context}
   end
 
   @doc false
-  def __compile_integer__(vars, _context, _line, _offset) when is_list(vars) do
-    vars
-    |> quoted_ascii_to_integer(1)
-    |> Enum.reduce(&{:+, [], [&2, &1]})
-    |> List.wrap()
+  def __compile_integer__(acc, context, _line, _offset) when is_list(acc) do
+    ast =
+      acc
+      |> quoted_ascii_to_integer(1)
+      |> Enum.reduce(&{:+, [], [&2, &1]})
+
+    {[ast], context}
   end
 
   defp reverse_now_or_later(list) when is_list(list), do: :lists.reverse(list)
