@@ -255,7 +255,9 @@ defmodule NimbleParsecTest do
     test "properly counts newlines" do
       assert compile_label_with_newline("T\nO") == {:ok, ["T\nO"], "", %{}, {2, 2}, 3}
       assert compile_label_with_newline("T\nOC") == {:ok, ["T\nO"], "C", %{}, {2, 2}, 3}
-      assert compile_label_with_newline("A\nO") == {:error, "expected label", "A\nO", %{}, {1, 0}, 0}
+
+      assert compile_label_with_newline("A\nO") ==
+               {:error, "expected label", "A\nO", %{}, {1, 0}, 0}
     end
 
     test "is bound" do
@@ -331,7 +333,8 @@ defmodule NimbleParsecTest do
               |> integer(2)
 
     test "returns ok/error" do
-      assert local_runtime_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", %{}, {1, 0}, 8}
+      assert local_runtime_traverse("T12abc34") ==
+               {:ok, ["T", 12, "99-98-97", 34], "", %{}, {1, 0}, 8}
 
       error =
         "expected string \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
@@ -555,7 +558,9 @@ defmodule NimbleParsecTest do
       assert repeat_while_double_digits_to_string("12345") ==
                {:ok, ["49", "50"], "345", %{}, {1, 0}, 2}
 
-      assert repeat_while_double_digits_to_string("135") == {:ok, ["49", "51"], "5", %{}, {1, 0}, 2}
+      assert repeat_while_double_digits_to_string("135") ==
+               {:ok, ["49", "51"], "5", %{}, {1, 0}, 2}
+
       assert repeat_while_double_digits_to_string("312") == {:ok, [], "312", %{}, {1, 0}, 0}
       assert repeat_while_double_digits_to_string("a123") == {:ok, [], "a123", %{}, {1, 0}, 0}
     end
@@ -618,7 +623,9 @@ defmodule NimbleParsecTest do
       assert repeat_until_double_digits_to_string("12345") ==
                {:ok, ["49", "50"], "345", %{}, {1, 0}, 2}
 
-      assert repeat_until_double_digits_to_string("135") == {:ok, ["49", "51"], "5", %{}, {1, 0}, 2}
+      assert repeat_until_double_digits_to_string("135") ==
+               {:ok, ["49", "51"], "5", %{}, {1, 0}, 2}
+
       assert repeat_until_double_digits_to_string("312") == {:ok, [], "312", %{}, {1, 0}, 0}
       assert repeat_until_double_digits_to_string("a123") == {:ok, [], "a123", %{}, {1, 0}, 0}
     end
@@ -637,7 +644,9 @@ defmodule NimbleParsecTest do
     test "returns ok/error when bound" do
       assert times_digits("12") == {:ok, [?1, ?2], "", %{}, {1, 0}, 2}
       assert times_digits("123") == {:ok, [?1, ?2], "3", %{}, {1, 0}, 2}
-      assert times_digits("123456789") == {:ok, [?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8], "9", %{}, {1, 0}, 8}
+
+      assert times_digits("123456789") ==
+               {:ok, [?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8], "9", %{}, {1, 0}, 8}
 
       assert times_digits("1234567890") ==
                {:ok, [?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8], "90", %{}, {1, 0}, 8}
@@ -817,7 +826,8 @@ defmodule NimbleParsecTest do
     defparsec :datetime, date |> ignore(string("T")) |> concat(time), inline: true
 
     test "returns ok/error by itself" do
-      assert datetime("2010-04-17T14:12:34") == {:ok, [2010, 4, 17, 14, 12, 34], "", %{}, {1, 0}, 19}
+      assert datetime("2010-04-17T14:12:34") ==
+               {:ok, [2010, 4, 17, 14, 12, 34], "", %{}, {1, 0}, 19}
     end
   end
 

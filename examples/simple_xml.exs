@@ -1,3 +1,5 @@
+# Run it from root with `mix run examples/simple_xml.exs`
+
 defmodule SimpleXML do
   import NimbleParsec
 
