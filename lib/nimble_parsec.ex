@@ -66,23 +66,29 @@ defmodule NimbleParsec do
         @doc """
         Parses the given `binary` as #{name}.
 
+        Returns `{:ok, [token], rest, line, byte_offset}` or
+        `{:error, reason, rest, line, byte_offset}`.
+
         ## Options
 
           * `:line` - the initial line, defaults to 1
-          * `:column` - the initial column, defaults to 1
+          * `:byte_offset` - the initial byte offset, defaults to 0
 
         """
         @spec unquote(name)(binary, keyword) ::
-                {:ok, [term], rest, line, column}
-                | {:error, reason, rest, line, column}
-              when line: pos_integer, column: pos_integer, rest: binary, reason: String.t()
+                {:ok, [term], rest, line, byte_offset}
+                | {:error, reason, rest, line, byte_offset}
+              when line: {pos_integer, byte_offset},
+                   byte_offset: pos_integer,
+                   rest: binary,
+                   reason: String.t()
         def unquote(name)(binary, opts \\ []) when is_binary(binary) do
           line = Keyword.get(opts, :line, 1)
-          column = Keyword.get(opts, :column, 1)
+          offset = Keyword.get(opts, :byte_offset, 0)
 
-          case unquote(:"#{name}__0")(binary, [], [], line, column) do
-            {:ok, acc, rest, line, column} ->
-              {:ok, :lists.reverse(acc), rest, line, column}
+          case unquote(:"#{name}__0")(binary, [], [], {line, offset}, offset) do
+            {:ok, acc, rest, line, offset} ->
+              {:ok, :lists.reverse(acc), rest, line, offset}
 
             {:error, _, _, _, _} = error ->
               error
@@ -225,10 +231,6 @@ defmodule NimbleParsec do
     * a `codepoint` integer expressing a supported codepoint
     * `{:not, min..max}` expressing not supported codepoints
     * `{:not, codepoint}` expressing a not supported codepoint
-
-  Note: currently columns only count codepoints and not graphemes.
-  This means the column count will be off when the input contains
-  grapheme clusters.
 
   ## Examples
 
@@ -391,9 +393,10 @@ defmodule NimbleParsec do
   `call` is either a `{module, function, args}` representing
   a remote call or `{function, args}` representing a local call.
 
-  The parser results to be traversed will be prepended to the
-  given `args`. The `args` will be injected at the compile site
-  and therefore must be escapable via `Macro.escape/1`.
+  The parser results to be traversed, the current line and the
+  current offset will be prepended to the given `args`. The `args`
+  will be injected at the compile site and therefore must be
+  escapable via `Macro.escape/1`.
 
   Notice the results are received in reverse order and
   must be returned in reverse order.
@@ -420,7 +423,7 @@ defmodule NimbleParsec do
                   |> ascii_char([?a..?z])
                   |> traverse({:join_and_wrap, ["-"]})
 
-        defp join_and_wrap(args, joiner) do
+        defp join_and_wrap(args, _line, _offset, joiner) do
           args |> Enum.join(joiner) |> List.wrap()
         end
       end
@@ -432,16 +435,16 @@ defmodule NimbleParsec do
   @spec traverse(t, t, call) :: t
   def traverse(combinator \\ empty(), to_traverse, call)
       when is_combinator(combinator) and is_combinator(to_traverse) and is_tuple(call) do
-    compile_call!(:ok, call, "traverse")
-    quoted_traverse(combinator, to_traverse, {__MODULE__, :__call__, [call, "traverse"]})
+    compile_call!([], call, "traverse")
+    quoted_traverse(combinator, to_traverse, {__MODULE__, :__traverse__, [call, "traverse"]})
   end
 
   @doc """
   Invokes `call` to emit the AST that traverses the `to_traverse`
   combinator results.
 
-  `call` is a `{module, function, args}` where the AST argument
-  that will represent the combinator results will be prended to
+  `call` is a `{module, function, args}`. The AST representation
+  of the parser results, line and offset will be prepended to
   `args`. `call` is invoked at compile time and is useful in
   combinators that avoid injecting runtime dependencies.
   """
@@ -483,7 +486,7 @@ defmodule NimbleParsec do
   def map(combinator \\ empty(), to_map, call)
       when is_combinator(combinator) and is_combinator(to_map) and is_tuple(call) do
     var = Macro.var(:var, __MODULE__)
-    call = compile_call!(var, call, "map")
+    call = compile_call!([var], call, "map")
     quoted_traverse(combinator, to_map, {__MODULE__, :__map__, [var, call]})
   end
 
@@ -517,7 +520,7 @@ defmodule NimbleParsec do
   @spec reduce(t, t, call) :: t
   def reduce(combinator \\ empty(), to_reduce, call)
       when is_combinator(combinator) and is_combinator(to_reduce) and is_tuple(call) do
-    compile_call!(:ok, call, "reduce")
+    compile_call!([], call, "reduce")
     quoted_traverse(combinator, to_reduce, {__MODULE__, :__reduce__, [call]})
   end
 
@@ -673,7 +676,7 @@ defmodule NimbleParsec do
   def repeat_while(combinator \\ empty(), to_repeat, call)
       when is_combinator(combinator) and is_combinator(to_repeat) and is_tuple(call) do
     non_empty!(to_repeat, "repeat_while")
-    compile_call!(:ok, call, "repeat_while")
+    compile_call!([], call, "repeat_while")
     quoted_repeat_while(combinator, to_repeat, {__MODULE__, :__call__, [call, "repeat_while"]})
   end
 
@@ -902,20 +905,23 @@ defmodule NimbleParsec do
     raise ArgumentError, "unknown range #{inspect(range)} given to #{context}"
   end
 
-  defp compile_call!(arg, {module, function, args}, _context)
+  defp compile_call!(extra, {module, function, args}, _context)
        when is_atom(module) and is_atom(function) and is_list(args) do
     quote do
-      unquote(module).unquote(function)(unquote(arg), unquote_splicing(Macro.escape(args)))
+      unquote(module).unquote(function)(
+        unquote_splicing(extra),
+        unquote_splicing(Macro.escape(args))
+      )
     end
   end
 
-  defp compile_call!(arg, {function, args}, _context) when is_atom(function) and is_list(args) do
+  defp compile_call!(extra, {function, args}, _context) when is_atom(function) and is_list(args) do
     quote do
-      unquote(function)(unquote(arg), unquote_splicing(Macro.escape(args)))
+      unquote(function)(unquote_splicing(extra), unquote_splicing(Macro.escape(args)))
     end
   end
 
-  defp compile_call!(_arg, unknown, context) do
+  defp compile_call!(_args, unknown, context) do
     raise ArgumentError, "unknown call given to #{context}, got: #{inspect(unknown)}"
   end
 
@@ -933,25 +939,40 @@ defmodule NimbleParsec do
   ## Callbacks functions
 
   @doc false
-  def __constant__(_, constant) do
+  def __constant__(_quoted, constant) do
+    constant
+  end
+
+  @doc false
+  def __constant__(_quoted, _line, _offset, constant) do
     constant
   end
 
   @doc false
   def __call__(quoted, call, context) do
-    compile_call!(quoted, call, context)
+    compile_call!([quoted], call, context)
   end
 
   @doc false
-  def __map__(arg, var, call) do
+  def __call__(quoted, _line, _offset, call, context) do
+    compile_call!([quoted], call, context)
+  end
+
+  @doc false
+  def __traverse__(quoted, line, offset, call, context) do
+    compile_call!([quoted, line, offset], call, context)
+  end
+
+  @doc false
+  def __map__(arg, _line, _offset, var, call) do
     quote do
       Enum.map(unquote(arg), fn unquote(var) -> unquote(call) end)
     end
   end
 
   @doc false
-  def __reduce__(arg, call) do
-    [compile_call!(quote(do: :lists.reverse(unquote(arg))), call, "reduce")]
+  def __reduce__(arg, _line, _offset, call) do
+    [compile_call!([quote(do: :lists.reverse(unquote(arg)))], call, "reduce")]
   end
 
   @doc false
@@ -962,7 +983,7 @@ defmodule NimbleParsec do
   end
 
   @doc false
-  def __runtime_integer__(acc) do
+  def __runtime_integer__(acc, _line, _offset) do
     quote do
       [head | tail] = :lists.reverse(unquote(acc))
       [:lists.foldl(fn x, acc -> x - ?0 + acc * 10 end, head, tail)]
@@ -970,7 +991,7 @@ defmodule NimbleParsec do
   end
 
   @doc false
-  def __compile_integer__(vars) when is_list(vars) do
+  def __compile_integer__(vars, _line, _offset) when is_list(vars) do
     vars
     |> quoted_ascii_to_integer(1)
     |> Enum.reduce(&{:+, [], [&2, &1]})

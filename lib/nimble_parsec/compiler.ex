@@ -8,7 +8,7 @@ defmodule NimbleParsec.Compiler do
 
   def compile_pattern(combinators) do
     case take_bound_combinators(Enum.reverse(combinators)) do
-      {[], inputs, guards, _, _, _, _} -> {inputs, guards_list_to_quoted(guards)}
+      {[], inputs, guards, _, _, _, _, _} -> {inputs, guards_list_to_quoted(guards)}
       _ -> :error
     end
   end
@@ -76,7 +76,7 @@ defmodule NimbleParsec.Compiler do
   defp compile(combinators, defs, inline, current, step, config) do
     {next_combinators, used_combinators, {new_defs, new_inline, next, step, catch_all}} =
       case take_bound_combinators(combinators) do
-        {[combinator | combinators], [], [], [], [], _, _} ->
+        {[combinator | combinators], [], [], [], [], _, _, _} ->
           case combinator do
             {:label, label_combinators, label} ->
               pre_combinators = [{:update, :labels, &[label | &1]} | label_combinators]
@@ -90,9 +90,9 @@ defmodule NimbleParsec.Compiler do
                compile_unbound_combinator(combinator, current, step, config)}
           end
 
-        {combinators, inputs, guards, outputs, acc, cursor, _} ->
+        {combinators, inputs, guards, outputs, acc, line, offset, _} ->
           {combinators, Enum.reverse(acc),
-           compile_bound_combinator(inputs, guards, outputs, cursor, current, step, config)}
+           compile_bound_combinator(inputs, guards, outputs, line, offset, current, step, config)}
       end
 
     catch_all_defs =
@@ -109,7 +109,7 @@ defmodule NimbleParsec.Compiler do
 
   defp compile_unbound_combinator({:parsec, parsec}, current, step, config) do
     {next, step} = build_next(step, config)
-    head = quote(do: [rest, acc, stack, line, column])
+    head = quote(do: [rest, acc, stack, line, offset])
 
     catch_all =
       case config do
@@ -123,9 +123,9 @@ defmodule NimbleParsec.Compiler do
 
     body =
       quote do
-        case unquote(:"#{parsec}__0")(rest, acc, [], line, column) do
-          {:ok, acc, rest, line, column} ->
-            unquote(next)(rest, acc, stack, line, column)
+        case unquote(:"#{parsec}__0")(rest, acc, [], line, offset) do
+          {:ok, acc, rest, line, offset} ->
+            unquote(next)(rest, acc, stack, line, offset)
 
           {:error, _, _, _, _} = error ->
             unquote(catch_all)
@@ -138,9 +138,12 @@ defmodule NimbleParsec.Compiler do
 
   defp compile_unbound_combinator({:traverse, [], traversal}, current, step, config) do
     {next, step} = build_next(step, config)
-    user_acc = apply_mfa(traversal, [])
-    head = quote(do: [arg, acc, stack, line, column])
-    args = quote(do: [arg, unquote(user_acc) ++ acc, stack, line, column])
+
+    head = quote(do: [arg, acc, stack, line, offset])
+    [_, _, _, line, offset] = head
+
+    user_acc = apply_mfa(traversal, [[], line, offset])
+    args = quote(do: [arg, unquote(user_acc) ++ acc, stack, line, offset])
     body = {next, [], args}
     def = {current, head, true, body}
     {[def], [{current, @arity}], next, step, :catch_none}
@@ -148,8 +151,8 @@ defmodule NimbleParsec.Compiler do
 
   defp compile_unbound_combinator({:traverse, combinators, traversal}, current, step, config) do
     {next, step} = build_next(step, config)
-    head = quote(do: [arg, acc, stack, line, column])
-    args = quote(do: [arg, [], [acc | stack], line, column])
+    head = quote(do: [arg, acc, stack, line, offset])
+    args = quote(do: [arg, [], [acc | stack], line, offset])
     body = {next, [], args}
     first_def = {current, head, true, body}
 
@@ -159,9 +162,11 @@ defmodule NimbleParsec.Compiler do
     # No we need to traverse the accumulator with the user code and
     # concatenate with the previous accumulator at the top of the stack.
     {next, step} = build_next(step, config)
-    user_acc = apply_mfa(traversal, quote(do: user_acc))
-    head = quote(do: [arg, user_acc, [acc | stack], line, column])
-    args = quote(do: [arg, unquote(user_acc) ++ acc, stack, line, column])
+    head = quote(do: [arg, user_acc, [acc | stack], line, offset])
+    [_, user_acc, _, line, offset] = head
+
+    user_acc = apply_mfa(traversal, [user_acc, line, offset])
+    args = quote(do: [arg, unquote(user_acc) ++ acc, stack, line, offset])
     body = {next, [], args}
     last_def = {last, head, true, body}
 
@@ -202,13 +207,13 @@ defmodule NimbleParsec.Compiler do
     config = %{config | catch_all: failure, acc_depth: 0}
 
     {defs, recur, next, step} =
-      case apply_mfa(while, quote(do: rest)) do
+      case apply_mfa(while, [quote(do: rest)]) do
         true ->
           {[], current, current, step}
 
         quoted ->
           {next, step} = build_next(step, config)
-          head = args = quote(do: [rest, acc, stack, line, column])
+          head = args = quote(do: [rest, acc, stack, line, offset])
           body = repeat_while(quoted, next, args, failure, args)
           {[{current, head, true, body}], current, next, step}
       end
@@ -221,28 +226,28 @@ defmodule NimbleParsec.Compiler do
   defp compile_unbound_repeat(combinators, while, current, step, config) do
     {failure, step} = build_next(step, config)
     {recur, step} = build_next(step, config)
-    while = apply_mfa(while, quote(do: rest))
+    while = apply_mfa(while, [quote(do: rest)])
 
     config = %{config | catch_all: failure, acc_depth: 0}
     {defs, inline, success, step} = compile(combinators, [], [], recur, step, config)
 
     {next, step} = build_next(step, config)
-    head = quote(do: [_, _, [{rest, acc, line, column} | stack], _, _])
-    args = quote(do: [rest, acc, stack, line, column])
+    head = quote(do: [_, _, [{rest, acc, line, offset} | stack], _, _])
+    args = quote(do: [rest, acc, stack, line, offset])
     body = {next, [], args}
     failure_def = {failure, head, true, body}
 
-    cont = quote(do: {rest, acc, line, column})
-    head = quote(do: [inner_rest, inner_acc, [unquote(cont) | stack], inner_line, inner_column])
-    cont = quote(do: {inner_rest, inner_acc ++ acc, inner_line, inner_column})
-    true_args = quote(do: [inner_rest, [], [unquote(cont) | stack], inner_line, inner_column])
-    false_args = quote(do: [rest, acc, stack, line, column])
+    cont = quote(do: {rest, acc, line, offset})
+    head = quote(do: [inner_rest, inner_acc, [unquote(cont) | stack], inner_line, inner_offset])
+    cont = quote(do: {inner_rest, inner_acc ++ acc, inner_line, inner_offset})
+    true_args = quote(do: [inner_rest, [], [unquote(cont) | stack], inner_line, inner_offset])
+    false_args = quote(do: [rest, acc, stack, line, offset])
     body = repeat_while(while, recur, true_args, next, false_args)
     success_def = {success, head, true, body}
 
-    head = quote(do: [rest, acc, stack, line, column])
-    true_args = quote(do: [rest, [], [{rest, acc, line, column} | stack], line, column])
-    false_args = quote(do: [rest, acc, stack, line, column])
+    head = quote(do: [rest, acc, stack, line, offset])
+    true_args = quote(do: [rest, [], [{rest, acc, line, offset} | stack], line, offset])
+    false_args = quote(do: [rest, acc, stack, line, offset])
     body = repeat_while(while, recur, true_args, next, false_args)
     current_def = {current, head, true, body}
 
@@ -274,8 +279,8 @@ defmodule NimbleParsec.Compiler do
     {failure, step} = build_next(step, config)
     {recur, step} = build_next(step, config)
 
-    head = quote(do: [rest, acc, stack, line, column])
-    args = quote(do: [rest, acc, [unquote(count) | stack], line, column])
+    head = quote(do: [rest, acc, stack, line, offset])
+    args = quote(do: [rest, acc, [unquote(count) | stack], line, offset])
     body = {recur, [], args}
     current_def = {current, head, true, body}
 
@@ -283,18 +288,18 @@ defmodule NimbleParsec.Compiler do
     {defs, inline, success, step} = compile(combinators, [current_def], [], recur, step, config)
 
     {next, step} = build_next(step, config)
-    head = quote(do: [rest, acc, [1 | stack], line, column])
-    args = quote(do: [rest, acc, stack, line, column])
+    head = quote(do: [rest, acc, [1 | stack], line, offset])
+    args = quote(do: [rest, acc, stack, line, offset])
     body = {next, [], args}
     success_def0 = {success, head, true, body}
 
-    head = quote(do: [rest, acc, [count | stack], line, column])
-    args = quote(do: [rest, acc, [count - 1 | stack], line, column])
+    head = quote(do: [rest, acc, [count | stack], line, offset])
+    args = quote(do: [rest, acc, [count - 1 | stack], line, offset])
     body = {recur, [], args}
     success_def1 = {success, head, true, body}
 
-    head = quote(do: [rest, acc, [_ | stack], line, column])
-    args = quote(do: [rest, acc, stack, line, column])
+    head = quote(do: [rest, acc, [_ | stack], line, offset])
+    args = quote(do: [rest, acc, stack, line, offset])
     body = {next, [], args}
     failure_def = {failure, head, true, body}
 
@@ -307,9 +312,9 @@ defmodule NimbleParsec.Compiler do
     {failure, step} = build_next(step, config)
     {recur, step} = build_next(step, config)
 
-    head = quote(do: [rest, acc, stack, line, column])
-    cont = quote(do: {unquote(count), rest, acc, line, column})
-    args = quote(do: [rest, [], [unquote(cont) | stack], line, column])
+    head = quote(do: [rest, acc, stack, line, offset])
+    cont = quote(do: {unquote(count), rest, acc, line, offset})
+    args = quote(do: [rest, [], [unquote(cont) | stack], line, offset])
     body = {recur, [], args}
     current_def = {current, head, true, body}
 
@@ -317,19 +322,19 @@ defmodule NimbleParsec.Compiler do
     {defs, inline, success, step} = compile(combinators, [current_def], [], recur, step, config)
 
     {next, step} = build_next(step, config)
-    head = quote(do: [rest, user_acc, [{1, _, acc, _, _} | stack], line, column])
-    args = quote(do: [rest, user_acc ++ acc, stack, line, column])
+    head = quote(do: [rest, user_acc, [{1, _, acc, _, _} | stack], line, offset])
+    args = quote(do: [rest, user_acc ++ acc, stack, line, offset])
     body = {next, [], args}
     success_def0 = {success, head, true, body}
 
-    head = quote(do: [rest, user_acc, [{count, _, acc, _, _} | stack], line, column])
-    cont = quote(do: {count - 1, rest, user_acc ++ acc, line, column})
-    args = quote(do: [rest, [], [unquote(cont) | stack], line, column])
+    head = quote(do: [rest, user_acc, [{count, _, acc, _, _} | stack], line, offset])
+    cont = quote(do: {count - 1, rest, user_acc ++ acc, line, offset})
+    args = quote(do: [rest, [], [unquote(cont) | stack], line, offset])
     body = {recur, [], args}
     success_def1 = {success, head, true, body}
 
-    head = quote(do: [_, _, [{_, rest, acc, line, column} | stack], _, _])
-    args = quote(do: [rest, acc, stack, line, column])
+    head = quote(do: [_, _, [{_, rest, acc, line, offset} | stack], _, _])
+    args = quote(do: [rest, acc, stack, line, offset])
     body = {next, [], args}
     failure_def = {failure, head, true, body}
 
@@ -368,8 +373,8 @@ defmodule NimbleParsec.Compiler do
     {first, defs, inline, step} =
       compile_unbound_choice(Enum.reverse(choices), [], [], :unused, step, done, config)
 
-    head = quote(do: [rest, acc, stack, line, column])
-    args = quote(do: [rest, [], [{rest, line, column}, acc | stack], line, column])
+    head = quote(do: [rest, acc, stack, line, offset])
+    args = quote(do: [rest, [], [{rest, line, offset}, acc | stack], line, offset])
     body = {first, [], args}
     def = {current, head, true, body}
 
@@ -385,14 +390,14 @@ defmodule NimbleParsec.Compiler do
     {current, step} = build_next(step, config)
     {defs, inline, success, step} = compile(choice, defs, inline, current, step, config)
 
-    head = quote(do: [rest, acc, [_, previous_acc | stack], line, column])
-    args = quote(do: [rest, acc ++ previous_acc, stack, line, column])
+    head = quote(do: [rest, acc, [_, previous_acc | stack], line, offset])
+    args = quote(do: [rest, acc ++ previous_acc, stack, line, offset])
     body = {done, [], args}
     success_def = {success, head, true, body}
 
     {failure, step} = build_next(step, config)
-    head = quote(do: [_, _, [{rest, line, column} | _] = stack, _, _])
-    args = quote(do: [rest, [], stack, line, column])
+    head = quote(do: [_, _, [{rest, line, offset} | _] = stack, _, _])
+    args = quote(do: [rest, [], stack, line, offset])
     body = {current, [], args}
     failure_def = {failure, head, true, body}
 
@@ -405,21 +410,18 @@ defmodule NimbleParsec.Compiler do
   ## Bound combinators
 
   # A bound combinator is a combinator where the number of inputs, guards,
-  # outputs, cursor shifts are known at compilation time. We inline those bound
-  # combinators into a single bitstring pattern for performance. Currently error
-  # reporting will accuse the beginning of the bound combinator in case of errors
-  # but such can be addressed if desired.
+  # outputs, line and offset shifts are known at compilation time. We inline
+  # those bound combinators into a single bitstring pattern for performance.
+  # Currently error reporting will accuse the beginning of the bound combinator
+  # in case of errors but such can be addressed if desired.
 
-  defp compile_bound_combinator(inputs, guards, outputs, cursor, current, step, config) do
+  defp compile_bound_combinator(inputs, guards, outputs, line, offset, current, step, config) do
     {next, step} = build_next(step, config)
     pattern = {:<<>>, [], inputs ++ [quote(do: rest :: binary)]}
-    head = quote(do: [unquote(pattern), acc, stack, combinator__line, combinator__column])
 
-    body =
-      rewrite_cursor(cursor, fn line, column ->
-        args = quote(do: [rest, unquote(outputs) ++ acc, stack, unquote(line), unquote(column)])
-        {next, [], args}
-      end)
+    head = quote(do: [unquote(pattern), acc, stack, combinator__line, combinator__offset])
+    args = quote(do: [rest, unquote(outputs) ++ acc, stack, unquote(line), unquote(offset)])
+    body = {next, [], args}
 
     guards = guards_list_to_quoted(guards)
     def = {current, head, guards, body}
@@ -427,153 +429,124 @@ defmodule NimbleParsec.Compiler do
   end
 
   defp all_bound_combinators?(combinators) do
-    cursor = cursor_pair()
+    {line, offset} = line_offset_pair()
 
     Enum.all?(combinators, fn combinator ->
-      case bound_combinator(combinator, cursor, 0) do
-        {:ok, _, _, _, _, _} -> true
+      case bound_combinator(combinator, line, offset, 0) do
+        {:ok, _, _, _, _, _, _} -> true
         :error -> false
       end
     end)
   end
 
   defp take_bound_combinators(combinators) do
-    take_bound_combinators(combinators, [], [], [], [], cursor_pair(), 0)
+    {line, offset} = line_offset_pair()
+    take_bound_combinators(combinators, [], [], [], [], line, offset, 0)
   end
 
-  defp take_bound_combinators(combinators, inputs, guards, outputs, acc, cursor, counter) do
+  defp take_bound_combinators(combinators, inputs, guards, outputs, acc, line, offset, counter) do
     with [combinator | combinators] <- combinators,
-         {:ok, new_inputs, new_guards, new_outputs, new_cursor, new_counter} <-
-           bound_combinator(combinator, cursor, counter) do
+         {:ok, new_inputs, new_guards, new_outputs, new_line, new_offset, new_counter} <-
+           bound_combinator(combinator, line, offset, counter) do
       take_bound_combinators(
         combinators,
         inputs ++ new_inputs,
         guards ++ new_guards,
         merge_output(new_outputs, outputs),
         [combinator | acc],
-        new_cursor,
+        new_line,
+        new_offset,
         new_counter
       )
     else
       _ ->
-        {combinators, inputs, guards, outputs, acc, cursor, counter}
+        {combinators, inputs, guards, outputs, acc, line, offset, counter}
     end
   end
 
   defp merge_output(left, right) when is_list(left) and is_list(right), do: left ++ right
   defp merge_output(left, right), do: quote(do: unquote(left) ++ unquote(right))
 
-  defp bound_combinator({:string, binary}, cursor, counter) do
-    cursor =
-      case String.split(binary, "\n") do
-        [single] ->
-          add_column(cursor, String.length(single))
+  defp bound_combinator({:string, string}, line, offset, counter) do
+    size = byte_size(string)
+
+    line =
+      case String.split(string, "\n") do
+        [_] ->
+          line
 
         [_ | _] = many ->
-          column = many |> List.last() |> String.length()
-          add_line(cursor, length(many) - 1, column + 1)
+          last_size = many |> List.last() |> byte_size()
+          line_offset = add_offset(offset, size - last_size)
+
+          quote do
+            {elem(unquote(line), 0) + unquote(length(many) - 1), unquote(line_offset)}
+          end
       end
 
-    {:ok, [binary], [], [binary], cursor, counter}
+    offset = add_offset(offset, size)
+    {:ok, [string], [], [string], line, offset, counter}
   end
 
-  defp bound_combinator({:bin_segment, inclusive, exclusive, modifiers}, cursor, counter) do
+  defp bound_combinator({:bin_segment, inclusive, exclusive, modifiers}, line, offset, counter) do
     {var, counter} = build_var(counter)
     input = apply_bin_modifiers(var, modifiers)
     guards = compile_bin_ranges(var, inclusive, exclusive)
+    offset = add_offset(offset, 1)
 
-    cursor =
+    line =
       if newline_allowed?(inclusive) and not newline_forbidden?(exclusive) do
-        rewrite_cursor(cursor, fn line, column ->
-          quote do
-            {combinator__line, combinator__column} =
-              case unquote(var) do
-                ?\n -> {unquote(line) + 1, 1}
-                _ -> {unquote(line), unquote(column) + 1}
-              end
+        quote do
+          case unquote(var) do
+            ?\n -> {elem(unquote(line), 0) + 1, unquote(offset)}
+            _ -> unquote(line)
           end
-        end)
+        end
       else
-        add_column(cursor, 1)
+        line
       end
 
-    {:ok, [input], guards, [var], cursor, counter}
+    {:ok, [input], guards, [var], line, offset, counter}
   end
 
-  defp bound_combinator({:label, combinators, _labels}, cursor, counter) do
-    case take_bound_combinators(combinators, [], [], [], [], cursor, counter) do
-      {[], inputs, guards, outputs, _, cursor, counter} ->
-        {:ok, inputs, guards, outputs, cursor, counter}
+  defp bound_combinator({:label, combinators, _labels}, line, offset, counter) do
+    case take_bound_combinators(combinators, [], [], [], [], line, offset, counter) do
+      {[], inputs, guards, outputs, _, line, offset, counter} ->
+        {:ok, inputs, guards, outputs, line, offset, counter}
 
-      {_, _, _, _, _, _, _} ->
+      {_, _, _, _, _, _, _, _} ->
         :error
     end
   end
 
-  defp bound_combinator({:traverse, combinators, fun}, cursor, counter) do
-    case take_bound_combinators(combinators, [], [], [], [], cursor, counter) do
-      {[], inputs, guards, outputs, _, cursor, counter} ->
-        {:ok, inputs, guards, apply_mfa(fun, outputs), cursor, counter}
+  defp bound_combinator({:traverse, combinators, fun}, line, offset, counter) do
+    case take_bound_combinators(combinators, [], [], [], [], line, offset, counter) do
+      {[], inputs, guards, outputs, _, line, offset, counter} ->
+        # TODO: Remove hardcoded positions.
+        {:ok, inputs, guards, apply_mfa(fun, [outputs, line, offset]), line, offset, counter}
 
-      {_, _, _, _, _, _, _} ->
+      {_, _, _, _, _, _, _, _} ->
         :error
     end
   end
 
-  defp bound_combinator(_, _cursor, _counter) do
+  defp bound_combinator(_, _line, _offset, _counter) do
     :error
   end
 
-  ## Cursor handling
+  ## Line and offset handling
 
-  defp cursor_pair() do
-    quote(do: {combinator__line, combinator__column})
+  defp line_offset_pair() do
+    quote(do: {combinator__line, combinator__offset})
   end
 
-  defp rewrite_cursor({line, column}, fun) do
-    fun.(line, column)
-  end
-
-  defp rewrite_cursor(cursor, fun) do
-    {line, column} = cursor_pair()
-
-    quote do
-      unquote(cursor)
-      unquote(fun.(line, column))
-    end
-  end
-
-  defp add_column({line, {:+, _, [column, current]}}, extra)
+  defp add_offset({:+, _, [var, current]}, extra)
        when is_integer(current) and is_integer(extra) do
-    {line, {:+, [], [column, current + extra]}}
+    {:+, [], [var, current + extra]}
   end
 
-  defp add_column({line, column}, extra) when is_integer(extra) do
-    {line, {:+, [], [column, extra]}}
-  end
-
-  defp add_column(past, extra) when is_integer(extra) do
-    quote do
-      unquote(past)
-      combinator__column = combinator__column + unquote(extra)
-    end
-  end
-
-  defp add_line({{:+, _, [line, current]}, _}, extra, column)
-       when is_integer(current) and is_integer(extra) do
-    {{:+, [], [line, current + extra]}, column}
-  end
-
-  defp add_line({line, _}, extra, column) when is_integer(extra) do
-    {{:+, [], [line, extra]}, column}
-  end
-
-  defp add_line(past, extra, column) when is_integer(extra) do
-    quote do
-      unquote(past)
-      combinator__line = combinator__line + unquote(extra)
-      combinator__column = unquote(column)
-    end
+  defp add_offset(var, extra) when is_integer(extra) do
+    {:+, [], [var, extra]}
   end
 
   defp newline_allowed?([]), do: true
@@ -723,8 +696,8 @@ defmodule NimbleParsec.Compiler do
 
   ## Helpers
 
-  defp apply_mfa({mod, fun, args}, arg) do
-    apply(mod, fun, [arg | args])
+  defp apply_mfa({mod, fun, args}, extra) do
+    apply(mod, fun, extra ++ args)
   end
 
   defp guards_list_to_quoted([]), do: true
@@ -739,15 +712,15 @@ defmodule NimbleParsec.Compiler do
   end
 
   defp build_ok(current) do
-    head = quote(do: [rest, acc, _stack, line, column])
-    body = quote(do: {:ok, acc, rest, line, column})
+    head = quote(do: [rest, acc, _stack, line, offset])
+    body = quote(do: {:ok, acc, rest, line, offset})
     {current, head, true, body}
   end
 
   defp build_catch_all(name, combinators, %{catch_all: nil, labels: labels}) do
     reason = error_reason(combinators, labels)
-    args = quote(do: [rest, acc, stack, line, column])
-    body = quote(do: {:error, unquote(reason), rest, line, column})
+    args = quote(do: [rest, acc, stack, line, offset])
+    body = quote(do: {:error, unquote(reason), rest, line, offset})
     {name, args, true, body}
   end
 
@@ -759,19 +732,19 @@ defmodule NimbleParsec.Compiler do
   defp build_acc_depth(n, acc, stack), do: [quote(do: _) | build_acc_depth(n - 1, acc, stack)]
 
   defp build_proxy_to(name, next, 0) do
-    args = quote(do: [rest, acc, stack, line, column])
+    args = quote(do: [rest, acc, stack, line, offset])
     body = {next, [], args}
     {name, args, true, body}
   end
 
   defp build_proxy_to(name, next, n) do
-    args = quote(do: [rest, acc, stack, line, column])
+    args = quote(do: [rest, acc, stack, line, offset])
     [_, acc, stack, _, _] = args
 
     body =
       quote do
         unquote(build_acc_depth(n, acc, stack)) = stack
-        unquote(next)(rest, acc, stack, line, column)
+        unquote(next)(rest, acc, stack, line, offset)
       end
 
     {name, args, true, body}
