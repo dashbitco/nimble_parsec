@@ -323,7 +323,8 @@ defmodule NimbleParsecTest do
               |> integer(2)
 
     test "returns ok/error" do
-      assert remote_runtime_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", {1, 0}, 8}
+      assert remote_runtime_traverse("T12abc34") ==
+               {:ok, ["T", 12, "99-98-97", 34], "", {1, 0}, 8}
 
       error =
         "expected string \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
@@ -602,7 +603,9 @@ defmodule NimbleParsecTest do
     end
 
     test "returns ok/error with concat map" do
-      assert repeat_while_double_digits_to_string("12345") == {:ok, ["49", "50"], "345", {1, 0}, 2}
+      assert repeat_while_double_digits_to_string("12345") ==
+               {:ok, ["49", "50"], "345", {1, 0}, 2}
+
       assert repeat_while_double_digits_to_string("135") == {:ok, ["49", "51"], "5", {1, 0}, 2}
       assert repeat_while_double_digits_to_string("312") == {:ok, [], "312", {1, 0}, 0}
       assert repeat_while_double_digits_to_string("a123") == {:ok, [], "a123", {1, 0}, 0}
@@ -656,7 +659,9 @@ defmodule NimbleParsecTest do
     end
 
     test "returns ok/error with concat map" do
-      assert repeat_until_double_digits_to_string("12345") == {:ok, ["49", "50"], "345", {1, 0}, 2}
+      assert repeat_until_double_digits_to_string("12345") ==
+               {:ok, ["49", "50"], "345", {1, 0}, 2}
+
       assert repeat_until_double_digits_to_string("135") == {:ok, ["49", "51"], "5", {1, 0}, 2}
       assert repeat_until_double_digits_to_string("312") == {:ok, [], "312", {1, 0}, 0}
       assert repeat_until_double_digits_to_string("a123") == {:ok, [], "a123", {1, 0}, 0}
@@ -677,7 +682,10 @@ defmodule NimbleParsecTest do
       assert times_digits("12") == {:ok, [?1, ?2], "", {1, 0}, 2}
       assert times_digits("123") == {:ok, [?1, ?2], "3", {1, 0}, 2}
       assert times_digits("123456789") == {:ok, [?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8], "9", {1, 0}, 8}
-      assert times_digits("1234567890") == {:ok, [?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8], "90", {1, 0}, 8}
+
+      assert times_digits("1234567890") ==
+               {:ok, [?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8], "90", {1, 0}, 8}
+
       assert times_digits("12o") == {:ok, [?1, ?2], "o", {1, 0}, 2}
       assert times_digits("o") == {:ok, [], "o", {1, 0}, 0}
     end
@@ -760,7 +768,9 @@ defmodule NimbleParsecTest do
     test "returns ok/error with repeat and inner map" do
       assert choice_repeat_and_inner_map("az") == {:ok, ["97", "122"], "", {1, 0}, 2}
       assert choice_repeat_and_inner_map("AZ") == {:ok, ["65", "90"], "", {1, 0}, 2}
-      assert choice_repeat_and_inner_map("aAzZ") == {:ok, ["97", "65", "122", "90"], "", {1, 0}, 4}
+
+      assert choice_repeat_and_inner_map("aAzZ") ==
+               {:ok, ["97", "65", "122", "90"], "", {1, 0}, 4}
     end
 
     test "returns ok/error with repeat and maps" do
@@ -812,7 +822,9 @@ defmodule NimbleParsecTest do
     test "returns ok/error with choice" do
       assert parsec_choice("+O") == {:ok, ["+"], "O", {1, 0}, 1}
       assert parsec_choice("O+") == {:ok, ["79"], "+", {1, 0}, 1}
-      assert parsec_choice("==") == {:error, "expected parsec_inner or string \"+\"", "==", {1, 0}, 0}
+
+      assert parsec_choice("==") ==
+               {:error, "expected parsec_inner or string \"+\"", "==", {1, 0}, 0}
     end
 
     test "returns ok/error with repeat" do
@@ -872,7 +884,7 @@ defmodule NimbleParsecTest do
   end
 
   defp private_join_and_wrap(args, {line, line_offset}, byte_offset, joiner)
-      when is_integer(line) and is_integer(line_offset) and is_integer(byte_offset) do
+       when is_integer(line) and is_integer(line_offset) and is_integer(byte_offset) do
     args |> Enum.join(joiner) |> List.wrap()
   end
 end

@@ -73,6 +73,8 @@ defmodule NimbleParsec do
 
           * `:line` - the initial line, defaults to 1
           * `:byte_offset` - the initial byte offset, defaults to 0
+          * `:context` - the initial context value. It will be converted
+            to a map
 
         """
         @spec unquote(name)(binary, keyword) ::
@@ -85,8 +87,9 @@ defmodule NimbleParsec do
         def unquote(name)(binary, opts \\ []) when is_binary(binary) do
           line = Keyword.get(opts, :line, 1)
           offset = Keyword.get(opts, :byte_offset, 0)
+          context = Map.new(Keyword.get(opts, :context, []))
 
-          case unquote(:"#{name}__0")(binary, [], [], {line, offset}, offset) do
+          case unquote(:"#{name}__0")(binary, [], [], context, {line, offset}, offset) do
             {:ok, acc, rest, line, offset} ->
               {:ok, :lists.reverse(acc), rest, line, offset}
 

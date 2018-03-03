@@ -109,7 +109,7 @@ defmodule NimbleParsec.Compiler do
 
   defp compile_unbound_combinator({:parsec, parsec}, current, step, config) do
     {next, step} = build_next(step, config)
-    head = quote(do: [rest, acc, stack, line, offset])
+    head = quote(do: [rest, acc, stack, context, line, offset])
 
     catch_all =
       case config do
@@ -123,9 +123,9 @@ defmodule NimbleParsec.Compiler do
 
     body =
       quote do
-        case unquote(:"#{parsec}__0")(rest, acc, [], line, offset) do
+        case unquote(:"#{parsec}__0")(rest, acc, [], context, line, offset) do
           {:ok, acc, rest, line, offset} ->
-            unquote(next)(rest, acc, stack, line, offset)
+            unquote(next)(rest, acc, stack, context, line, offset)
 
           {:error, _, _, _, _} = error ->
             unquote(catch_all)
@@ -139,11 +139,12 @@ defmodule NimbleParsec.Compiler do
   defp compile_unbound_combinator({:traverse, [], traversal}, current, step, config) do
     {next, step} = build_next(step, config)
 
-    head = quote(do: [arg, acc, stack, line, offset])
-    [_, _, _, line, offset] = head
+    head = quote(do: [arg, acc, stack, context, line, offset])
+    [_, _, _, _, line, offset] = head
 
+    # TODO: Add context to traverse and while
     user_acc = apply_traverse(traversal, [], line, offset)
-    args = quote(do: [arg, unquote(user_acc) ++ acc, stack, line, offset])
+    args = quote(do: [arg, unquote(user_acc) ++ acc, stack, context, line, offset])
     body = {next, [], args}
     def = {current, head, true, body}
     {[def], [{current, @arity}], next, step, :catch_none}
@@ -151,8 +152,8 @@ defmodule NimbleParsec.Compiler do
 
   defp compile_unbound_combinator({:traverse, combinators, traversal}, current, step, config) do
     {next, step} = build_next(step, config)
-    head = quote(do: [arg, acc, stack, line, offset])
-    args = quote(do: [arg, [], [acc | stack], line, offset])
+    head = quote(do: [arg, acc, stack, context, line, offset])
+    args = quote(do: [arg, [], [acc | stack], context, line, offset])
     body = {next, [], args}
     first_def = {current, head, true, body}
 
@@ -162,11 +163,11 @@ defmodule NimbleParsec.Compiler do
     # No we need to traverse the accumulator with the user code and
     # concatenate with the previous accumulator at the top of the stack.
     {next, step} = build_next(step, config)
-    head = quote(do: [arg, user_acc, [acc | stack], line, offset])
-    [_, user_acc, _, line, offset] = head
+    head = quote(do: [arg, user_acc, [acc | stack], context, line, offset])
+    [_, user_acc, _, _, line, offset] = head
 
     user_acc = apply_traverse(traversal, user_acc, line, offset)
-    args = quote(do: [arg, unquote(user_acc) ++ acc, stack, line, offset])
+    args = quote(do: [arg, unquote(user_acc) ++ acc, stack, context, line, offset])
     body = {next, [], args}
     last_def = {last, head, true, body}
 
@@ -213,7 +214,7 @@ defmodule NimbleParsec.Compiler do
 
         quoted ->
           {next, step} = build_next(step, config)
-          head = args = quote(do: [rest, acc, stack, line, offset])
+          head = args = quote(do: [rest, acc, stack, context, line, offset])
           body = repeat_while(quoted, next, args, failure, args)
           {[{current, head, true, body}], current, next, step}
       end
@@ -232,22 +233,37 @@ defmodule NimbleParsec.Compiler do
     {defs, inline, success, step} = compile(combinators, [], [], recur, step, config)
 
     {next, step} = build_next(step, config)
-    head = quote(do: [_, _, [{rest, acc, line, offset} | stack], _, _])
-    args = quote(do: [rest, acc, stack, line, offset])
+    head = quote(do: [_, _, [{rest, acc, context, line, offset} | stack], _, _, _])
+    args = quote(do: [rest, acc, stack, context, line, offset])
     body = {next, [], args}
     failure_def = {failure, head, true, body}
 
-    cont = quote(do: {rest, acc, line, offset})
-    head = quote(do: [inner_rest, inner_acc, [unquote(cont) | stack], inner_line, inner_offset])
-    cont = quote(do: {inner_rest, inner_acc ++ acc, inner_line, inner_offset})
-    true_args = quote(do: [inner_rest, [], [unquote(cont) | stack], inner_line, inner_offset])
-    false_args = quote(do: [rest, acc, stack, line, offset])
+    cont = quote(do: {rest, acc, context, line, offset})
+
+    head =
+      quote do
+        [inner_rest, inner_acc, [unquote(cont) | stack], inner_context, inner_line, inner_offset]
+      end
+
+    cont = quote(do: {inner_rest, inner_acc ++ acc, inner_context, inner_line, inner_offset})
+
+    true_args =
+      quote do
+        [inner_rest, [], [unquote(cont) | stack], inner_context, inner_line, inner_offset]
+      end
+
+    false_args = quote(do: [rest, acc, stack, context, line, offset])
     body = repeat_while(while, recur, true_args, next, false_args)
     success_def = {success, head, true, body}
 
-    head = quote(do: [rest, acc, stack, line, offset])
-    true_args = quote(do: [rest, [], [{rest, acc, line, offset} | stack], line, offset])
-    false_args = quote(do: [rest, acc, stack, line, offset])
+    head = quote(do: [rest, acc, stack, context, line, offset])
+
+    true_args =
+      quote do
+        [rest, [], [{rest, acc, context, line, offset} | stack], context, line, offset]
+      end
+
+    false_args = quote(do: [rest, acc, stack, context, line, offset])
     body = repeat_while(while, recur, true_args, next, false_args)
     current_def = {current, head, true, body}
 
@@ -279,8 +295,8 @@ defmodule NimbleParsec.Compiler do
     {failure, step} = build_next(step, config)
     {recur, step} = build_next(step, config)
 
-    head = quote(do: [rest, acc, stack, line, offset])
-    args = quote(do: [rest, acc, [unquote(count) | stack], line, offset])
+    head = quote(do: [rest, acc, stack, context, line, offset])
+    args = quote(do: [rest, acc, [unquote(count) | stack], context, line, offset])
     body = {recur, [], args}
     current_def = {current, head, true, body}
 
@@ -288,18 +304,18 @@ defmodule NimbleParsec.Compiler do
     {defs, inline, success, step} = compile(combinators, [current_def], [], recur, step, config)
 
     {next, step} = build_next(step, config)
-    head = quote(do: [rest, acc, [1 | stack], line, offset])
-    args = quote(do: [rest, acc, stack, line, offset])
+    head = quote(do: [rest, acc, [1 | stack], context, line, offset])
+    args = quote(do: [rest, acc, stack, context, line, offset])
     body = {next, [], args}
     success_def0 = {success, head, true, body}
 
-    head = quote(do: [rest, acc, [count | stack], line, offset])
-    args = quote(do: [rest, acc, [count - 1 | stack], line, offset])
+    head = quote(do: [rest, acc, [count | stack], context, line, offset])
+    args = quote(do: [rest, acc, [count - 1 | stack], context, line, offset])
     body = {recur, [], args}
     success_def1 = {success, head, true, body}
 
-    head = quote(do: [rest, acc, [_ | stack], line, offset])
-    args = quote(do: [rest, acc, stack, line, offset])
+    head = quote(do: [rest, acc, [_ | stack], context, line, offset])
+    args = quote(do: [rest, acc, stack, context, line, offset])
     body = {next, [], args}
     failure_def = {failure, head, true, body}
 
@@ -312,9 +328,9 @@ defmodule NimbleParsec.Compiler do
     {failure, step} = build_next(step, config)
     {recur, step} = build_next(step, config)
 
-    head = quote(do: [rest, acc, stack, line, offset])
-    cont = quote(do: {unquote(count), rest, acc, line, offset})
-    args = quote(do: [rest, [], [unquote(cont) | stack], line, offset])
+    head = quote(do: [rest, acc, stack, context, line, offset])
+    cont = quote(do: {unquote(count), rest, acc, context, line, offset})
+    args = quote(do: [rest, [], [unquote(cont) | stack], context, line, offset])
     body = {recur, [], args}
     current_def = {current, head, true, body}
 
@@ -322,19 +338,19 @@ defmodule NimbleParsec.Compiler do
     {defs, inline, success, step} = compile(combinators, [current_def], [], recur, step, config)
 
     {next, step} = build_next(step, config)
-    head = quote(do: [rest, user_acc, [{1, _, acc, _, _} | stack], line, offset])
-    args = quote(do: [rest, user_acc ++ acc, stack, line, offset])
+    head = quote(do: [rest, user_acc, [{1, _, acc, _, _, _} | stack], context, line, offset])
+    args = quote(do: [rest, user_acc ++ acc, stack, context, line, offset])
     body = {next, [], args}
     success_def0 = {success, head, true, body}
 
-    head = quote(do: [rest, user_acc, [{count, _, acc, _, _} | stack], line, offset])
-    cont = quote(do: {count - 1, rest, user_acc ++ acc, line, offset})
-    args = quote(do: [rest, [], [unquote(cont) | stack], line, offset])
+    head = quote(do: [rest, user_acc, [{count, _, acc, _, _, _} | stack], context, line, offset])
+    cont = quote(do: {count - 1, rest, user_acc ++ acc, context, line, offset})
+    args = quote(do: [rest, [], [unquote(cont) | stack], context, line, offset])
     body = {recur, [], args}
     success_def1 = {success, head, true, body}
 
-    head = quote(do: [_, _, [{_, rest, acc, line, offset} | stack], _, _])
-    args = quote(do: [rest, acc, stack, line, offset])
+    head = quote(do: [_, _, [{_, rest, acc, context, line, offset} | stack], _, _, _])
+    args = quote(do: [rest, acc, stack, context, line, offset])
     body = {next, [], args}
     failure_def = {failure, head, true, body}
 
@@ -373,8 +389,9 @@ defmodule NimbleParsec.Compiler do
     {first, defs, inline, step} =
       compile_unbound_choice(Enum.reverse(choices), [], [], :unused, step, done, config)
 
-    head = quote(do: [rest, acc, stack, line, offset])
-    args = quote(do: [rest, [], [{rest, line, offset}, acc | stack], line, offset])
+    head = quote(do: [rest, acc, stack, context, line, offset])
+    cont = quote(do: {rest, context, line, offset})
+    args = quote(do: [rest, [], [unquote(cont), acc | stack], context, line, offset])
     body = {first, [], args}
     def = {current, head, true, body}
 
@@ -390,14 +407,14 @@ defmodule NimbleParsec.Compiler do
     {current, step} = build_next(step, config)
     {defs, inline, success, step} = compile(choice, defs, inline, current, step, config)
 
-    head = quote(do: [rest, acc, [_, previous_acc | stack], line, offset])
-    args = quote(do: [rest, acc ++ previous_acc, stack, line, offset])
+    head = quote(do: [rest, acc, [_, previous_acc | stack], context, line, offset])
+    args = quote(do: [rest, acc ++ previous_acc, stack, context, line, offset])
     body = {done, [], args}
     success_def = {success, head, true, body}
 
     {failure, step} = build_next(step, config)
-    head = quote(do: [_, _, [{rest, line, offset} | _] = stack, _, _])
-    args = quote(do: [rest, [], stack, line, offset])
+    head = quote(do: [_, _, [{rest, context, line, offset} | _] = stack, _, _, _])
+    args = quote(do: [rest, [], stack, context, line, offset])
     body = {current, [], args}
     failure_def = {failure, head, true, body}
 
@@ -417,10 +434,11 @@ defmodule NimbleParsec.Compiler do
 
   defp compile_bound_combinator(inputs, guards, outputs, line, offset, current, step, config) do
     {next, step} = build_next(step, config)
-    pattern = {:<<>>, [], inputs ++ [quote(do: rest :: binary)]}
+    bin = {:<<>>, [], inputs ++ [quote(do: rest :: binary)]}
+    acc = quote(do: unquote(outputs) ++ acc)
 
-    head = quote(do: [unquote(pattern), acc, stack, combinator__line, combinator__offset])
-    args = quote(do: [rest, unquote(outputs) ++ acc, stack, unquote(line), unquote(offset)])
+    head = quote(do: [unquote(bin), acc, stack, context, combinator__line, combinator__offset])
+    args = quote(do: [rest, unquote(acc), stack, context, unquote(line), unquote(offset)])
     body = {next, [], args}
 
     guards = guards_list_to_quoted(guards)
@@ -718,14 +736,14 @@ defmodule NimbleParsec.Compiler do
   end
 
   defp build_ok(current) do
-    head = quote(do: [rest, acc, _stack, line, offset])
+    head = quote(do: [rest, acc, _stack, _context, line, offset])
     body = quote(do: {:ok, acc, rest, line, offset})
     {current, head, true, body}
   end
 
   defp build_catch_all(name, combinators, %{catch_all: nil, labels: labels}) do
     reason = error_reason(combinators, labels)
-    args = quote(do: [rest, acc, stack, line, offset])
+    args = quote(do: [rest, acc, _stack, _context, line, offset])
     body = quote(do: {:error, unquote(reason), rest, line, offset})
     {name, args, true, body}
   end
@@ -738,19 +756,19 @@ defmodule NimbleParsec.Compiler do
   defp build_acc_depth(n, acc, stack), do: [quote(do: _) | build_acc_depth(n - 1, acc, stack)]
 
   defp build_proxy_to(name, next, 0) do
-    args = quote(do: [rest, acc, stack, line, offset])
+    args = quote(do: [rest, acc, stack, context, line, offset])
     body = {next, [], args}
     {name, args, true, body}
   end
 
   defp build_proxy_to(name, next, n) do
-    args = quote(do: [rest, acc, stack, line, offset])
-    [_, acc, stack, _, _] = args
+    args = quote(do: [rest, acc, stack, context, line, offset])
+    [_, acc, stack, _, _, _] = args
 
     body =
       quote do
         unquote(build_acc_depth(n, acc, stack)) = stack
-        unquote(next)(rest, acc, stack, line, offset)
+        unquote(next)(rest, acc, stack, context, line, offset)
       end
 
     {name, args, true, body}
