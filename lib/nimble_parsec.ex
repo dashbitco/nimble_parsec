@@ -289,6 +289,8 @@ defmodule NimbleParsec do
 
   If you want an integer of unknown size, use `integer(min: 1)`.
 
+  This combinator does not parse the sign and is always on base 10.
+
   ## Examples
 
   With exact length:
