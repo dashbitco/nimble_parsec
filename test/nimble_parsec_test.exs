@@ -87,7 +87,7 @@ defmodule NimbleParsecTest do
 
   describe "integer/2 combinator with exact length" do
     defparsec :only_integer, integer(2)
-    defparsec :prefixed_integer, literal("T") |> integer(2)
+    defparsec :prefixed_integer, string("T") |> integer(2)
 
     @error "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
@@ -97,7 +97,7 @@ defmodule NimbleParsecTest do
       assert only_integer("1a3") == {:error, @error, "1a3", 1, 1}
     end
 
-    @error "expected literal \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
+    @error "expected string \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
     test "returns ok/error with previous document" do
       assert prefixed_integer("T12") == {:ok, ["T", 12], "", 1, 4}
@@ -107,8 +107,8 @@ defmodule NimbleParsecTest do
 
     test "is bound" do
       assert bound?(integer(2))
-      assert bound?(literal("T") |> integer(2))
-      assert bound?(literal("T") |> integer(2) |> literal("E"))
+      assert bound?(string("T") |> integer(2))
+      assert bound?(string("T") |> integer(2) |> string("E"))
     end
   end
 
@@ -133,37 +133,37 @@ defmodule NimbleParsecTest do
     end
   end
 
-  describe "literal/2 combinator" do
-    defparsec :only_literal, literal("TO")
-    defparsec :only_literal_with_newline, literal("T\nO")
+  describe "string/2 combinator" do
+    defparsec :only_string, string("TO")
+    defparsec :only_string_with_newline, string("T\nO")
 
     test "returns ok/error" do
-      assert only_literal("TO") == {:ok, ["TO"], "", 1, 3}
-      assert only_literal("TOC") == {:ok, ["TO"], "C", 1, 3}
-      assert only_literal("AO") == {:error, "expected literal \"TO\"", "AO", 1, 1}
+      assert only_string("TO") == {:ok, ["TO"], "", 1, 3}
+      assert only_string("TOC") == {:ok, ["TO"], "C", 1, 3}
+      assert only_string("AO") == {:error, "expected string \"TO\"", "AO", 1, 1}
     end
 
     test "properly counts newlines" do
-      assert only_literal_with_newline("T\nO") == {:ok, ["T\nO"], "", 2, 2}
-      assert only_literal_with_newline("T\nOC") == {:ok, ["T\nO"], "C", 2, 2}
+      assert only_string_with_newline("T\nO") == {:ok, ["T\nO"], "", 2, 2}
+      assert only_string_with_newline("T\nOC") == {:ok, ["T\nO"], "C", 2, 2}
 
-      assert only_literal_with_newline("A\nO") ==
-               {:error, "expected literal \"T\\nO\"", "A\nO", 1, 1}
+      assert only_string_with_newline("A\nO") ==
+               {:error, "expected string \"T\\nO\"", "A\nO", 1, 1}
     end
 
     test "is bound" do
-      assert bound?(literal("T"))
+      assert bound?(string("T"))
     end
   end
 
   describe "ignore/2 combinator at compile time" do
-    defparsec :compile_ignore, ignore(literal("TO"))
-    defparsec :compile_ignore_with_newline, ignore(literal("T\nO"))
+    defparsec :compile_ignore, ignore(string("TO"))
+    defparsec :compile_ignore_with_newline, ignore(string("T\nO"))
 
     test "returns ok/error" do
       assert compile_ignore("TO") == {:ok, [], "", 1, 3}
       assert compile_ignore("TOC") == {:ok, [], "C", 1, 3}
-      assert compile_ignore("AO") == {:error, "expected literal \"TO\"", "AO", 1, 1}
+      assert compile_ignore("AO") == {:error, "expected string \"TO\"", "AO", 1, 1}
     end
 
     test "properly counts newlines" do
@@ -171,11 +171,11 @@ defmodule NimbleParsecTest do
       assert compile_ignore_with_newline("T\nOC") == {:ok, [], "C", 2, 2}
 
       assert compile_ignore_with_newline("A\nO") ==
-               {:error, "expected literal \"T\\nO\"", "A\nO", 1, 1}
+               {:error, "expected string \"T\\nO\"", "A\nO", 1, 1}
     end
 
     test "is bound" do
-      assert bound?(ignore(literal("T")))
+      assert bound?(ignore(string("T")))
     end
   end
 
@@ -197,14 +197,14 @@ defmodule NimbleParsecTest do
   end
 
   describe "replace/3 combinator at compile time" do
-    defparsec :compile_replace, replace(literal("TO"), "OTHER")
-    defparsec :compile_replace_with_newline, replace(literal("T\nO"), "OTHER")
+    defparsec :compile_replace, replace(string("TO"), "OTHER")
+    defparsec :compile_replace_with_newline, replace(string("T\nO"), "OTHER")
     defparsec :compile_replace_empty, replace(empty(), "OTHER")
 
     test "returns ok/error" do
       assert compile_replace("TO") == {:ok, ["OTHER"], "", 1, 3}
       assert compile_replace("TOC") == {:ok, ["OTHER"], "C", 1, 3}
-      assert compile_replace("AO") == {:error, "expected literal \"TO\"", "AO", 1, 1}
+      assert compile_replace("AO") == {:error, "expected string \"TO\"", "AO", 1, 1}
     end
 
     test "can replace empty" do
@@ -216,11 +216,11 @@ defmodule NimbleParsecTest do
       assert compile_replace_with_newline("T\nOC") == {:ok, ["OTHER"], "C", 2, 2}
 
       assert compile_replace_with_newline("A\nO") ==
-               {:error, "expected literal \"T\\nO\"", "A\nO", 1, 1}
+               {:error, "expected string \"T\\nO\"", "A\nO", 1, 1}
     end
 
     test "is bound" do
-      assert bound?(replace(literal("T"), "OTHER"))
+      assert bound?(replace(string("T"), "OTHER"))
       assert bound?(replace(empty(), "OTHER"))
     end
   end
@@ -243,8 +243,8 @@ defmodule NimbleParsecTest do
   end
 
   describe "label/3 combinator at compile time" do
-    defparsec :compile_label, label(literal("TO"), "label")
-    defparsec :compile_label_with_newline, label(literal("T\nO"), "label")
+    defparsec :compile_label, label(string("TO"), "label")
+    defparsec :compile_label_with_newline, label(string("T\nO"), "label")
 
     test "returns ok/error" do
       assert compile_label("TO") == {:ok, ["TO"], "", 1, 3}
@@ -259,7 +259,7 @@ defmodule NimbleParsecTest do
     end
 
     test "is bound" do
-      assert bound?(label(literal("T"), "label"))
+      assert bound?(label(string("T"), "label"))
     end
   end
 
@@ -294,12 +294,12 @@ defmodule NimbleParsecTest do
                          |> ascii_char([?a..?z])
 
     defparsec :remote_traverse,
-              literal("T")
+              string("T")
               |> integer(2)
               |> traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]})
               |> integer(2)
 
-    @error "expected literal \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
+    @error "expected string \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
     test "returns ok/error" do
       assert remote_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", 1, 9}
@@ -317,7 +317,7 @@ defmodule NimbleParsecTest do
     @three_ascii_letters times(ascii_char([?a..?z]), min: 3)
 
     defparsec :remote_runtime_traverse,
-              literal("T")
+              string("T")
               |> integer(2)
               |> traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]})
               |> integer(2)
@@ -326,7 +326,7 @@ defmodule NimbleParsecTest do
       assert remote_runtime_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", 1, 9}
 
       error =
-        "expected literal \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
+        "expected string \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
       assert remote_runtime_traverse("Tabc34") == {:error, error, "Tabc34", 1, 1}
 
@@ -352,12 +352,12 @@ defmodule NimbleParsecTest do
                          |> ascii_char([?a..?z])
 
     defparsec :local_traverse,
-              literal("T")
+              string("T")
               |> integer(2)
               |> traverse(@three_ascii_letters, {:private_join_and_wrap, ["-"]})
               |> integer(2)
 
-    @error "expected literal \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
+    @error "expected string \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
     test "returns ok/error" do
       assert local_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", 1, 9}
@@ -375,7 +375,7 @@ defmodule NimbleParsecTest do
     @three_ascii_letters times(ascii_char([?a..?z]), min: 3)
 
     defparsec :local_runtime_traverse,
-              literal("T")
+              string("T")
               |> integer(2)
               |> traverse(@three_ascii_letters, {:private_join_and_wrap, ["-"]})
               |> integer(2)
@@ -384,7 +384,7 @@ defmodule NimbleParsecTest do
       assert local_runtime_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", 1, 9}
 
       error =
-        "expected literal \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
+        "expected string \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
       assert local_runtime_traverse("Tabc34") == {:error, error, "Tabc34", 1, 1}
 
@@ -588,7 +588,7 @@ defmodule NimbleParsecTest do
 
   describe "repeat_until/3 combinator" do
     defparsec :repeat_until_digits,
-              repeat_until(ascii_char([?0..?9]) |> ascii_char([?0..?9]), [literal("3")])
+              repeat_until(ascii_char([?0..?9]) |> ascii_char([?0..?9]), [string("3")])
 
     ascii_to_string = map(ascii_char([?0..?9]), {:to_string, []})
     defparsec :repeat_until_digits_to_string, repeat_until(ascii_to_string, [ascii_char([?3])])
@@ -765,28 +765,28 @@ defmodule NimbleParsecTest do
                  map(ascii_char([?A..?Z]), {:to_string, []})
                ])
 
-    defparsec :parsec_literal, literal("T") |> parsec(:parsec_inner) |> literal("O")
+    defparsec :parsec_string, string("T") |> parsec(:parsec_inner) |> string("O")
     defparsec :parsec_repeat, repeat(parsec(:parsec_inner))
     defparsec :parsec_map, map(parsec(:parsec_inner), {String, :to_integer, []})
-    defparsec :parsec_choice, choice([parsec(:parsec_inner), literal("+")])
+    defparsec :parsec_choice, choice([parsec(:parsec_inner), string("+")])
 
-    test "returns ok/error with literal" do
-      assert parsec_literal("TaO") == {:ok, ["T", "97", "O"], "", 1, 4}
+    test "returns ok/error with string" do
+      assert parsec_string("TaO") == {:ok, ["T", "97", "O"], "", 1, 4}
 
-      error = "expected literal \"T\""
-      assert parsec_literal("ZaO") == {:error, error, "ZaO", 1, 1}
+      error = "expected string \"T\""
+      assert parsec_string("ZaO") == {:error, error, "ZaO", 1, 1}
 
       error = "expected byte in the range ?a..?z or byte in the range ?A..?Z"
-      assert parsec_literal("T1O") == {:error, error, "1O", 1, 2}
+      assert parsec_string("T1O") == {:error, error, "1O", 1, 2}
 
-      error = "expected literal \"O\""
-      assert parsec_literal("TaA") == {:error, error, "A", 1, 3}
+      error = "expected string \"O\""
+      assert parsec_string("TaA") == {:error, error, "A", 1, 3}
     end
 
     test "returns ok/error with choice" do
       assert parsec_choice("+O") == {:ok, ["+"], "O", 1, 2}
       assert parsec_choice("O+") == {:ok, ["79"], "+", 1, 2}
-      assert parsec_choice("==") == {:error, "expected parsec_inner or literal \"+\"", "==", 1, 1}
+      assert parsec_choice("==") == {:error, "expected parsec_inner or string \"+\"", "==", 1, 1}
     end
 
     test "returns ok/error with repeat" do
@@ -808,19 +808,19 @@ defmodule NimbleParsecTest do
   describe "custom datetime/2 combinator" do
     date =
       integer(4)
-      |> ignore(literal("-"))
+      |> ignore(string("-"))
       |> integer(2)
-      |> ignore(literal("-"))
+      |> ignore(string("-"))
       |> integer(2)
 
     time =
       integer(2)
-      |> ignore(literal(":"))
+      |> ignore(string(":"))
       |> integer(2)
-      |> ignore(literal(":"))
+      |> ignore(string(":"))
       |> integer(2)
 
-    defparsec :datetime, date |> ignore(literal("T")) |> concat(time)
+    defparsec :datetime, date |> ignore(string("T")) |> concat(time)
 
     test "returns ok/error by itself" do
       assert datetime("2010-04-17T14:12:34") == {:ok, [2010, 4, 17, 14, 12, 34], "", 1, 20}

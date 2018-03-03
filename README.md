@@ -32,20 +32,20 @@ defmodule MyParser do
 
   date =
     integer(4)
-    |> ignore(literal("-"))
+    |> ignore(string("-"))
     |> integer(2)
-    |> ignore(literal("-"))
+    |> ignore(string("-"))
     |> integer(2)
 
   time =
     integer(2)
-    |> ignore(literal(":"))
+    |> ignore(string(":"))
     |> integer(2)
-    |> ignore(literal(":"))
+    |> ignore(string(":"))
     |> integer(2)
-    |> optional(literal("Z"))
+    |> optional(string("Z"))
 
-  defparsec :datetime, date |> ignore(literal("T")) |> concat(time), debug: true
+  defparsec :datetime, date |> ignore(string("T")) |> concat(time), debug: true
 end
 
 MyParser.datetime("2010-04-17T14:12:34Z")

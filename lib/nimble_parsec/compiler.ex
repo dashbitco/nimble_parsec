@@ -463,7 +463,7 @@ defmodule NimbleParsec.Compiler do
   defp merge_output(left, right) when is_list(left) and is_list(right), do: left ++ right
   defp merge_output(left, right), do: quote(do: unquote(left) ++ unquote(right))
 
-  defp bound_combinator({:literal, binary}, cursor, counter) do
+  defp bound_combinator({:string, binary}, cursor, counter) do
     cursor =
       case String.split(binary, "\n") do
         [single] ->
@@ -604,8 +604,8 @@ defmodule NimbleParsec.Compiler do
     Enum.map_join(combinators, ", followed by ", &label/1)
   end
 
-  defp label({:literal, binary}) do
-    "literal #{inspect(binary)}"
+  defp label({:string, binary}) do
+    "string #{inspect(binary)}"
   end
 
   defp label({:label, _document, label}) do

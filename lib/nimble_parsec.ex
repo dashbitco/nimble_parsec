@@ -24,9 +24,9 @@ defmodule NimbleParsec do
 
         def date do
           integer(4)
-          |> ignore(literal("-"))
+          |> ignore(string("-"))
           |> integer(2)
-          |> ignore(literal("-"))
+          |> ignore(string("-"))
           |> integer(2)
         end
 
@@ -42,9 +42,9 @@ defmodule NimbleParsec do
 
         date =
           integer(4)
-          |> ignore(literal("-"))
+          |> ignore(string("-"))
           |> integer(2)
-          |> ignore(literal("-"))
+          |> ignore(string("-"))
           |> integer(2)
 
         defparsec :date, date
@@ -143,7 +143,7 @@ defmodule NimbleParsec do
 
   @typep bound_combinator ::
            {:bin_segment, [inclusive_range], [exclusive_range], [bin_modifiers]}
-           | {:literal, binary}
+           | {:string, binary}
 
   @typep maybe_bound_combinator ::
            {:label, t, binary}
@@ -522,27 +522,27 @@ defmodule NimbleParsec do
   end
 
   @doc ~S"""
-  Defines a literal binary value.
+  Defines a string binary value.
 
   ## Examples
 
       defmodule MyParser do
         import NimbleParsec
 
-        defparsec :literal_t, literal("T")
+        defparsec :string_t, string("T")
       end
 
-      MyParser.literal_t("T")
+      MyParser.string_t("T")
       #=> {:ok, ["T"], "", 1, 2}
 
-      MyParser.literal_t("not T")
-      #=> {:error, "expected a literal \"T\"", "not T", 1, 1}
+      MyParser.string_t("not T")
+      #=> {:error, "expected a string \"T\"", "not T", 1, 1}
 
   """
-  @spec literal(t, binary) :: t
-  def literal(combinator \\ empty(), binary)
+  @spec string(t, binary) :: t
+  def string(combinator \\ empty(), binary)
       when is_combinator(combinator) and is_binary(binary) do
-    [{:literal, binary} | combinator]
+    [{:string, binary} | combinator]
   end
 
   @doc """
@@ -553,7 +553,7 @@ defmodule NimbleParsec do
       defmodule MyParser do
         import NimbleParsec
 
-        defparsec :ignorable, literal("T") |> ignore() |> integer(2, 2)
+        defparsec :ignorable, string("T") |> ignore() |> integer(2, 2)
       end
 
       MyParser.ignorable("T12")
@@ -581,7 +581,7 @@ defmodule NimbleParsec do
       defmodule MyParser do
         import NimbleParsec
 
-        defparsec :replaceable, literal("T") |> replace("OTHER") |> integer(2, 2)
+        defparsec :replaceable, string("T") |> replace("OTHER") |> integer(2, 2)
       end
 
       MyParser.replaceable("T12")
@@ -601,12 +601,12 @@ defmodule NimbleParsec do
   Beware! Since `repeat/2` allows zero entries, it cannot be used inside
   `choice/2`, because it will always succeed and may lead to unused function
   warnings since any further choice won't ever be attempted. For example,
-  because `repeat/2` always succeeds, the `literal/2` combinator below it
+  because `repeat/2` always succeeds, the `string/2` combinator below it
   won't ever run:
 
       choice([
         repeat(ascii_char([?a..?z])),
-        literal("OK")
+        string("OK")
       ])
 
   Instead of `repeat/2`, you may want to use `times/3` with the flags `:min`
@@ -653,7 +653,7 @@ defmodule NimbleParsec do
                   ascii_char([?"])
                   |> repeat_while(
                     choice([
-                      ~S(\") |> literal() |> replace(?"),
+                      ~S(\") |> string() |> replace(?"),
                       utf8_char([])
                     ]),
                     {:not_quote, []}
@@ -693,7 +693,7 @@ defmodule NimbleParsec do
                   ascii_char([?"])
                   |> repeat_until(
                     choice([
-                      ~S(\") |> literal() |> replace(?"),
+                      ~S(\") |> string() |> replace(?"),
                       utf8_char([])
                     ]),
                     [ascii_char(?")]
@@ -829,11 +829,11 @@ defmodule NimbleParsec do
   If a combinator that always succeeds is given as a choice, that choice
   will always succeed which may lead to unused function warnings since
   any further choice won't ever be attempted. For example, because `repeat/2`
-  always succeeds, the `literal/2` combinator below it won't ever run:
+  always succeeds, the `string/2` combinator below it won't ever run:
 
       choice([
         repeat(ascii_char([?0..?9])),
-        literal("OK")
+        string("OK")
       ])
 
   Instead of `repeat/2`, you may want to use `times/3` with the flags `:min`
