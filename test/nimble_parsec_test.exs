@@ -611,8 +611,15 @@ defmodule NimbleParsecTest do
       assert repeat_while_double_digits_to_string("a123") == {:ok, [], "a123", {1, 0}, 0}
     end
 
-    def not_3(<<?3, _::binary>>), do: false
-    def not_3(_), do: true
+    def not_3(<<?3, _::binary>>, %{} = context, {line, line_offset}, byte_offset)
+        when is_integer(line) and is_integer(line_offset) and is_integer(byte_offset) do
+      {:error, context}
+    end
+
+    def not_3(<<_::binary>>, %{} = context, {line, line_offset}, byte_offset)
+        when is_integer(line) and is_integer(line_offset) and is_integer(byte_offset) do
+      {:ok, context}
+    end
   end
 
   describe "repeat_until/3 combinator" do

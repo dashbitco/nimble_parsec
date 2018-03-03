@@ -177,8 +177,6 @@ defmodule NimbleParsec do
   Invokes an already compiled parsec with name `name` in the
   same module.
 
-  It is useful for implementing recursive parsers.
-
   It can also be used to exchange compilation time by runtime
   performance. If you have a parser used over and over again,
   you can compile it using `defparsecp` and rely on it via
@@ -428,8 +426,9 @@ defmodule NimbleParsec do
   given `args`. The `args` will be injected at the compile site
   and therefore must be escapable via `Macro.escape/1`.
 
-  Notice the results are received in reverse order and
-  must be returned in reverse order.
+  The `call` must return a list of results to be added to
+  the accumulator. Notice the received results are in reverse
+  order and must be returned in reverse order too.
 
   The number of elements returned does not need to be
   the same as the number of elements given.
@@ -466,7 +465,7 @@ defmodule NimbleParsec do
   def traverse(combinator \\ empty(), to_traverse, call)
       when is_combinator(combinator) and is_combinator(to_traverse) do
     compile_call!([], call, "traverse")
-    quoted_traverse(combinator, to_traverse, {__MODULE__, :__traverse__, [call, "traverse"]})
+    quoted_traverse(combinator, to_traverse, {__MODULE__, :__call__, [call, "traverse"]})
   end
 
   @doc """
@@ -477,6 +476,13 @@ defmodule NimbleParsec do
   of the parser results, context, line and offset will be prepended
   to `args`. `call` is invoked at compile time and is useful in
   combinators that avoid injecting runtime dependencies.
+
+  The `call` must return a list of results to be added to
+  the accumulator. Notice the received results are in reverse
+  order and must be returned in reverse order too.
+
+  The number of elements returned does not need to be
+  the same as the number of elements given.
   """
   @spec quoted_traverse(t, t, mfargs) :: t
   def quoted_traverse(combinator, to_traverse, {_, _, _} = call)
@@ -672,17 +678,21 @@ defmodule NimbleParsec do
   def repeat(combinator \\ empty(), to_repeat)
       when is_combinator(combinator) and is_combinator(to_repeat) do
     non_empty!(to_repeat, "repeat")
-    quoted_repeat_while(combinator, to_repeat, {__MODULE__, :__constant__, [true]})
+    quoted_repeat_while(combinator, to_repeat, {__MODULE__, :__ok_context__, []})
   end
 
   @doc ~S"""
-  Repeats while the given remote or local function `call` returns true.
+  Repeats while the given remote or local function `call` returns
+  `{:ok, context}`.
+
+  In case repetition should stop, `call` must return `{:error, context}`.
 
   `call` is either a `{module, function, args}` representing
   a remote call, a `{function, args}` representing a local call
   or an atom `function` representing `{function, []}`.
 
-  The `rest` of the binary to be parsed will be prepended to the
+  The `rest` of the binary to be parsed, the parser context, the
+  current line and the current offset will be prepended to the
   given `args`. The `args` will be injected at the compile site
   and therefore must be escapable via `Macro.escape/1`.
 
@@ -762,26 +772,24 @@ defmodule NimbleParsec do
         end
 
         case NimbleParsec.Compiler.compile_pattern(choice) do
-          {inputs, guards} ->
-            hd(quote(do: (<<unquote_splicing(inputs), _::binary>> when unquote(guards) -> false)))
-
-          :error ->
-            raise "cannot compile combinator as choice given in repeat_until"
+          {_inputs, _guards} = pair -> pair
+          :error -> raise "cannot compile combinator as choice given in repeat_until"
         end
       end
 
-    clauses = clauses ++ quote(do: (_ -> true))
     quoted_repeat_while(combinator, to_repeat, {__MODULE__, :__repeat_until__, [clauses]})
   end
 
   @doc """
   Invokes `call` to emit the AST that will repeat `to_repeat`
-  while the AST code returns true.
+  while the AST code returns `{:ok, context}`.
 
-  `call` is a `{module, function, args}` where the AST argument
-  that represents the binary to be parsed  will be prended to
-  `args`. `call` is invoked at compile time and is useful in
-  combinators that avoid injecting runtime dependencies.
+  In case repetition should stop, `call` must return `{:error, context}`.
+
+  `call` is a `{module, function, args}` where the AST representations
+  of the binary to be parsed, context, line and offset will be
+  prended to `args`. `call` is invoked at compile time and is
+  useful in combinators that avoid injecting runtime dependencies.
   """
   @spec quoted_repeat_while(t, t, mfargs) :: t
   def quoted_repeat_while(combinator \\ empty(), to_repeat, {_, _, _} = call)
@@ -839,7 +847,7 @@ defmodule NimbleParsec do
       if max do
         [{:repeat_up_to, to_repeat, max - (min || 0)} | combinator]
       else
-        [{:repeat, to_repeat, {__MODULE__, :__constant__, [true]}} | combinator]
+        [{:repeat, to_repeat, {__MODULE__, :__ok_context__, []}} | combinator]
       end
 
     combinator
@@ -985,27 +993,17 @@ defmodule NimbleParsec do
   ## Callbacks functions
 
   @doc false
-  def __constant__(_quoted, constant) do
-    constant
-  end
-
-  @doc false
   def __constant__(_quoted, _context, _line, _offset, constant) do
     constant
   end
 
-  @doc false
-  def __call__(quoted, call, combinator) do
-    compile_call!([quoted], call, combinator)
+   @doc false
+  def __ok_context__(_, context, _line, _offset) do
+    {:ok, context}
   end
 
   @doc false
-  def __call__(quoted, _context, _line, _offset, call, combinator) do
-    compile_call!([quoted], call, combinator)
-  end
-
-  @doc false
-  def __traverse__(quoted, context, line, offset, call, combinator) do
+  def __call__(quoted, context, line, offset, call, combinator) do
     compile_call!([quoted, context, line, offset], call, combinator)
   end
 
@@ -1032,7 +1030,19 @@ defmodule NimbleParsec do
   end
 
   @doc false
-  def __repeat_until__(arg, clauses) do
+  def __repeat_until__(arg, context, _line, _offset, clauses) do
+    clauses =
+      for {inputs, guards} <- clauses do
+        hd(
+          quote do
+            <<unquote_splicing(inputs), _::binary>> when unquote(guards) ->
+              {:error, unquote(context)}
+          end
+        )
+      end
+
+    clauses = clauses ++ quote(do: (_ -> {:ok, unquote(context)}))
+
     quote do
       case unquote(arg), do: unquote(clauses)
     end

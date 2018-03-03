@@ -207,8 +207,8 @@ defmodule NimbleParsec.Compiler do
     config = %{config | catch_all: failure, acc_depth: 0}
 
     {defs, recur, next, step} =
-      case apply_mfa(while, [quote(do: rest)]) do
-        true ->
+      case apply_mfa(while, quote(do: [rest, context, line, offset])) do
+        {:ok, quote(do: context)} ->
           {[], current, current, step}
 
         quoted ->
@@ -226,7 +226,7 @@ defmodule NimbleParsec.Compiler do
   defp compile_unbound_repeat(combinators, while, current, step, config) do
     {failure, step} = build_next(step, config)
     {recur, step} = build_next(step, config)
-    while = apply_mfa(while, [quote(do: rest)])
+    while = apply_mfa(while, quote(do: [rest, context, line, offset]))
 
     config = %{config | catch_all: failure, acc_depth: 0}
     {defs, inline, success, step} = compile(combinators, [], [], recur, step, config)
@@ -271,19 +271,19 @@ defmodule NimbleParsec.Compiler do
     {defs, inline, next, step, :catch_none}
   end
 
-  defp repeat_while(true, true_name, true_args, _false_name, _false_args) do
+  defp repeat_while({:ok, quote(do: context)}, true_name, true_args, _false_name, _false_args) do
     {true_name, [], true_args}
   end
 
-  defp repeat_while(false, _true_name, _true_args, false_name, false_args) do
+  defp repeat_while({:error, quote(do: context)}, _true_name, _true_args, false_name, false_args) do
     {false_name, [], false_args}
   end
 
   defp repeat_while(quoted, true_name, true_args, false_name, false_args) do
     quote do
       case unquote(quoted) do
-        true -> unquote({true_name, [], true_args})
-        false -> unquote({false_name, [], false_args})
+        {:ok, context} -> unquote({true_name, [], true_args})
+        {:error, context} -> unquote({false_name, [], false_args})
       end
     end
   end
