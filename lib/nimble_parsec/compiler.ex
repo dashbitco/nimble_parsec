@@ -124,10 +124,10 @@ defmodule NimbleParsec.Compiler do
     body =
       quote do
         case unquote(:"#{parsec}__0")(rest, acc, [], context, line, offset) do
-          {:ok, acc, rest, line, offset} ->
+          {:ok, acc, rest, context, line, offset} ->
             unquote(next)(rest, acc, stack, context, line, offset)
 
-          {:error, _, _, _, _} = error ->
+          {:error, _, _, _, _, _} = error ->
             unquote(catch_all)
         end
       end
@@ -750,7 +750,7 @@ defmodule NimbleParsec.Compiler do
               unquote(next)(rest, user_acc ++ acc, stack, context, line, offset)
 
             {:error, reason} ->
-              {:error, reason, rest, line, offset}
+              {:error, reason, rest, context, line, offset}
           end
         end
     end
@@ -798,15 +798,15 @@ defmodule NimbleParsec.Compiler do
   end
 
   defp build_ok(current) do
-    head = quote(do: [rest, acc, _stack, _context, line, offset])
-    body = quote(do: {:ok, acc, rest, line, offset})
+    head = quote(do: [rest, acc, _stack, context, line, offset])
+    body = quote(do: {:ok, acc, rest, context, line, offset})
     {current, head, true, body}
   end
 
   defp build_catch_all(name, combinators, %{catch_all: nil, labels: labels}) do
     reason = error_reason(combinators, labels)
-    args = quote(do: [rest, acc, _stack, _context, line, offset])
-    body = quote(do: {:error, unquote(reason), rest, line, offset})
+    args = quote(do: [rest, acc, _stack, context, line, offset])
+    body = quote(do: {:error, unquote(reason), rest, context, line, offset})
     {name, args, true, body}
   end
 

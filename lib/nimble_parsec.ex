@@ -70,8 +70,8 @@ defmodule NimbleParsec do
         @doc """
         Parses the given `binary` as #{name}.
 
-        Returns `{:ok, [token], rest, line, byte_offset}` or
-        `{:error, reason, rest, line, byte_offset}`.
+        Returns `{:ok, [token], rest, context, line, byte_offset}` or
+        `{:error, reason, rest, context, line, byte_offset}`.
 
         ## Options
 
@@ -82,22 +82,23 @@ defmodule NimbleParsec do
 
         """
         @spec unquote(name)(binary, keyword) ::
-                {:ok, [term], rest, line, byte_offset}
-                | {:error, reason, rest, line, byte_offset}
+                {:ok, [term], rest, context, line, byte_offset}
+                | {:error, reason, rest, context, line, byte_offset}
               when line: {pos_integer, byte_offset},
                    byte_offset: pos_integer,
                    rest: binary,
-                   reason: String.t()
+                   reason: String.t(),
+                   context: map()
         def unquote(name)(binary, opts \\ []) when is_binary(binary) do
           line = Keyword.get(opts, :line, 1)
           offset = Keyword.get(opts, :byte_offset, 0)
           context = Map.new(Keyword.get(opts, :context, []))
 
           case unquote(:"#{name}__0")(binary, [], [], context, {line, offset}, offset) do
-            {:ok, acc, rest, line, offset} ->
-              {:ok, :lists.reverse(acc), rest, line, offset}
+            {:ok, acc, rest, context, line, offset} ->
+              {:ok, :lists.reverse(acc), rest, context, line, offset}
 
-            {:error, _, _, _, _} = error ->
+            {:error, _, _, _, _, _} = error ->
               error
           end
         end

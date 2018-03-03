@@ -2,7 +2,7 @@
 
 ## v0.2.0-dev
 
-  * Support parser combinator contexts
+  * Support parser combinator contexts and return them in ok/error
   * Rename `literal/2` to `string/2`
   * Add `line/2` and `byte_offset/2` combinators
   * The MFA given to `repeat_while/3` now receives the accumulator, context, line, and byte_offset values and must return `{:cont, context} | {:halt, context}`
