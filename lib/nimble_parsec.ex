@@ -1,4 +1,4 @@
-# TODO: Make ignore cascade up.
+# TODO: Make ignore cascade up
 # TODO: Test debug, wrap, tag, and traverse with error
 # TODO: Add ascii_string / utf8_string
 
@@ -142,7 +142,7 @@ defmodule NimbleParsec do
   @type range :: inclusive_range | exclusive_range
   @type inclusive_range :: Range.t() | char()
   @type exclusive_range :: {:not, Range.t()} | {:not, char()}
-  @type min_and_max :: {:min, pos_integer()} | {:max, pos_integer()}
+  @type min_and_max :: {:min, non_neg_integer()} | {:max, pos_integer()}
   @type call :: mfargs | fargs | atom
   @type mfargs :: {module, atom, args :: [term]}
   @type fargs :: {atom, args :: [term]}
@@ -167,7 +167,7 @@ defmodule NimbleParsec do
            {:choice, [t]}
            | {:parsec, atom}
            | {:repeat, t, mfargs}
-           | {:repeat_up_to, t, pos_integer}
+           | {:times, t, min :: non_neg_integer, pos_integer}
 
   @cont_context {__MODULE__, :__cont_context__, []}
 
@@ -873,7 +873,7 @@ defmodule NimbleParsec do
 
     combinator =
       if max do
-        [{:repeat_up_to, to_repeat, max - (min || 0)} | combinator]
+        [{:times, to_repeat, 0, max - (min || 0)} | combinator]
       else
         [{:repeat, to_repeat, @cont_context} | combinator]
       end

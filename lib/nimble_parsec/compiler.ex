@@ -169,11 +169,11 @@ defmodule NimbleParsec.Compiler do
     {Enum.reverse([last_def | defs]), inline, next, step, :catch_none}
   end
 
-  defp compile_unbound_combinator({:repeat_up_to, combinators, count}, current, step, config) do
+  defp compile_unbound_combinator({:times, combinators, 0, count}, current, step, config) do
     if all_bound_combinators?(combinators) do
-      compile_bound_repeat_up_to(combinators, count, current, step, config)
+      compile_bound_times(combinators, count, current, step, config)
     else
-      compile_unbound_repeat_up_to(combinators, count, current, step, config)
+      compile_unbound_times(combinators, count, current, step, config)
     end
   end
 
@@ -282,7 +282,7 @@ defmodule NimbleParsec.Compiler do
 
   ## Repeat up to
 
-  defp compile_bound_repeat_up_to(combinators, count, current, step, config) do
+  defp compile_bound_times(combinators, count, current, step, config) do
     {failure, step} = build_next(step, config)
     {recur, step} = build_next(step, config)
 
@@ -315,7 +315,7 @@ defmodule NimbleParsec.Compiler do
     {defs, inline, next, step, :catch_none}
   end
 
-  defp compile_unbound_repeat_up_to(combinators, count, current, step, config) do
+  defp compile_unbound_times(combinators, count, current, step, config) do
     {failure, step} = build_next(step, config)
     {recur, step} = build_next(step, config)
 
@@ -620,7 +620,7 @@ defmodule NimbleParsec.Compiler do
     labels(combinators)
   end
 
-  defp label({:repeat_up_to, combinators, _}) do
+  defp label({:times, combinators, _, _}) do
     labels(combinators)
   end
 
