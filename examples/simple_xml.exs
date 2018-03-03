@@ -4,7 +4,7 @@ defmodule SimpleXML do
   import NimbleParsec
 
   @doc """
-  Parser a simple XML.
+  Parses a simple XML.
 
   It is meant to show NimbleParsec recursive features.
   It doesn't support attributes. The content of a tag is
