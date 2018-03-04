@@ -28,13 +28,8 @@ defmodule SimpleXML do
     end
   end
 
-  letter = ascii_char([?a..?z, ?A..?Z])
-  tag = letter |> repeat(letter) |> reduce({List, :to_string, []})
-
-  text =
-    ascii_char(not: ?<)
-    |> repeat(ascii_char(not: ?<))
-    |> reduce({List, :to_string, []})
+  tag = ascii_string([?a..?z, ?A..?Z], min: 1)
+  text = ascii_string([not: ?<], min: 1)
 
   opening_tag =
     ignore(string("<"))
@@ -60,11 +55,13 @@ defmodule SimpleXML do
             |> concat(closing_tag)
             |> traverse(:check_close_tag_and_emit_tag)
 
-  defp store_tag_in_context([tag], %{tags: tags} = context, _line, _offset) do
+  defp store_tag_in_context(_rest, [tag], %{tags: tags} = context, _line, _offset) do
     {[tag], %{context | tags: [tag | tags]}}
   end
 
-  defp check_close_tag_and_emit_tag([closing, [opening | contents]], context, _line, _offset) do
+  defp check_close_tag_and_emit_tag(_rest, acc, context, _line, _offset) do
+    [closing, [opening | contents]] = acc
+
     if closing == opening do
       context = update_in(context.tags, &tl/1)
 

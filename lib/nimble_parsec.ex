@@ -1,5 +1,3 @@
-# TODO: Add ascii_string / utf8_string
-
 defmodule NimbleParsec do
   @moduledoc "README.md"
              |> File.read!()
@@ -136,7 +134,7 @@ defmodule NimbleParsec do
   end
 
   @type t :: [combinator]
-  @type bin_modifiers :: :utf8 | :utf16 | :utf32
+  @type bin_modifiers :: :integer | :utf8 | :utf16 | :utf32
   @type range :: inclusive_range | exclusive_range
   @type inclusive_range :: Range.t() | char()
   @type exclusive_range :: {:not, Range.t()} | {:not, char()}
@@ -227,7 +225,7 @@ defmodule NimbleParsec do
   def ascii_char(combinator \\ empty(), ranges)
       when is_combinator(combinator) and is_list(ranges) do
     {inclusive, exclusive} = split_ranges!(ranges, "ascii_char")
-    bin_segment(combinator, inclusive, exclusive, [])
+    bin_segment(combinator, inclusive, exclusive, [:integer])
   end
 
   @doc ~S"""
@@ -333,33 +331,88 @@ defmodule NimbleParsec do
 
   """
   @spec integer(t, pos_integer | [min_and_max]) :: t
-  def integer(combinator \\ empty(), count)
-
-  def integer(combinator, count)
-      when is_combinator(combinator) and is_integer(count) and count > 0 do
-    integer = duplicate(ascii_char([?0..?9]), count)
-    quoted_traverse(combinator, integer, {__MODULE__, :__compile_integer__, []})
+  def integer(combinator \\ empty(), count_or_opts)
+      when is_combinator(combinator) and (is_integer(count_or_opts) or is_list(count_or_opts)) do
+    min_max_compile_runtime_chars(
+      combinator,
+      ascii_char([?0..?9]),
+      count_or_opts,
+      :__compile_integer__,
+      :__runtime_integer__,
+      []
+    )
   end
 
-  def integer(combinator, opts) when is_combinator(combinator) and is_list(opts) do
-    {min, max} = validate_min_and_max!(opts)
-    to_repeat = ascii_char([?0..?9])
+  @doc ~S"""
+  Defines an ascii string combinator with of exact length or `min` and `max`
+  length.
 
-    integer =
-      if min do
-        integer(min)
-      else
-        empty()
+  The `ranges` specify the allowed characters in the ascii string.
+  See `ascii_char/2` for more information.
+
+  If you want a string of unknown size, use `ascii_string(ranges, min: 1)`.
+  If you want a literal string, use `string/2`.
+
+  ## Examples
+
+      defmodule MyParser do
+        import NimbleParsec
+
+        defparsec :two_lowercase_letters, ascii_string([?a..?z], 2)
       end
 
-    integer =
-      if max do
-        times(integer, to_repeat, max: max - (min || 0))
-      else
-        repeat(integer, to_repeat)
+      MyParser.two_lowercase_letters("abc")
+      #=> {:ok, ["ab"], "c", %{}, {1, 0}, 2}
+
+  """
+  @spec ascii_string(t, [range], pos_integer | [min_and_max]) :: t
+  def ascii_string(combinator \\ empty(), range, count_or_opts)
+      when is_combinator(combinator) and is_list(range) and
+             (is_integer(count_or_opts) or is_list(count_or_opts)) do
+    min_max_compile_runtime_chars(
+      combinator,
+      ascii_char(range),
+      count_or_opts,
+      :__compile_string__,
+      :__runtime_string__,
+      [quote(do: integer)]
+    )
+  end
+
+  @doc ~S"""
+  Defines an ascii string combinator with of exact length or `min` and `max`
+  codepoint length.
+
+  The `ranges` specify the allowed characters in the ascii string.
+  See `ascii_char/2` for more information.
+
+  If you want a string of unknown size, use `utf8_string(ranges, min: 1)`.
+  If you want a literal string, use `string/2`.
+
+  ## Examples
+
+      defmodule MyParser do
+        import NimbleParsec
+
+        defparsec :two_letters, utf8_string([], 2)
       end
 
-    quoted_traverse(combinator, integer, {__MODULE__, :__runtime_integer__, []})
+      MyParser.two_letters("áé")
+      #=> {:ok, ["áé"], "", %{}, {1, 0}, 3}
+
+  """
+  @spec utf8_string(t, [range], pos_integer | [min_and_max]) :: t
+  def utf8_string(combinator \\ empty(), range, count_or_opts)
+      when is_combinator(combinator) and is_list(range) and
+             (is_integer(count_or_opts) or is_list(count_or_opts)) do
+    min_max_compile_runtime_chars(
+      combinator,
+      utf8_char(range),
+      count_or_opts,
+      :__compile_string__,
+      :__runtime_string__,
+      [quote(do: utf8)]
+    )
   end
 
   @doc ~S"""
@@ -389,8 +442,15 @@ defmodule NimbleParsec do
   @doc """
   Duplicates the combinator `to_duplicate` `n` times.
   """
-  @spec duplicate(t, t, pos_integer) :: t
+  @spec duplicate(t, t, non_neg_integer) :: t
   def duplicate(combinator \\ empty(), to_duplicate, n)
+
+  def duplicate(combinator, to_duplicate, 0)
+      when is_combinator(combinator) and is_combinator(to_duplicate) do
+    empty()
+  end
+
+  def duplicate(combinator, to_duplicate, n)
       when is_combinator(combinator) and is_combinator(to_duplicate) and is_integer(n) and n >= 1 do
     Enum.reduce(1..n, combinator, fn _, acc -> to_duplicate ++ acc end)
   end
@@ -428,6 +488,7 @@ defmodule NimbleParsec do
   a remote call, a `{function, args}` representing a local call
   or an atom `function` representing `{function, []}`.
 
+  The function given in `call` will receive 5 additional arguments.
   The rest of the parsed binary, the parser results to be traversed,
   the parser context, the current line and the current offset will
   be prepended to the given `args`. The `args` will be injected at
@@ -484,6 +545,7 @@ defmodule NimbleParsec do
   a remote call, a `{function, args}` representing a local call
   or an atom `function` representing `{function, []}`.
 
+  The function given in `call` will receive 4 additional arguments.
   The rest of the parsed binary, the parser context, the current line
   and the current offset will be prepended to the given `args`.
   The `args` will be injected at the compile site and therefore must
@@ -533,11 +595,11 @@ defmodule NimbleParsec do
   Invokes `call` to emit the AST that traverses the `to_traverse`
   combinator results.
 
-  `call` is a `{module, function, args}`. The AST representation
-  of the rest of the parsed binary, the parser results, context,
-  line and offset will be prepended to `args`. `call` is invoked
-  at compile time and is useful in combinators that avoid injecting
-  runtime dependencies.
+  `call` is a `{module, function, args}` and it will receive 5
+  additional arguments. The AST representation of the rest of the
+  parsed binary, the parser results, context, line and offset will
+  be prepended to `args`. `call` is invoked at compile time and is
+  useful in combinators that avoid injecting runtime dependencies.
 
   The `call` must return a list of results to be added to
   the accumulator. Notice the received results are in reverse
@@ -775,6 +837,7 @@ defmodule NimbleParsec do
   a remote call, a `{function, args}` representing a local call
   or an atom `function` representing `{function, []}`.
 
+  The function given in `while` will receive 4 additional arguments.
   The `rest` of the binary to be parsed, the parser context, the
   current line and the current offset will be prepended to the
   given `args`. The `args` will be injected at the compile site
@@ -859,10 +922,11 @@ defmodule NimbleParsec do
 
   In case repetition should stop, `while` must return `{:halt, context}`.
 
-  `while` is a `{module, function, args}` where the AST representations
-  of the binary to be parsed, context, line and offset will be
-  prended to `args`. `while` is invoked at compile time and is
-  useful in combinators that avoid injecting runtime dependencies.
+  `while` is a `{module, function, args}` and it will receive 4
+  additional arguments. The AST representations of the binary to be
+  parsed, context, line and offset will be prended to `args`. `while`
+  is invoked at compile time and is useful in combinators that avoid
+  injecting runtime dependencies.
   """
   @spec quoted_repeat_while(t, t, mfargs) :: t
   def quoted_repeat_while(combinator \\ empty(), to_repeat, {_, _, _} = while)
@@ -908,7 +972,7 @@ defmodule NimbleParsec do
     non_empty!(to_repeat, "times")
 
     combinator =
-      if min do
+      if min > 0 do
         duplicate(combinator, to_repeat, min)
       else
         combinator
@@ -918,7 +982,7 @@ defmodule NimbleParsec do
 
     combinator =
       if max do
-        [{:times, to_repeat, 0, max - (min || 0)} | combinator]
+        [{:times, to_repeat, 0, max - min} | combinator]
       else
         [{:repeat, to_repeat, @cont_context} | combinator]
       end
@@ -1003,7 +1067,7 @@ defmodule NimbleParsec do
         raise ArgumentError, "expected :min or :max to be given"
     end
 
-    {min, max}
+    {min || 0, max}
   end
 
   defp validate_min_or_max!(kind, value) do
@@ -1083,7 +1147,7 @@ defmodule NimbleParsec do
     end
   end
 
-  defp bin_segment(combinator, inclusive, exclusive, modifiers) do
+  defp bin_segment(combinator, inclusive, exclusive, [_ | _] = modifiers) do
     [{:bin_segment, inclusive, exclusive, modifiers} | combinator]
   end
 
@@ -1186,21 +1250,75 @@ defmodule NimbleParsec do
     end
   end
 
-  ## Data type callbacks
+  ## Chars callbacks
+
+  defp min_max_compile_runtime_chars(combinator, to_repeat, count, compile, _runtime, args)
+       when is_integer(count) and count > 0 do
+    chars = duplicate(to_repeat, count)
+    quoted_traverse(combinator, chars, {__MODULE__, compile, [count | args]})
+  end
+
+  defp min_max_compile_runtime_chars(combinator, to_repeat, opts, compile, runtime, args)
+       when is_list(opts) do
+    {min, max} = validate_min_and_max!(opts)
+
+    chars =
+      if min > 0 do
+        min_max_compile_runtime_chars(combinator, to_repeat, min, compile, runtime, args)
+      else
+        empty()
+      end
+
+    chars =
+      if max do
+        times(chars, to_repeat, max: max - min)
+      else
+        repeat(chars, to_repeat)
+      end
+
+    quoted_traverse(combinator, chars, {__MODULE__, runtime, [min, max | args]})
+  end
 
   @doc false
-  def __runtime_integer__(_rest, acc, context, _line, _offset) do
+  def __runtime_string__(_rest, acc, context, _line, _offset, _min, _max, _type) do
+    ast = quote(do: List.to_string(unquote(reverse_now_or_later(acc))))
+    {[ast], context}
+  end
+
+  @doc false
+  def __compile_string__(_rest, acc, context, _line, _offset, _count, type) when is_list(acc) do
+    acc =
+      for entry <- :lists.reverse(acc) do
+        {:::, [], [entry, type]}
+      end
+
+    {[{:<<>>, [], acc}], context}
+  end
+
+  @doc false
+  def __runtime_integer__(_rest, acc, context, _line, _offset, min, _max)
+      when is_integer(min) and min > 0 do
     ast =
       quote do
-        [head | tail] = :lists.reverse(unquote(acc))
+        [head | tail] = unquote(reverse_now_or_later(acc))
         [:lists.foldl(fn x, acc -> x - ?0 + acc * 10 end, head, tail)]
       end
 
     {ast, context}
   end
 
+  def __runtime_integer__(_rest, acc, context, _line, _offset, _min, _max) do
+    ast =
+      quote do
+        [head | tail] = unquote(reverse_now_or_later(acc))
+        [:lists.foldl(fn x, acc -> x - ?0 + acc * 10 end, head - ?0, tail)]
+      end
+
+    {ast, context}
+  end
+
   @doc false
-  def __compile_integer__(_rest, acc, context, _line, _offset) when is_list(acc) do
+  def __compile_integer__(_rest, acc, context, _line, _offset, _count) when is_list(acc) do
     ast =
       acc
       |> quoted_ascii_to_integer(1)

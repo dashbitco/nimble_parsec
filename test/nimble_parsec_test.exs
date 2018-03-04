@@ -68,15 +68,15 @@ defmodule NimbleParsecTest do
     test "returns ok/error on composition" do
       assert only_utf8("1a") == {:ok, [?1, ?a], "", %{}, {1, 0}, 2}
       assert only_utf8("11") == {:ok, [?1, ?1], "", %{}, {1, 0}, 2}
-      assert only_utf8("1é") == {:ok, [?1, ?é], "", %{}, {1, 0}, 2}
+      assert only_utf8("1é") == {:ok, [?1, ?é], "", %{}, {1, 0}, 3}
       assert only_utf8("a1") == {:error, @error, "a1", %{}, {1, 0}, 0}
     end
 
     test "returns ok/error even with newlines" do
       assert utf8_newline("1a\n") == {:ok, [?1, ?a], "\n", %{}, {1, 0}, 2}
       assert utf8_newline("1\na") == {:ok, [?1, ?\n], "a", %{}, {2, 2}, 2}
-      assert utf8_newline("éa\n") == {:ok, [?é, ?a], "\n", %{}, {1, 0}, 2}
-      assert utf8_newline("é\na") == {:ok, [?é, ?\n], "a", %{}, {2, 2}, 2}
+      assert utf8_newline("éa\n") == {:ok, [?é, ?a], "\n", %{}, {1, 0}, 3}
+      assert utf8_newline("é\na") == {:ok, [?é, ?\n], "a", %{}, {2, 3}, 3}
       assert utf8_newline("\nao") == {:ok, [?\n, ?a], "o", %{}, {2, 1}, 2}
     end
 
@@ -87,15 +87,15 @@ defmodule NimbleParsecTest do
   end
 
   describe "integer/2 combinator with exact length" do
-    defparsec :only_integer, integer(2)
+    defparsec :exact_integer, integer(2)
     defparsec :prefixed_integer, string("T") |> integer(2)
 
     @error "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
     test "returns ok/error by itself" do
-      assert only_integer("12") == {:ok, [12], "", %{}, {1, 0}, 2}
-      assert only_integer("123") == {:ok, [12], "3", %{}, {1, 0}, 2}
-      assert only_integer("1a3") == {:error, @error, "1a3", %{}, {1, 0}, 0}
+      assert exact_integer("12") == {:ok, [12], "", %{}, {1, 0}, 2}
+      assert exact_integer("123") == {:ok, [12], "3", %{}, {1, 0}, 2}
+      assert exact_integer("1a3") == {:error, @error, "1a3", %{}, {1, 0}, 0}
     end
 
     @error "expected string \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
@@ -114,17 +114,34 @@ defmodule NimbleParsecTest do
   end
 
   describe "integer/2 combinator with min/max" do
-    defparsec :min_integer, integer(min: 3)
+    defparsec :min_integer, integer(min: 2)
     defparsec :max_integer, integer(max: 3)
-    defparsec :min_max_integer, integer(min: 1, max: 3)
+    defparsec :min_max_integer, integer(min: 2, max: 3)
 
-    @error "expected byte in the range ?0..?9, followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
+    @error "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
     test "returns ok/error with min" do
+      assert min_integer("12") == {:ok, [12], "", %{}, {1, 0}, 2}
       assert min_integer("123") == {:ok, [123], "", %{}, {1, 0}, 3}
       assert min_integer("123o") == {:ok, [123], "o", %{}, {1, 0}, 3}
       assert min_integer("1234") == {:ok, [1234], "", %{}, {1, 0}, 4}
-      assert min_integer("12") == {:error, @error, "12", %{}, {1, 0}, 0}
+      assert min_integer("1") == {:error, @error, "1", %{}, {1, 0}, 0}
+    end
+
+    test "returns ok/error with max" do
+      assert max_integer("1") == {:ok, [1], "", %{}, {1, 0}, 1}
+      assert max_integer("12") == {:ok, [12], "", %{}, {1, 0}, 2}
+      assert max_integer("123") == {:ok, [123], "", %{}, {1, 0}, 3}
+      assert max_integer("1234") == {:ok, [123], "4", %{}, {1, 0}, 3}
+      assert max_integer("123o") == {:ok, [123], "o", %{}, {1, 0}, 3}
+    end
+
+    test "returns ok/error with min/max" do
+      assert min_max_integer("1") == {:error, @error, "1", %{}, {1, 0}, 0}
+      assert min_max_integer("12") == {:ok, [12], "", %{}, {1, 0}, 2}
+      assert min_max_integer("123") == {:ok, [123], "", %{}, {1, 0}, 3}
+      assert min_max_integer("1234") == {:ok, [123], "4", %{}, {1, 0}, 3}
+      assert min_max_integer("123o") == {:ok, [123], "o", %{}, {1, 0}, 3}
     end
 
     test "is not bound" do
@@ -154,6 +171,114 @@ defmodule NimbleParsecTest do
 
     test "is bound" do
       assert bound?(string("T"))
+    end
+  end
+
+  describe "ascii_string/2 combinator with exact length" do
+    defparsec :exact_ascii_string, ascii_string([?a..?z], 2)
+
+    @error "expected byte in the range ?a..?z, followed by byte in the range ?a..?z"
+
+    test "returns ok/error" do
+      assert exact_ascii_string("ab") == {:ok, ["ab"], "", %{}, {1, 0}, 2}
+      assert exact_ascii_string("abc") == {:ok, ["ab"], "c", %{}, {1, 0}, 2}
+      assert exact_ascii_string("1ab") == {:error, @error, "1ab", %{}, {1, 0}, 0}
+    end
+
+    test "is bound" do
+      assert bound?(ascii_string([?a..?z], 2))
+    end
+  end
+
+  describe "ascii_string/2 combinator with min/max" do
+    defparsec :min_ascii_string, ascii_string([?0..?9], min: 2)
+    defparsec :max_ascii_string, ascii_string([?0..?9], max: 3)
+    defparsec :min_max_ascii_string, ascii_string([?0..?9], min: 2, max: 3)
+
+    @error "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
+
+    test "returns ok/error with min" do
+      assert min_ascii_string("12") == {:ok, ["12"], "", %{}, {1, 0}, 2}
+      assert min_ascii_string("123") == {:ok, ["123"], "", %{}, {1, 0}, 3}
+      assert min_ascii_string("123o") == {:ok, ["123"], "o", %{}, {1, 0}, 3}
+      assert min_ascii_string("1234") == {:ok, ["1234"], "", %{}, {1, 0}, 4}
+      assert min_ascii_string("1") == {:error, @error, "1", %{}, {1, 0}, 0}
+    end
+
+    test "returns ok/error with max" do
+      assert max_ascii_string("1") == {:ok, ["1"], "", %{}, {1, 0}, 1}
+      assert max_ascii_string("12") == {:ok, ["12"], "", %{}, {1, 0}, 2}
+      assert max_ascii_string("123") == {:ok, ["123"], "", %{}, {1, 0}, 3}
+      assert max_ascii_string("1234") == {:ok, ["123"], "4", %{}, {1, 0}, 3}
+      assert max_ascii_string("123o") == {:ok, ["123"], "o", %{}, {1, 0}, 3}
+    end
+
+    test "returns ok/error with min/max" do
+      assert min_max_ascii_string("1") == {:error, @error, "1", %{}, {1, 0}, 0}
+      assert min_max_ascii_string("12") == {:ok, ["12"], "", %{}, {1, 0}, 2}
+      assert min_max_ascii_string("123") == {:ok, ["123"], "", %{}, {1, 0}, 3}
+      assert min_max_ascii_string("1234") == {:ok, ["123"], "4", %{}, {1, 0}, 3}
+      assert min_max_ascii_string("12o") == {:ok, ["12"], "o", %{}, {1, 0}, 2}
+    end
+
+    test "is not bound" do
+      assert not_bound?(ascii_string([?0..?9], min: 3))
+      assert not_bound?(ascii_string([?0..?9], max: 3))
+      assert not_bound?(ascii_string([?0..?9], min: 1, max: 3))
+    end
+  end
+
+  describe "utf8_string/2 combinator with exact length" do
+    defparsec :exact_utf8_string, utf8_string([], 2)
+
+    @error "expected utf8 codepoint, followed by utf8 codepoint"
+
+    test "returns ok/error" do
+      assert exact_utf8_string("áé") == {:ok, ["áé"], "", %{}, {1, 0}, 4}
+      assert exact_utf8_string("áé\xFF") == {:ok, ["áé"], "\xFF", %{}, {1, 0}, 4}
+      assert exact_utf8_string("\xFFáé") == {:error, @error, "\xFFáé", %{}, {1, 0}, 0}
+    end
+
+    test "is bound" do
+      assert bound?(utf8_string([], 2))
+    end
+  end
+
+  describe "utf8_string/2 combinator with min/max" do
+    defparsec :min_utf8_string, utf8_string([], min: 2)
+    defparsec :max_utf8_string, utf8_string([], max: 3)
+    defparsec :min_max_utf8_string, utf8_string([], min: 2, max: 3)
+
+    @error "expected utf8 codepoint, followed by utf8 codepoint"
+
+    test "returns ok/error with min" do
+      assert min_utf8_string("áé") == {:ok, ["áé"], "", %{}, {1, 0}, 4}
+      assert min_utf8_string("áéí") == {:ok, ["áéí"], "", %{}, {1, 0}, 6}
+      assert min_utf8_string("áéí\xFF") == {:ok, ["áéí"], "\xFF", %{}, {1, 0}, 6}
+      assert min_utf8_string("áéíó") == {:ok, ["áéíó"], "", %{}, {1, 0}, 8}
+      assert min_utf8_string("\xFF") == {:error, @error, "\xFF", %{}, {1, 0}, 0}
+    end
+
+    test "returns ok/error with max" do
+      assert max_utf8_string("á") == {:ok, ["á"], "", %{}, {1, 0}, 2}
+      assert max_utf8_string("áé") == {:ok, ["áé"], "", %{}, {1, 0}, 4}
+      assert max_utf8_string("áéí") == {:ok, ["áéí"], "", %{}, {1, 0}, 6}
+      assert max_utf8_string("áéíó") == {:ok, ["áéí"], "ó", %{}, {1, 0}, 6}
+      assert max_utf8_string("áéí\xFF") == {:ok, ["áéí"], "\xFF", %{}, {1, 0}, 6}
+    end
+
+    test "returns ok/error with min/max" do
+      assert min_max_utf8_string("á") == {:error, @error, "á", %{}, {1, 0}, 0}
+      assert min_max_utf8_string("áé") == {:ok, ["áé"], "", %{}, {1, 0}, 4}
+      assert min_max_utf8_string("áéí") == {:ok, ["áéí"], "", %{}, {1, 0}, 6}
+      assert min_max_utf8_string("áéíó") == {:ok, ["áéí"], "ó", %{}, {1, 0}, 6}
+      assert min_max_utf8_string("áé\xFF") == {:ok, ["áé"], "\xFF", %{}, {1, 0}, 4}
+    end
+
+    test "is not bound" do
+      assert not_bound?(utf8_string([], min: 3))
+      assert not_bound?(utf8_string([], max: 3))
+      assert not_bound?(utf8_string([], min: 1, max: 3))
     end
   end
 

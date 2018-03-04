@@ -565,7 +565,13 @@ defmodule NimbleParsec.Compiler do
     {var, counter} = build_var(counter)
     input = apply_bin_modifiers(var, modifiers)
     guards = compile_bin_ranges(var, inclusive, exclusive)
-    offset = add_offset(offset, 1)
+
+    offset =
+      if :integer in modifiers do
+        add_offset(offset, 1)
+      else
+        add_offset(offset, quote(do: byte_size(<<unquote(input)>>)))
+      end
 
     line =
       if newline_allowed?(inclusive) and not newline_forbidden?(exclusive) do
@@ -625,7 +631,7 @@ defmodule NimbleParsec.Compiler do
     {:+, [], [var, current + extra]}
   end
 
-  defp add_offset(var, extra) when is_integer(extra) do
+  defp add_offset(var, extra) do
     {:+, [], [var, extra]}
   end
 
@@ -671,10 +677,10 @@ defmodule NimbleParsec.Compiler do
 
     prefix =
       cond do
+        :integer in modifiers -> "byte"
         :utf8 in modifiers -> "utf8 codepoint"
         :utf16 in modifiers -> "utf16 codepoint"
         :utf32 in modifiers -> "utf32 codepoint"
-        true -> "byte"
       end
 
     prefix <> Enum.join([Enum.join(inclusive, " or") | exclusive], ", and not")
