@@ -1,4 +1,3 @@
-# TODO: Make ignore cascade up
 # TODO: Test debug, wrap, tag, and traverse with error
 # TODO: Add ascii_string / utf8_string
 
@@ -147,11 +146,11 @@ defmodule NimbleParsec do
   @type mfargs :: {module, atom, args :: [term]}
   @type fargs :: {atom, args :: [term]}
 
-  # Steps to add a new bound combinator:
+  # Steps to add a new combinator:
   #
-  #   1. Update the combinator type
-  #   2. Update the compiler bound combinator step
-  #   3. Update the compiler label step
+  #   1. Update the combinator type below
+  #   2. Update the compiler with combinator
+  #   3. Update the compiler with label step
   #
   @typep combinator :: bound_combinator | maybe_bound_combinator | unbound_combinator
 
@@ -161,7 +160,7 @@ defmodule NimbleParsec do
 
   @typep maybe_bound_combinator ::
            {:label, t, binary}
-           | {:traverse, t, [mfargs]}
+           | {:traverse, t, constant? :: boolean, [mfargs]}
 
   @typep unbound_combinator ::
            {:choice, [t]}
@@ -498,13 +497,7 @@ defmodule NimbleParsec do
   @spec quoted_traverse(t, t, mfargs) :: t
   def quoted_traverse(combinator, to_traverse, {_, _, _} = call)
       when is_combinator(combinator) and is_combinator(to_traverse) do
-    case to_traverse do
-      [{:traverse, inner_traverse, inner_call}] ->
-        [{:traverse, inner_traverse, [call | inner_call]} | combinator]
-
-      _ ->
-        [{:traverse, Enum.reverse(to_traverse), [call]} | combinator]
-    end
+    quoted_traverse(combinator, to_traverse, false, call)
   end
 
   @doc ~S"""
@@ -652,7 +645,7 @@ defmodule NimbleParsec do
     if to_ignore == empty() do
       to_ignore
     else
-      quoted_traverse(combinator, to_ignore, {__MODULE__, :__constant__, [[]]})
+      quoted_traverse(combinator, to_ignore, true, {__MODULE__, :__constant__, [[]]})
     end
   end
 
@@ -678,7 +671,7 @@ defmodule NimbleParsec do
   def replace(combinator \\ empty(), to_replace, value)
       when is_combinator(combinator) and is_combinator(to_replace) do
     value = Macro.escape(value)
-    quoted_traverse(combinator, to_replace, {__MODULE__, :__constant__, [[value]]})
+    quoted_traverse(combinator, to_replace, true, {__MODULE__, :__constant__, [[value]]})
   end
 
   @doc """
@@ -934,6 +927,19 @@ defmodule NimbleParsec do
   end
 
   ## Helpers
+
+  defp quoted_traverse(combinator, to_traverse, constant?, call) do
+    case to_traverse do
+      [{:traverse, inner_traverse, inner_constant?, inner_call}] ->
+        [
+          {:traverse, inner_traverse, inner_constant? and constant?, [call | inner_call]}
+          | combinator
+        ]
+
+      _ ->
+        [{:traverse, Enum.reverse(to_traverse), constant?, [call]} | combinator]
+    end
+  end
 
   defp validate_min_and_max!(opts) do
     min = opts[:min]

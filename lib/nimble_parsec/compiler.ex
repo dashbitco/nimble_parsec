@@ -52,7 +52,8 @@ defmodule NimbleParsec.Compiler do
       acc_depth: 0,
       catch_all: nil,
       labels: [],
-      name: name
+      name: name,
+      replace: false
     }
 
     {next, step} = build_next(0, config)
@@ -136,37 +137,15 @@ defmodule NimbleParsec.Compiler do
     {[def], [{current, @arity}], next, step, :catch_none}
   end
 
-  defp compile_unbound_combinator({:traverse, [], traversal}, current, step, config) do
-    {next, step} = build_next(step, config)
-
-    head = quote(do: [rest, acc, stack, context, line, offset])
-    [_, _, _, context, line, offset] = head
-    body = traverse(next, traversal, [], context, line, offset)
-    def = {current, head, true, body}
-    {[def], [{current, @arity}], next, step, :catch_none}
-  end
-
-  defp compile_unbound_combinator({:traverse, combinators, traversal}, current, step, config) do
-    {next, step} = build_next(step, config)
-    head = quote(do: [rest, acc, stack, context, line, offset])
-    args = quote(do: [rest, [], [acc | stack], context, line, offset])
-    body = {next, [], args}
-    first_def = {current, head, true, body}
-
-    config = update_in(config.acc_depth, &(&1 + 1))
-    {defs, inline, last, step} = compile(combinators, [first_def], [], next, step, config)
-
-    # Now we need to traverse the accumulator with the user code and
-    # concatenate with the previous accumulator at the top of the stack.
-    {next, step} = build_next(step, config)
-    head = quote(do: [rest, user_acc, [acc | stack], context, line, offset])
-    [_, user_acc, _, context, line, offset] = head
-
-    body = traverse(next, traversal, user_acc, context, line, offset)
-    last_def = {last, head, true, body}
-
-    inline = [{current, @arity}, {last, @arity} | inline]
-    {Enum.reverse([last_def | defs]), inline, next, step, :catch_none}
+  defp compile_unbound_combinator(
+         {:traverse, combinators, constant?, traversal},
+         current,
+         step,
+         config
+       ) do
+    fun = &traverse(traversal, &1, &2, &3, &4, &5, config)
+    config = if constant?, do: put_in(config.replace, true), else: config
+    compile_unbound_traverse(combinators, current, step, config, fun)
   end
 
   defp compile_unbound_combinator({:times, combinators, 0, count}, current, step, config) do
@@ -195,6 +174,89 @@ defmodule NimbleParsec.Compiler do
       compile_bound_choice(choices, current, step, config)
     else
       compile_unbound_choice(choices, current, step, config)
+    end
+  end
+
+  ## Traverse
+
+  defp compile_unbound_traverse([], current, step, config, fun) do
+    {next, step} = build_next(step, config)
+
+    head = quote(do: [rest, acc, stack, context, line, offset])
+    [_, _, _, context, line, offset] = head
+    body = fun.(next, [], context, line, offset)
+    def = {current, head, true, body}
+    {[def], [{current, @arity}], next, step, :catch_none}
+  end
+
+  defp compile_unbound_traverse(combinators, current, step, config, fun) do
+    {next, step} = build_next(step, config)
+    head = quote(do: [rest, acc, stack, context, line, offset])
+    args = quote(do: [rest, [], [acc | stack], context, line, offset])
+    body = {next, [], args}
+    first_def = {current, head, true, body}
+
+    config = update_in(config.acc_depth, &(&1 + 1))
+    {defs, inline, last, step} = compile(combinators, [first_def], [], next, step, config)
+
+    # Now we need to traverse the accumulator with the user code and
+    # concatenate with the previous accumulator at the top of the stack.
+    {next, step} = build_next(step, config)
+    head = quote(do: [rest, user_acc, [acc | stack], context, line, offset])
+    [_, user_acc, _, context, line, offset] = head
+
+    body = fun.(next, user_acc, context, line, offset)
+    last_def = {last, head, true, body}
+
+    inline = [{current, @arity}, {last, @arity} | inline]
+    {Enum.reverse([last_def | defs]), inline, next, step, :catch_none}
+  end
+
+  defp traverse(_traversal, next, _user_acc, _context, _line, _offset, %{replace: true}) do
+    quote(do: unquote(next)(rest, acc, stack, context, line, offset))
+  end
+
+  defp traverse(traversal, next, user_acc, context, line, offset, %{replace: false}) do
+    case apply_traverse(traversal, user_acc, context, line, offset) do
+      {user_acc, ^context} when user_acc != :error ->
+        quote(do: unquote(next)(rest, unquote(user_acc) ++ acc, stack, context, line, offset))
+
+      quoted ->
+        quote do
+          case unquote(quoted) do
+            {user_acc, context} when is_list(user_acc) ->
+              unquote(next)(rest, user_acc ++ acc, stack, context, line, offset)
+
+            {:error, reason} ->
+              {:error, reason, rest, context, line, offset}
+          end
+        end
+    end
+  end
+
+  defp apply_traverse(mfargs, acc, context, line, offset) do
+    apply_traverse(Enum.reverse(mfargs), {acc, context}, [line, offset])
+  end
+
+  defp apply_traverse([mfargs | rest], {acc, context}, args) when acc != :error do
+    apply_traverse(rest, apply_mfa(mfargs, [acc, context | args]), args)
+  end
+
+  defp apply_traverse([], other, _args) do
+    other
+  end
+
+  defp apply_traverse(rest, other, args) do
+    pattern = quote(do: {acc, context} when is_list(acc))
+    args = quote(do: [acc, context]) ++ args
+
+    entries =
+      Enum.map(rest, fn mfargs ->
+        quote(do: unquote(pattern) <- unquote(apply_mfa(mfargs, args)))
+      end)
+
+    quote do
+      with unquote(pattern) <- unquote(other), unquote_splicing(entries), do: unquote(pattern)
     end
   end
 
@@ -426,7 +488,7 @@ defmodule NimbleParsec.Compiler do
   defp compile_bound_combinator(inputs, guards, outputs, line, offset, current, step, config) do
     {next, step} = build_next(step, config)
     bin = {:<<>>, [], inputs ++ [quote(do: rest :: binary)]}
-    acc = quote(do: unquote(outputs) ++ acc)
+    acc = if config.replace, do: quote(do: acc), else: quote(do: unquote(outputs) ++ acc)
 
     head = quote(do: [unquote(bin), acc, stack, comb__context, comb__line, comb__offset])
     args = quote(do: [rest, unquote(acc), stack, comb__context, unquote(line), unquote(offset)])
@@ -528,7 +590,7 @@ defmodule NimbleParsec.Compiler do
     end
   end
 
-  defp bound_combinator({:traverse, combinators, fun}, line, offset, counter) do
+  defp bound_combinator({:traverse, combinators, _constant?, fun}, line, offset, counter) do
     case take_bound_combinators(combinators, [], [], [], [], line, offset, counter) do
       {[], inputs, guards, outputs, _, line, offset, counter} ->
         context = quote(do: comb__context)
@@ -628,7 +690,7 @@ defmodule NimbleParsec.Compiler do
     Enum.map_join(choices, " or ", &labels/1)
   end
 
-  defp label({:traverse, combinators, _}) do
+  defp label({:traverse, combinators, _, _}) do
     labels(combinators)
   end
 
@@ -711,50 +773,6 @@ defmodule NimbleParsec.Compiler do
   end
 
   ## Helpers
-
-  defp traverse(next, traversal, user_acc, context, line, offset) do
-    case apply_traverse(traversal, user_acc, context, line, offset) do
-      {user_acc, ^context} when user_acc != :error ->
-        quote(do: unquote(next)(rest, unquote(user_acc) ++ acc, stack, context, line, offset))
-
-      quoted ->
-        quote do
-          case unquote(quoted) do
-            {user_acc, context} when is_list(user_acc) ->
-              unquote(next)(rest, user_acc ++ acc, stack, context, line, offset)
-
-            {:error, reason} ->
-              {:error, reason, rest, context, line, offset}
-          end
-        end
-    end
-  end
-
-  defp apply_traverse(mfargs, acc, context, line, offset) do
-    apply_traverse(Enum.reverse(mfargs), {acc, context}, [line, offset])
-  end
-
-  defp apply_traverse([mfargs | rest], {acc, context}, args) when acc != :error do
-    apply_traverse(rest, apply_mfa(mfargs, [acc, context | args]), args)
-  end
-
-  defp apply_traverse([], other, _args) do
-    other
-  end
-
-  defp apply_traverse(rest, other, args) do
-    pattern = quote(do: {acc, context} when is_list(acc))
-    args = quote(do: [acc, context]) ++ args
-
-    entries =
-      Enum.map(rest, fn mfargs ->
-        quote(do: unquote(pattern) <- unquote(apply_mfa(mfargs, args)))
-      end)
-
-    quote do
-      with unquote(pattern) <- unquote(other), unquote_splicing(entries), do: unquote(pattern)
-    end
-  end
 
   defp apply_mfa({mod, fun, args}, extra) do
     apply(mod, fun, extra ++ args)
