@@ -3,7 +3,6 @@ defmodule NimbleParsecTest do
 
   import NimbleParsec
   import ExUnit.CaptureIO
-  doctest NimbleParsec
 
   describe "ascii_char/2 combinator without newlines" do
     defparsec :only_ascii, ascii_char([?0..?9]) |> ascii_char([])
@@ -92,7 +91,7 @@ defmodule NimbleParsecTest do
 
     @error "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
-    test "returns ok/error by itself" do
+    test "returns ok/error" do
       assert exact_integer("12") == {:ok, [12], "", %{}, {1, 0}, 2}
       assert exact_integer("123") == {:ok, [12], "3", %{}, {1, 0}, 2}
       assert exact_integer("1a3") == {:error, @error, "1a3", %{}, {1, 0}, 0}
@@ -1031,29 +1030,6 @@ defmodule NimbleParsecTest do
       assert parsec_map("az") == {:ok, [?a], "z", %{}, {1, 0}, 1}
       assert parsec_map("AZ") == {:ok, [?A], "Z", %{}, {1, 0}, 1}
       assert parsec_map("1aAzZ") == {:error, @error, "1aAzZ", %{}, {1, 0}, 0}
-    end
-  end
-
-  describe "custom datetime/2 combinator" do
-    date =
-      integer(4)
-      |> ignore(string("-"))
-      |> integer(2)
-      |> ignore(string("-"))
-      |> integer(2)
-
-    time =
-      integer(2)
-      |> ignore(string(":"))
-      |> integer(2)
-      |> ignore(string(":"))
-      |> integer(2)
-
-    defparsec :datetime, date |> ignore(string("T")) |> concat(time), inline: true
-
-    test "returns ok/error by itself" do
-      assert datetime("2010-04-17T14:12:34") ==
-               {:ok, [2010, 4, 17, 14, 12, 34], "", %{}, {1, 0}, 19}
     end
   end
 

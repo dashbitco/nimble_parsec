@@ -1264,7 +1264,7 @@ defmodule NimbleParsec do
 
     chars =
       if min > 0 do
-        min_max_compile_runtime_chars(combinator, to_repeat, min, compile, runtime, args)
+        min_max_compile_runtime_chars(empty(), to_repeat, min, compile, runtime, args)
       else
         empty()
       end
