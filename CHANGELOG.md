@@ -1,6 +1,6 @@
 # Changelog for NimbleParsec
 
-## v0.2.0-dev
+## v0.2.0 (2018-03-04)
 
   * Support parser combinator contexts and return them in ok/error tuples
   * Add `ascii_string/3` and `utf_string/3` combinators

@@ -1,7 +1,7 @@
 defmodule NimbleParsec.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.2.0"
 
   def project do
     [
@@ -21,9 +21,7 @@ defmodule NimbleParsec.MixProject do
   end
 
   defp deps do
-    [
-      {:ex_doc, "~> 0.18", only: :docs}
-    ]
+    [{:ex_doc, "~> 0.18", only: :docs}]
   end
 
   defp docs do
