@@ -2,6 +2,7 @@ defmodule NimbleParsecTest do
   use ExUnit.Case, async: true
 
   import NimbleParsec
+  import ExUnit.CaptureIO
   doctest NimbleParsec
 
   describe "ascii_char/2 combinator without newlines" do
@@ -293,28 +294,37 @@ defmodule NimbleParsecTest do
   describe "remote traverse/3 combinator" do
     @three_ascii_letters times(ascii_char([?a..?z]), min: 3)
 
-    defparsec :remote_runtime_traverse,
+    defparsec :remote_traverse,
               string("T")
               |> integer(2)
               |> traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]})
               |> integer(2)
 
+    defparsec :remote_traverse_error_when_last_is_z,
+              traverse(@three_ascii_letters, {__MODULE__, :error_when_last_is_z, []})
+
     test "returns ok/error" do
-      assert remote_runtime_traverse("T12abc34") ==
-               {:ok, ["T", 12, "99-98-97", 34], "", %{}, {1, 0}, 8}
+      assert remote_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", %{}, {1, 0}, 8}
 
       error =
         "expected string \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
-      assert remote_runtime_traverse("Tabc34") == {:error, error, "Tabc34", %{}, {1, 0}, 0}
+      assert remote_traverse("Tabc34") == {:error, error, "Tabc34", %{}, {1, 0}, 0}
 
       error = "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
-      assert remote_runtime_traverse("T12abcdf") == {:error, error, "", %{}, {1, 0}, 8}
+      assert remote_traverse("T12abcdf") == {:error, error, "", %{}, {1, 0}, 8}
 
       error =
         "expected byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z"
 
-      assert remote_runtime_traverse("T12ab34") == {:error, error, "ab34", %{}, {1, 0}, 3}
+      assert remote_traverse("T12ab34") == {:error, error, "ab34", %{}, {1, 0}, 3}
+    end
+
+    test "returns error from traversal" do
+      assert remote_traverse_error_when_last_is_z("abcdef") == {:ok, 'abcdef', "", %{}, {1, 0}, 6}
+
+      assert remote_traverse_error_when_last_is_z("abcdez") ==
+               {:error, "last is z", "", %{}, {1, 0}, 6}
     end
 
     test "is not bound" do
@@ -326,28 +336,37 @@ defmodule NimbleParsecTest do
   describe "local traverse/3 combinator" do
     @three_ascii_letters times(ascii_char([?a..?z]), min: 3)
 
-    defparsec :local_runtime_traverse,
+    defparsec :local_traverse,
               string("T")
               |> integer(2)
               |> traverse(@three_ascii_letters, {:private_join_and_wrap, ["-"]})
               |> integer(2)
 
+    defparsec :local_traverse_error_when_last_is_z,
+              traverse(@three_ascii_letters, {__MODULE__, :error_when_last_is_z, []})
+
     test "returns ok/error" do
-      assert local_runtime_traverse("T12abc34") ==
-               {:ok, ["T", 12, "99-98-97", 34], "", %{}, {1, 0}, 8}
+      assert local_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", %{}, {1, 0}, 8}
 
       error =
         "expected string \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
-      assert local_runtime_traverse("Tabc34") == {:error, error, "Tabc34", %{}, {1, 0}, 0}
+      assert local_traverse("Tabc34") == {:error, error, "Tabc34", %{}, {1, 0}, 0}
 
       error = "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
-      assert local_runtime_traverse("T12abcdf") == {:error, error, "", %{}, {1, 0}, 8}
+      assert local_traverse("T12abcdf") == {:error, error, "", %{}, {1, 0}, 8}
 
       error =
         "expected byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z"
 
-      assert local_runtime_traverse("T12ab34") == {:error, error, "ab34", %{}, {1, 0}, 3}
+      assert local_traverse("T12ab34") == {:error, error, "ab34", %{}, {1, 0}, 3}
+    end
+
+    test "returns error from traversal" do
+      assert local_traverse_error_when_last_is_z("abcdef") == {:ok, 'abcdef', "", %{}, {1, 0}, 6}
+
+      assert local_traverse_error_when_last_is_z("abcdez") ==
+               {:error, "last is z", "", %{}, {1, 0}, 6}
     end
 
     test "is not bound" do
@@ -378,6 +397,61 @@ defmodule NimbleParsecTest do
     test "returns ok/error" do
       assert ascii_byte_offset("abc") == {:ok, [{[?a, ?b, ?c], 3}], "", %{}, {1, 0}, 3}
       assert ascii_byte_offset("a\nc") == {:ok, [{[?a, ?\n, ?c], 3}], "", %{}, {2, 2}, 3}
+    end
+  end
+
+  describe "wrap/2 combinator" do
+    defparsec :two_integers_wrapped,
+              integer(1)
+              |> integer(1)
+              |> wrap()
+
+    @error "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
+
+    test "returns ok/error" do
+      assert two_integers_wrapped("12") == {:ok, [[1, 2]], "", %{}, {1, 0}, 2}
+      assert two_integers_wrapped("123") == {:ok, [[1, 2]], "3", %{}, {1, 0}, 2}
+      assert two_integers_wrapped("a12") == {:error, @error, "a12", %{}, {1, 0}, 0}
+    end
+  end
+
+  describe "tag/2 combinator" do
+    defparsec :two_integers_tagged,
+              integer(1)
+              |> integer(1)
+              |> tag(:ints)
+
+    @error "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
+
+    test "returns ok/error" do
+      assert two_integers_tagged("12") == {:ok, [{:ints, [1, 2]}], "", %{}, {1, 0}, 2}
+      assert two_integers_tagged("123") == {:ok, [{:ints, [1, 2]}], "3", %{}, {1, 0}, 2}
+      assert two_integers_tagged("a12") == {:error, @error, "a12", %{}, {1, 0}, 0}
+    end
+  end
+
+  describe "debug/2 combinator" do
+    defparsec :two_integers_debugged,
+              integer(1)
+              |> integer(1)
+              |> debug()
+
+    @error "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
+
+    test "returns ok/error" do
+      debug =
+        capture_io(fn ->
+          assert two_integers_debugged("12") == {:ok, [1, 2], "", %{}, {1, 0}, 2}
+        end)
+
+      assert debug == """
+             == DEBUG ==
+             Acc: [1, 2]
+             Ctx: %{}
+             Lin: {1, 0}
+             Off: 2
+
+             """
     end
   end
 
@@ -842,6 +916,13 @@ defmodule NimbleParsecTest do
     {defs, _} = NimbleParsec.Compiler.compile(:not_used, document, [])
 
     assert length(defs) != 3, "Expected #{inspect(document)} to contain more than 3 clauses"
+  end
+
+  def error_when_last_is_z(acc, context, _line, _offset) do
+    case acc do
+      [?z | _] -> {:error, "last is z"}
+      acc -> {acc, context}
+    end
   end
 
   def public_join_and_wrap(args, %{} = context, {line, line_offset}, byte_offset, joiner)

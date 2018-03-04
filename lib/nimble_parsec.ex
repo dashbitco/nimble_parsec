@@ -1,4 +1,3 @@
-# TODO: Test debug, wrap, tag, and traverse with error
 # TODO: Add ascii_string / utf8_string
 
 defmodule NimbleParsec do

@@ -25,6 +25,10 @@ clauses with binary matching. This provides the following benefits:
     There is no need for `use NimbleParsec`, leaving no footprints on your
     modules
 
+The goal of this library is to focus on a set of primitives for writing
+efficient parser combinators. The composition aspect means you should be
+able to use those primitives to implement higher level combinators.
+
 ## Examples
 
 ```elixir
