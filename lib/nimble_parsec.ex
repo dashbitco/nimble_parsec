@@ -428,16 +428,16 @@ defmodule NimbleParsec do
   a remote call, a `{function, args}` representing a local call
   or an atom `function` representing `{function, []}`.
 
-  The parser results to be traversed, the parser context, the
-  current line and the current offset will be prepended to the
-  given `args`. The `args` will be injected at the compile site
-  and therefore must be escapable via `Macro.escape/1`.
+  The rest of the parsed binary, the parser results to be traversed,
+  the parser context, the current line and the current offset will
+  be prepended to the given `args`. The `args` will be injected at
+  the compile site and therefore must be escapable via `Macro.escape/1`.
 
-  The `call` must return a tuple with list of results to be added
-  to the accumulator as first argument and a context as second
-  argument. It may also return `{:error, reason}` to stop processing.
-  Notice the received results are in reverse order and must be
-  returned in reverse order too.
+  The `call` must return a tuple `{acc, context}` with list of results
+  to be added to the accumulator as first argument and a context as
+  second argument. It may also return `{:error, reason}` to stop
+  processing. Notice the received results are in reverse order and
+  must be returned in reverse order too.
 
   The number of elements returned does not need to be
   the same as the number of elements given.
@@ -461,7 +461,7 @@ defmodule NimbleParsec do
                   |> ascii_char([?a..?z])
                   |> traverse({:join_and_wrap, ["-"]})
 
-        defp join_and_wrap(args, context, _line, _offset, joiner) do
+        defp join_and_wrap(_rest, args, context, _line, _offset, joiner) do
           {args |> Enum.join(joiner) |> List.wrap(), context}
         end
       end
@@ -474,7 +474,59 @@ defmodule NimbleParsec do
   def traverse(combinator \\ empty(), to_traverse, call)
       when is_combinator(combinator) and is_combinator(to_traverse) do
     compile_call!([], call, "traverse")
-    quoted_traverse(combinator, to_traverse, {__MODULE__, :__call__, [call, "traverse"]})
+    quoted_traverse(combinator, to_traverse, {__MODULE__, :__traverse__, [call]})
+  end
+
+  @doc ~S"""
+  Looks ahead the rest of the binary to be parsed alongside the context.
+
+  `call` is either a `{module, function, args}` representing
+  a remote call, a `{function, args}` representing a local call
+  or an atom `function` representing `{function, []}`.
+
+  The rest of the parsed binary, the parser context, the current line
+  and the current offset will be prepended to the given `args`.
+  The `args` will be injected at the compile site and therefore must
+  be escapable via `Macro.escape/1`.
+
+  The `call` must return a tuple `{acc, context}` with list of results
+  to be added to the accumulator in reverse order as first argument
+  and a context as second argument. It may also return `{:error, reason}`
+  to stop processing.
+
+  ## Examples
+
+      defmodule MyParser do
+        import NimbleParsec
+
+        defparsec :letters_no_zero,
+                  ascii_char([?a..?z])
+                  |> times(min: 3)
+                  |> lookahead(:error_when_next_is_0)
+
+        defp error_when_next_is_0(<<?0, _::binary>>, context, _line, _offset) do
+          {:error, "next is 0"}
+        end
+
+        defp error_when_next_is_0(_rest, context, _line, _offset) do
+          {[], context}
+        end
+      end
+
+      MyParser.letters_no_zero("abc")
+      #=> {:ok, ["99-98-97"], "", %{}, {1, 0}, 3}
+
+      MyParser.letters_no_zero("abc1")
+      #=> {:ok, ["99-98-97"], "1", %{}, {1, 0}, 3}
+
+      MyParser.letters_no_zero("abc0")
+      #=> {:error, "next is zero", "0", %{}, {1, 0}, 3}
+
+  """
+  @spec lookahead(t, call) :: t
+  def lookahead(combinator \\ empty(), call) when is_combinator(combinator) do
+    compile_call!([], call, "lookahead")
+    quoted_traverse(combinator, [], {__MODULE__, :__lookahead__, [call]})
   end
 
   @doc """
@@ -482,9 +534,10 @@ defmodule NimbleParsec do
   combinator results.
 
   `call` is a `{module, function, args}`. The AST representation
-  of the parser results, context, line and offset will be prepended
-  to `args`. `call` is invoked at compile time and is useful in
-  combinators that avoid injecting runtime dependencies.
+  of the rest of the parsed binary, the parser results, context,
+  line and offset will be prepended to `args`. `call` is invoked
+  at compile time and is useful in combinators that avoid injecting
+  runtime dependencies.
 
   The `call` must return a list of results to be added to
   the accumulator. Notice the received results are in reverse
@@ -757,7 +810,7 @@ defmodule NimbleParsec do
       when is_combinator(combinator) and is_combinator(to_repeat) do
     non_empty!(to_repeat, "repeat_while")
     compile_call!([], while, "repeat_while")
-    quoted_repeat_while(combinator, to_repeat, {__MODULE__, :__call__, [while, "repeat_while"]})
+    quoted_repeat_while(combinator, to_repeat, {__MODULE__, :__repeat_while__, [while]})
   end
 
   @doc ~S"""
@@ -927,19 +980,6 @@ defmodule NimbleParsec do
 
   ## Helpers
 
-  defp quoted_traverse(combinator, to_traverse, constant?, call) do
-    case to_traverse do
-      [{:traverse, inner_traverse, inner_constant?, inner_call}] ->
-        [
-          {:traverse, inner_traverse, inner_constant? and constant?, [call | inner_call]}
-          | combinator
-        ]
-
-      _ ->
-        [{:traverse, Enum.reverse(to_traverse), constant?, [call]} | combinator]
-    end
-  end
-
   defp validate_min_and_max!(opts) do
     min = opts[:min]
     max = opts[:max]
@@ -1032,32 +1072,49 @@ defmodule NimbleParsec do
 
   ## Inner combinators
 
+  defp quoted_traverse(combinator, to_traverse, constant?, call) do
+    case to_traverse do
+      [{:traverse, inner_traverse, inner_constant?, inner_call}] ->
+        constant? = inner_constant? and constant?
+        [{:traverse, inner_traverse, constant?, [call | inner_call]} | combinator]
+
+      _ ->
+        [{:traverse, Enum.reverse(to_traverse), constant?, [call]} | combinator]
+    end
+  end
+
   defp bin_segment(combinator, inclusive, exclusive, modifiers) do
     [{:bin_segment, inclusive, exclusive, modifiers} | combinator]
   end
 
-  ## Callbacks functions
+  ## Traverse callbacks
 
   @doc false
-  def __call__(quoted, context, line, offset, call, combinator) do
-    compile_call!([quoted, context, line, offset], call, combinator)
+  def __traverse__(rest, acc, context, line, offset, call) do
+    compile_call!([rest, acc, context, line, offset], call, "traverse")
   end
 
   @doc false
-  def __wrap__(acc, context, _line, _offset) do
+  def __lookahead__(rest, _acc, context, line, offset, call) do
+    compile_call!([rest, context, line, offset], call, "lookahead")
+  end
+
+  @doc false
+  def __wrap__(_rest, acc, context, _line, _offset) do
     {[reverse_now_or_later(acc)], context}
   end
 
   @doc false
-  def __tag__(acc, context, _line, _offset, tag) do
+  def __tag__(_rest, acc, context, _line, _offset, tag) do
     {[{tag, reverse_now_or_later(acc)}], context}
   end
 
   @doc false
-  def __debug__(acc, context, line, offset) do
-    quote bind_quoted: [acc: acc, context: context, line: line, offset: offset] do
+  def __debug__(rest, acc, context, line, offset) do
+    quote bind_quoted: [rest: rest, acc: acc, context: context, line: line, offset: offset] do
       IO.puts("""
       == DEBUG ==
+      Bin: #{inspect(rest)}
       Acc: #{inspect(:lists.reverse(acc))}
       Ctx: #{inspect(context)}
       Lin: #{inspect(line)}
@@ -1069,22 +1126,22 @@ defmodule NimbleParsec do
   end
 
   @doc false
-  def __constant__(_acc, context, _line, _offset, constant) do
+  def __constant__(_rest, _acc, context, _line, _offset, constant) do
     {constant, context}
   end
 
   @doc false
-  def __line__(acc, context, line, _offset) do
+  def __line__(_rest, acc, context, line, _offset) do
     {[{reverse_now_or_later(acc), line}], context}
   end
 
   @doc false
-  def __byte_offset__(acc, context, _line, offset) do
+  def __byte_offset__(_rest, acc, context, _line, offset) do
     {[{reverse_now_or_later(acc), offset}], context}
   end
 
   @doc false
-  def __map__(acc, context, _line, _offset, var, call) do
+  def __map__(_rest, acc, context, _line, _offset, var, call) do
     ast =
       quote do
         Enum.map(unquote(acc), fn unquote(var) -> unquote(call) end)
@@ -1094,13 +1151,20 @@ defmodule NimbleParsec do
   end
 
   @doc false
-  def __reduce__(acc, context, _line, _offset, call) do
+  def __reduce__(_rest, acc, context, _line, _offset, call) do
     {[compile_call!([reverse_now_or_later(acc)], call, "reduce")], context}
   end
+
+  ## Repeat callbacks
 
   @doc false
   def __cont_context__(_rest, context, _line, _offset) do
     {:cont, context}
+  end
+
+  @doc false
+  def __repeat_while__(quoted, context, line, offset, call) do
+    compile_call!([quoted, context, line, offset], call, "repeat_while")
   end
 
   @doc false
@@ -1122,8 +1186,10 @@ defmodule NimbleParsec do
     end
   end
 
+  ## Data type callbacks
+
   @doc false
-  def __runtime_integer__(acc, context, _line, _offset) do
+  def __runtime_integer__(_rest, acc, context, _line, _offset) do
     ast =
       quote do
         [head | tail] = :lists.reverse(unquote(acc))
@@ -1134,7 +1200,7 @@ defmodule NimbleParsec do
   end
 
   @doc false
-  def __compile_integer__(acc, context, _line, _offset) when is_list(acc) do
+  def __compile_integer__(_rest, acc, context, _line, _offset) when is_list(acc) do
     ast =
       acc
       |> quoted_ascii_to_integer(1)

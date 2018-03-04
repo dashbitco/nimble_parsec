@@ -2,7 +2,8 @@
 
 <!-- MDOC !-->
 
-`NimbleParsec` is a simple and fast library for parser combinators.
+`NimbleParsec` is a simple and fast library for binary parser
+combinators.
 
 Combinators are built during runtime and compiled into multiple
 clauses with binary matching. This provides the following benefits:

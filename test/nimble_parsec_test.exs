@@ -374,6 +374,32 @@ defmodule NimbleParsecTest do
     end
   end
 
+  describe "remote lookahead/2 combinator" do
+    defparsec :remote_zero_lookahead,
+              ascii_char([?a..?z])
+              |> times(min: 3)
+              |> lookahead({__MODULE__, :error_when_next_is_0, []})
+
+    test "returns ok/error" do
+      assert remote_zero_lookahead("abcdef") == {:ok, 'abcdef', "", %{}, {1, 0}, 6}
+      assert remote_zero_lookahead("abcdef1") == {:ok, 'abcdef', "1", %{}, {1, 0}, 6}
+      assert remote_zero_lookahead("abcdef0") == {:error, "next is 0", "0", %{}, {1, 0}, 6}
+    end
+  end
+
+  describe "local lookahead/2 combinator" do
+    defparsec :local_zero_lookahead,
+              ascii_char([?a..?z])
+              |> times(min: 3)
+              |> lookahead(:error_when_next_is_0)
+
+    test "returns ok/error" do
+      assert local_zero_lookahead("abcdef") == {:ok, 'abcdef', "", %{}, {1, 0}, 6}
+      assert local_zero_lookahead("abcdef1") == {:ok, 'abcdef', "1", %{}, {1, 0}, 6}
+      assert local_zero_lookahead("abcdef0") == {:error, "next is 0", "0", %{}, {1, 0}, 6}
+    end
+  end
+
   describe "line/2 combinator" do
     defparsec :ascii_line,
               ascii_char([])
@@ -441,11 +467,12 @@ defmodule NimbleParsecTest do
     test "returns ok/error" do
       debug =
         capture_io(fn ->
-          assert two_integers_debugged("12") == {:ok, [1, 2], "", %{}, {1, 0}, 2}
+          assert two_integers_debugged("123") == {:ok, [1, 2], "3", %{}, {1, 0}, 2}
         end)
 
       assert debug == """
              == DEBUG ==
+             Bin: "3"
              Acc: [1, 2]
              Ctx: %{}
              Lin: {1, 0}
@@ -918,20 +945,32 @@ defmodule NimbleParsecTest do
     assert length(defs) != 3, "Expected #{inspect(document)} to contain more than 3 clauses"
   end
 
-  def error_when_last_is_z(acc, context, _line, _offset) do
+  def error_when_last_is_z(rest, acc, %{} = context, {line, line_offset}, byte_offset)
+      when is_binary(rest) and is_integer(line) and is_integer(line_offset) and
+             is_integer(byte_offset) do
     case acc do
       [?z | _] -> {:error, "last is z"}
       acc -> {acc, context}
     end
   end
 
-  def public_join_and_wrap(args, %{} = context, {line, line_offset}, byte_offset, joiner)
+  def error_when_next_is_0(rest, %{} = context, {line, line_offset}, byte_offset)
       when is_integer(line) and is_integer(line_offset) and is_integer(byte_offset) do
+    case rest do
+      <<?0, _::binary>> -> {:error, "next is 0"}
+      _ -> {[], context}
+    end
+  end
+
+  def public_join_and_wrap(rest, args, %{} = context, {line, line_offset}, byte_offset, joiner)
+      when is_binary(rest) and is_integer(line) and is_integer(line_offset) and
+             is_integer(byte_offset) do
     {args |> Enum.join(joiner) |> List.wrap(), context}
   end
 
-  defp private_join_and_wrap(args, %{} = context, {line, line_offset}, byte_offset, joiner)
-       when is_integer(line) and is_integer(line_offset) and is_integer(byte_offset) do
+  defp private_join_and_wrap(rest, args, %{} = context, {line, line_offset}, byte_offset, joiner)
+       when is_binary(rest) and is_integer(line) and is_integer(line_offset) and
+              is_integer(byte_offset) do
     {args |> Enum.join(joiner) |> List.wrap(), context}
   end
 end

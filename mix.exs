@@ -9,7 +9,7 @@ defmodule NimbleParsec.MixProject do
       version: @version,
       elixir: "~> 1.4",
       name: "NimbleParsec",
-      description: "A simple and fast parser combinator library for Elixir",
+      description: "A simple and fast binary parser combinator library",
       deps: deps(),
       docs: docs(),
       package: package()
