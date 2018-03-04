@@ -1,6 +1,14 @@
 # Changelog for NimbleParsec
 
+## v0.2.1 (2018-03-04)
+
+### Bug fix
+
+  * Do not duplicate entries in integer/ascii_string/utf8_string
+
 ## v0.2.0 (2018-03-04)
+
+### Enhancements
 
   * Support parser combinator contexts and return them in ok/error tuples
   * Add `ascii_string/3` and `utf_string/3` combinators
