@@ -103,7 +103,7 @@ can be gained by giving the `inline: true` option to `defparsec/3`.
 
 <!-- MDOC !-->
 
-## Instalation
+## Installation
 
 Add `nimble_parsec` to your list of dependencies in `mix.exs`:
 
