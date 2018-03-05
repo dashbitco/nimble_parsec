@@ -43,7 +43,7 @@ defmodule Mix.Tasks.NimbleParsec.Gen do
 
       mix nimble_parsec.gen lib/my_parser.ex.eex
 
-  The following file will be generated.
+  The following file will be generated:
 
       # lib/my_parser.ex
       defmodule MyParser do
