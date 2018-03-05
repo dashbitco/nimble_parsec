@@ -792,7 +792,7 @@ defmodule NimbleParsec.Compiler do
 
   defp build_catch_all(name, combinators, %{catch_all: nil, labels: labels}) do
     reason = error_reason(combinators, labels)
-    args = quote(do: [rest, acc, _stack, context, line, offset])
+    args = quote(do: [rest, _acc, _stack, context, line, offset])
     body = quote(do: {:error, unquote(reason), rest, context, line, offset})
     {name, args, true, body}
   end
