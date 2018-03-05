@@ -80,7 +80,7 @@ defmodule NimbleParsec.Printer do
     path
     |> File.read!()
     |> prepend_imports()
-    |> EEx.eval_string(file: path)
+    |> EEx.eval_string([], file: path)
     |> maybe_format_code()
   end
 
