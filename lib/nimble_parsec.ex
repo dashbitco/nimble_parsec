@@ -61,47 +61,15 @@ defmodule NimbleParsec do
 
   """
   defmacro defparsec(name, combinator, opts \\ []) do
-    fun =
-      quote bind_quoted: [name: name] do
-        @doc """
-        Parses the given `binary` as #{name}.
-
-        Returns `{:ok, [token], rest, context, line, byte_offset}` or
-        `{:error, reason, rest, context, line, byte_offset}`.
-
-        ## Options
-
-          * `:line` - the initial line, defaults to 1
-          * `:byte_offset` - the initial byte offset, defaults to 0
-          * `:context` - the initial context value. It will be converted
-            to a map
-
-        """
-        @spec unquote(name)(binary, keyword) ::
-                {:ok, [term], rest, context, line, byte_offset}
-                | {:error, reason, rest, context, line, byte_offset}
-              when line: {pos_integer, byte_offset},
-                   byte_offset: pos_integer,
-                   rest: binary,
-                   reason: String.t(),
-                   context: map()
-        def unquote(name)(binary, opts \\ []) when is_binary(binary) do
-          line = Keyword.get(opts, :line, 1)
-          offset = Keyword.get(opts, :byte_offset, 0)
-          context = Map.new(Keyword.get(opts, :context, []))
-
-          case unquote(:"#{name}__0")(binary, [], [], context, {line, offset}, offset) do
-            {:ok, acc, rest, context, line, offset} ->
-              {:ok, :lists.reverse(acc), rest, context, line, offset}
-
-            {:error, _, _, _, _, _} = error ->
-              error
-          end
-        end
-      end
+    {doc, spec, {name, args, guards, body}} = NimbleParsec.Compiler.entry_point(name)
 
     quote do
-      unquote(fun)
+      @doc unquote(doc)
+      @spec unquote(spec)
+      def unquote(name)(unquote_splicing(args)) when unquote(guards) do
+        unquote(body)
+      end
+
       unquote(compile(name, combinator, opts))
     end
   end

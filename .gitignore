@@ -22,3 +22,5 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 nimble_parsec-*.tar
 
+# Ignore generated tmp files for test
+/tmp

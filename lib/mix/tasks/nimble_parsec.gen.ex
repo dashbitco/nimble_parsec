@@ -1,10 +1,10 @@
-defmodule Mix.Tasks.NimbleParsec.Gen do
-  @usage "mix nimble_parsec.gen template1.ex.eex template2.ex.eex ..."
+defmodule Mix.Tasks.NimbleParsec.Compile do
+  @usage "mix nimble_parsec.compile template1.ex.eex template2.ex.eex ..."
 
-  @shortdoc "Generates parsers from EEx templates"
+  @shortdoc "Compiles parsers from EEx templates"
 
-  @moduledoc """
-  Generates parsers from EEx templates.
+  @moduledoc ~S"""
+  Compiles parsers from EEx templates.
 
       #{@usage}
 
@@ -41,7 +41,7 @@ defmodule Mix.Tasks.NimbleParsec.Gen do
 
   After running:
 
-      mix nimble_parsec.gen lib/my_parser.ex.eex
+      mix nimble_parsec.compile lib/my_parser.ex.eex
 
   The following file will be generated:
 
@@ -60,15 +60,15 @@ defmodule Mix.Tasks.NimbleParsec.Gen do
         ...
       end
 
-  In the template the special variants of `defparsec` and `defparsecp`
-  (coming from `NimbleParsec.Printer`) as well as all remaining functions from
-  `NimbleParsec` are automatically imported.
+  The template imports all of `NimbleParsec` functions by default but
+  replaces `defparsec` and `defparsecp` by variants coming from
+  `NimbleParsec.Printer`.
   """
 
   use Mix.Task
 
   def run(args) do
-    Mix.Task.run("loadpaths")
+    Mix.Task.run("compile")
 
     case args do
       [] ->
@@ -83,9 +83,10 @@ defmodule Mix.Tasks.NimbleParsec.Gen do
     target_path = Path.rootname(source_path, ".eex")
 
     Mix.shell().info("Generating #{target_path}")
-    comment = "# Generated from #{source_path}, do not edit.\n\n"
+    from = "# Generated from #{source_path}, do not edit.\n"
+    date = "# Generated at #{DateTime.utc_now |> Map.put(:microsecond, {0, 0}) |> to_string}\n\n"
     code = NimbleParsec.Printer.print_file(source_path)
 
-    File.write!(target_path, comment <> code)
+    File.write!(target_path, [from, date | code])
   end
 end

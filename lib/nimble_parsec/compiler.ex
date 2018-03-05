@@ -2,6 +2,54 @@ defmodule NimbleParsec.Compiler do
   @moduledoc false
   @arity 6
 
+  def entry_point(name) do
+    doc = """
+    Parses the given `binary` as #{name}.
+
+    Returns `{:ok, [token], rest, context, line, byte_offset}` or
+    `{:error, reason, rest, context, line, byte_offset}`.
+
+    ## Options
+
+      * `:line` - the initial line, defaults to 1
+      * `:byte_offset` - the initial byte offset, defaults to 0
+      * `:context` - the initial context value. It will be converted
+        to a map
+    """
+
+    spec =
+      quote do
+        unquote(name)(binary, keyword) ::
+          {:ok, [term], rest, context, line, byte_offset}
+          | {:error, reason, rest, context, line, byte_offset}
+        when line: {pos_integer, byte_offset},
+             byte_offset: pos_integer,
+             rest: binary,
+             reason: String.t(),
+             context: map()
+      end
+
+    args = quote(do: [binary, opts \\ []])
+    guards = quote(do: is_binary(binary))
+
+    body =
+      quote do
+        line = Keyword.get(opts, :line, 1)
+        offset = Keyword.get(opts, :byte_offset, 0)
+        context = Map.new(Keyword.get(opts, :context, []))
+
+        case unquote(:"#{name}__0")(binary, [], [], context, {line, offset}, offset) do
+          {:ok, acc, rest, context, line, offset} ->
+            {:ok, :lists.reverse(acc), rest, context, line, offset}
+
+          {:error, _, _, _, _, _} = error ->
+            error
+        end
+      end
+
+    {doc, spec, {name, args, guards, body}}
+  end
+
   def compile_pattern([]) do
     raise ArgumentError, "cannot compile empty parser combinator"
   end
@@ -20,11 +68,10 @@ defmodule NimbleParsec.Compiler do
   def compile(name, combinators, opts) when is_list(combinators) do
     debug? = Keyword.get(opts, :debug, false)
     inline? = Keyword.get(opts, :inline, false)
-
     {defs, inline} = compile(name, combinators)
 
     if debug? do
-      IO.puts(:stderr, NimbleParsec.Printer.print_functions(defs, inline?, inline))
+      IO.puts(:stderr, NimbleParsec.Printer.format_functions(defs, inline, inline?))
     end
 
     if inline? do

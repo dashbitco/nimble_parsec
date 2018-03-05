@@ -8,11 +8,11 @@ defmodule NimbleParsec.Printer do
 
   Receives the same options as `NimbleParsec.defparsec/3`.
   """
-  @spec defparsec(atom(), NimbleParsec.t(), keyword()) :: String.t()
+  @spec defparsec(atom(), NimbleParsec.t(), keyword()) :: iodata
   def defparsec(name, combinator, opts \\ []) do
     inline? = Keyword.get(opts, :inline, false)
     {defs, inline} = NimbleParsec.Compiler.compile(name, combinator, opts)
-    print_entry_point(name) <> print_functions(defs, inline?, inline)
+    [format_entry_point(name), ?\n | format_functions(defs, inline, inline?)]
   end
 
   @doc """
@@ -20,46 +20,51 @@ defmodule NimbleParsec.Printer do
 
   Receives the same options as `NimbleParsec.defparsecp/3`.
   """
-  @spec defparsecp(atom(), NimbleParsec.t(), keyword()) :: String.t()
+  @spec defparsecp(atom(), NimbleParsec.t(), keyword()) :: iodata
   def defparsecp(name, combinator, opts \\ []) do
     inline? = Keyword.get(opts, :inline, false)
     {defs, inline} = NimbleParsec.Compiler.compile(name, combinator, opts)
-    print_functions(defs, inline?, inline)
+    format_functions(defs, inline, inline?)
   end
 
   @doc false
-  defp print_entry_point(name) do
-    """
-    def #{name}(binary, opts \\\\ []) when is_binary(binary) do
-      line = Keyword.get(opts, :line, 1)
-      offset = Keyword.get(opts, :byte_offset, 0)
-      context = Map.new(Keyword.get(opts, :context, []))
-      case #{name}__0(binary, [], [], context, {line, offset}, offset) do
-        {:ok, acc, rest, context, line, offset} ->
-          {:ok, :lists.reverse(acc), rest, context, line, offset}
-        {:error, _, _, _, _, _} = error ->
-          error
-      end
-    end
+  def format_entry_point(name) do
+    {doc, spec, def} = NimbleParsec.Compiler.entry_point(name)
 
+    """
+    @doc "\""
+    #{doc}
+    "\""
+    @spec #{Macro.to_string(spec)}
+    #{format_function(:def, def)}
     """
   end
 
   @doc false
-  def print_functions(defs, inline?, inline) do
-    functions =
-      for {name, args, guards, body} <- defs do
-        """
-        defp #{Macro.to_string(quote(do: unquote(name)(unquote_splicing(args))))}
-             when #{Macro.to_string(guards)} do
-          #{Macro.to_string(body)}
-        end
-
-        """
-      end
-
+  def format_functions(defs, inline, inline?) do
+    functions = Enum.map(defs, &format_function(:defp, &1))
     inline = if inline?, do: "@compile {:inline, #{inline}}\n", else: ""
-    inline <> Enum.join(functions)
+    [inline | functions]
+  end
+
+  defp format_function(kind, {name, args, guards, body}) do
+    signature = Macro.to_string(quote(do: unquote(name)(unquote_splicing(args))))
+
+    if guards == true do
+      """
+      #{kind} #{signature} do
+        #{Macro.to_string(body)}
+      end
+
+      """
+    else
+      """
+      #{kind} #{signature} when #{Macro.to_string(guards)} do
+        #{Macro.to_string(body)}
+      end
+
+      """
+    end
   end
 
   @doc false
@@ -75,34 +80,21 @@ defmodule NimbleParsec.Printer do
     path
     |> File.read!()
     |> prepend_imports()
-    |> EEx.eval_string()
+    |> EEx.eval_string(file: path)
     |> maybe_format_code()
   end
 
   defp prepend_imports(code) do
-    """
-    <%
-    import NimbleParsec, except: [
-             defparsec: 2,
-             defparsec: 3,
-             defparsecp: 2,
-             defparsecp: 3
-           ]
-    import NimbleParsec.Printer, only: [
-             defparsec: 2,
-             defparsec: 3,
-             defparsecp: 2,
-             defparsecp: 3
-           ]
-    %>
-    """ <> code
+    "<% import NimbleParsec, except: [defparsec: 2, defparsec: 3, defparsecp: 2, defparsecp: 3] %>" <>
+      "<% import NimbleParsec.Printer, only: [defparsec: 2, defparsec: 3, defparsecp: 2, defparsecp: 3] %>" <>
+      code
   end
 
   defp maybe_format_code(code) do
-    if function_exported?(Code, :format_string!, 1) do
+    if Code.ensure_loaded?(Code) and function_exported?(Code, :format_string!, 1) do
       code
-      |> Code.format_string!()
       |> IO.iodata_to_binary()
+      |> Code.format_string!()
     else
       code
     end
