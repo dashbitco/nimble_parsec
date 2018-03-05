@@ -24,20 +24,7 @@ defmodule NimbleParsec.Compiler do
     {defs, inline} = compile(name, combinators)
 
     if debug? do
-      if inline? do
-        IO.puts(:stderr, """
-        @compile {:inline, #{inspect(inline)}}
-        """)
-      end
-
-      for {name, args, guards, body} <- defs do
-        IO.puts(:stderr, """
-        defp #{Macro.to_string(quote(do: unquote(name)(unquote_splicing(args))))}
-             when #{Macro.to_string(guards)} do
-          #{Macro.to_string(body)}
-        end
-        """)
-      end
+      IO.puts(:stderr, NimbleParsec.Printer.print_functions(defs, inline?, inline))
     end
 
     if inline? do
@@ -805,7 +792,7 @@ defmodule NimbleParsec.Compiler do
 
   defp build_catch_all(name, combinators, %{catch_all: nil, labels: labels}) do
     reason = error_reason(combinators, labels)
-    args = quote(do: [rest, acc, _stack, context, line, offset])
+    args = quote(do: [rest, _acc, _stack, context, line, offset])
     body = quote(do: {:error, unquote(reason), rest, context, line, offset})
     {name, args, true, body}
   end
