@@ -84,7 +84,7 @@ defmodule Mix.Tasks.NimbleParsec.Gen do
 
     Mix.shell().info("Generating #{target_path}")
     comment = "# Generated from #{source_path}, do not edit.\n\n"
-    code = NimbleParsec.Printer.print_file(source_path)
+    code = NimbleParsec.Printer.print_file(source_path, [], file: target_path)
 
     File.write!(target_path, comment <> code)
   end

@@ -63,19 +63,19 @@ defmodule NimbleParsec.Printer do
   end
 
   @doc false
-  def print_string(string) do
+  def print_string(string, bindings \\ [], eex_opts \\ []) do
     string
     |> prepend_imports()
-    |> EEx.eval_string()
+    |> EEx.eval_string(bindings, eex_opts)
     |> maybe_format_code()
   end
 
   @doc false
-  def print_file(path) do
+  def print_file(path, bindings \\ [], eex_opts \\ []) do
     path
     |> File.read!()
     |> prepend_imports()
-    |> EEx.eval_string()
+    |> EEx.eval_string(bindings, eex_opts)
     |> maybe_format_code()
   end
 
