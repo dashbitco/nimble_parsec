@@ -36,4 +36,50 @@ defmodule NimbleParsec.IntegrationTest do
                {:ok, [2010, 4, 17, 14, 12, 34], "", %{}, {1, 0}, 19}
     end
   end
+
+  describe "string with quotes inside, using repeat_while" do
+
+    defparsec :string_with_quotes_using_repeat_while,
+              ascii_char([?"])
+              |> repeat_while(
+                choice([
+                  ~S(\") |> string() |> replace(?"),
+                  utf8_char([])
+                ]),
+                {:not_quote, []}
+              )
+              |> ascii_char([?"])
+              |> reduce({List, :to_string, []})
+
+    defp not_quote(<<?", _::binary>>, context, _, _), do: {:halt, context}
+    defp not_quote(_, context, _, _), do: {:cont, context}
+
+    test "returns ok/error" do
+      assert string_with_quotes_using_repeat_while(~S("string with quotes \" inside")) ==
+               {:ok, ["\"string with quotes \" inside\""], "", %{}, {1, 0}, 30}
+    end
+
+  end
+
+  describe "string with quotes inside, using repeat_until" do
+
+    defparsec :string_with_quotes_using_repeat_until,
+              ascii_char([?"])
+              |> repeat_until(
+                choice([
+                  ~S(\") |> string() |> replace(?"),
+                  utf8_char([])
+                ]),
+                [ascii_char([?"])]
+              )
+              |> ascii_char([?"])
+              |> reduce({List, :to_string, []})
+
+    test "returns ok/error" do
+      assert string_with_quotes_using_repeat_until(~S("string with quotes \" inside")) ==
+               {:ok, ["\"string with quotes \" inside\""], "", %{}, {1, 0}, 30}
+    end
+
+  end
+
 end
