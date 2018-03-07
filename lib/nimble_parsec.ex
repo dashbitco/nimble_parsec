@@ -799,7 +799,7 @@ defmodule NimbleParsec do
   Repeats while the given remote or local function `while` returns
   `{:cont, context}`.
 
-  In case repetition should stop, `while` must return `{:break, context}`.
+  In case repetition should stop, `while` must return `{:halt, context}`.
 
   `while` is either a `{module, function, args}` representing
   a remote call, a `{function, args}` representing a local call
@@ -816,7 +816,7 @@ defmodule NimbleParsec do
       defmodule MyParser do
         import NimbleParsec
 
-        defparsec :string,
+        defparsec :string_with_quotes,
                   ascii_char([?"])
                   |> repeat_while(
                     choice([
@@ -828,11 +828,11 @@ defmodule NimbleParsec do
                   |> ascii_char([?"])
                   |> reduce({List, :to_string, []})
 
-        defp not_quote(<<?", _::binary>>, context, _, _), do: {:stop, context}
-        defp not_quote(_, _, _, _), do: {:cont, context}
+        defp not_quote(<<?", _::binary>>, context, _, _), do: {:halt, context}
+        defp not_quote(_, context, _, _), do: {:cont, context}
       end
 
-      MyParser.string(~S("string with quotes \" inside"))
+      MyParser.string_with_quotes(~S("string with quotes \" inside"))
       {:ok, ["\"string with quotes \" inside\""], "", %{}, {1, 0}, 30}
 
   """
@@ -856,23 +856,21 @@ defmodule NimbleParsec do
       defmodule MyParser do
         import NimbleParsec
 
-        defparsec :string,
+        defparsec :string_with_quotes,
                   ascii_char([?"])
                   |> repeat_until(
                     choice([
                       ~S(\") |> string() |> replace(?"),
                       utf8_char([])
                     ]),
-                    [ascii_char(?")]
+                    [ascii_char([?"])]
                   )
                   |> ascii_char([?"])
                   |> reduce({List, :to_string, []})
 
-        defp not_quote(<<?", _::binary>>), do: false
-        defp not_quote(_), do: true
       end
 
-      MyParser.string(~S("string with quotes \" inside"))
+      MyParser.string_with_quotes(~S("string with quotes \" inside"))
       {:ok, ["\"string with quotes \" inside\""], "", %{}, {1, 0}, 30}
 
   """
