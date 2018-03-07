@@ -1,6 +1,8 @@
 sudo: false
 language: elixir
-
+script:
+  - if [[ `elixir -v` = *"1.6"* ]]; then mix format --check-formatted; fi
+  - mix test
 matrix:
   include:
     - elixir: 1.4.5

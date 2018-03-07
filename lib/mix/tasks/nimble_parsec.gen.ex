@@ -84,7 +84,10 @@ defmodule Mix.Tasks.NimbleParsec.Compile do
 
     Mix.shell().info("Generating #{target_path}")
     from = "# Generated from #{source_path}, do not edit.\n"
-    date = "# Generated at #{DateTime.utc_now |> Map.put(:microsecond, {0, 0}) |> to_string}\n\n"
+
+    date =
+      "# Generated at #{DateTime.utc_now() |> Map.put(:microsecond, {0, 0}) |> to_string}\n\n"
+
     code = NimbleParsec.Printer.print_file(source_path)
 
     File.write!(target_path, [from, date | code])
