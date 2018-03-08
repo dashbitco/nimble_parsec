@@ -2,6 +2,10 @@
 
 ## v0.2.2 (2018-03-08)
 
+### Enhancements
+
+  * Add `NimbleParsec.Printer` and `nimble_parsec.compile` task
+
 ### Bug fix
 
   * Ensure multiple runtime traversals compose
