@@ -1,7 +1,6 @@
 defmodule NimbleParsec.Recorder do
   @moduledoc false
 
-  use Agent
   @name __MODULE__
 
   @doc """
