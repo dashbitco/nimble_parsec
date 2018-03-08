@@ -4,7 +4,7 @@ defmodule Mix.Tasks.NimbleParsec.Compile do
   @shortdoc "Compiles a parser and injects its content into the parser file"
 
   @moduledoc ~S"""
-  Compiles parsers from EEx templates.
+  Compiles a parser from a template.
 
       #{@usage}
 
