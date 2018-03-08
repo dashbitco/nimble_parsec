@@ -18,6 +18,7 @@ defmodule Mix.Tasks.NimbleParsec.Compile do
         @moduledoc false
 
         ## parsec:MyParser
+        import NimbleParsec
 
         date =
           integer(4)
