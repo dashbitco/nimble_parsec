@@ -2,6 +2,9 @@ defmodule NimbleParsec.Compiler do
   @moduledoc false
   @arity 6
 
+  @doc """
+  Returns a parsec entrypoint named `name`.
+  """
   def entry_point(name) do
     doc = """
     Parses the given `binary` as #{name}.
@@ -50,6 +53,9 @@ defmodule NimbleParsec.Compiler do
     {doc, spec, {name, args, guards, body}}
   end
 
+  @doc """
+  Compiles the given combinators into a clause pattern.
+  """
   def compile_pattern([]) do
     raise ArgumentError, "cannot compile empty parser combinator"
   end
@@ -61,18 +67,16 @@ defmodule NimbleParsec.Compiler do
     end
   end
 
+  @doc """
+  Compiles the given combinators into multiple definitions.
+  """
   def compile(name, [], _opts) do
     raise ArgumentError, "cannot compile #{inspect(name)} with an empty parser combinator"
   end
 
   def compile(name, combinators, opts) when is_list(combinators) do
-    debug? = Keyword.get(opts, :debug, false)
     inline? = Keyword.get(opts, :inline, false)
     {defs, inline} = compile(name, combinators)
-
-    if debug? do
-      IO.puts(:stderr, NimbleParsec.Printer.format_functions(defs, inline, inline?))
-    end
 
     if inline? do
       {defs, inline}

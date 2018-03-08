@@ -70,7 +70,7 @@ defmodule NimbleParsec do
         unquote(body)
       end
 
-      unquote(compile(name, combinator, opts))
+      unquote(compile(:def, name, combinator, opts))
     end
   end
 
@@ -82,12 +82,13 @@ defmodule NimbleParsec do
   Receives the same options as `defparsec/3`.
   """
   defmacro defparsecp(name, combinator, opts \\ []) do
-    compile(name, combinator, opts)
+    compile(:defp, name, combinator, opts)
   end
 
-  defp compile(name, combinator, opts) do
-    quote bind_quoted: [name: name, combinator: combinator, opts: opts] do
+  defp compile(kind, name, combinator, opts) do
+    quote bind_quoted: [kind: kind, name: name, combinator: combinator, opts: opts] do
       {defs, inline} = NimbleParsec.Compiler.compile(name, combinator, opts)
+      NimbleParsec.Recorder.record(__MODULE__, kind, name, defs, inline, opts)
 
       if inline != [] do
         @compile {:inline, inline}
