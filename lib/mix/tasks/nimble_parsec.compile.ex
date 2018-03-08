@@ -17,7 +17,7 @@ defmodule Mix.Tasks.NimbleParsec.Compile do
       defmodule MyParser do
         @moduledoc false
 
-        ## parsec:MyParser
+        # parsec:MyParser
         import NimbleParsec
 
         date =
@@ -37,7 +37,7 @@ defmodule Mix.Tasks.NimbleParsec.Compile do
 
         defparsec :datetime, date |> ignore(string("T")) |> concat(time)
 
-        ## parsec:MyParser
+        # parsec:MyParser
       end
 
   After running:
