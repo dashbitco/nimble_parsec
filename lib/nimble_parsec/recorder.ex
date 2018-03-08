@@ -92,6 +92,9 @@ defmodule NimbleParsec.Recorder do
           replacement = Enum.map(entries, &format_recorded/1)
           IO.iodata_to_binary([pre, replacement, pos])
 
+        [_, _] ->
+          raise ArgumentError, "expected 2 markers #{inspect(marker)} on #{inspect(id)}, got 1"
+
         _ ->
           raise ArgumentError, "could not find marker #{inspect(marker)} on #{inspect(id)}"
       end
