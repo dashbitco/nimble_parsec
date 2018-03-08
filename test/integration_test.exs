@@ -77,4 +77,24 @@ defmodule NimbleParsec.IntegrationTest do
                {:ok, ["\"string with quotes \" inside\""], "", %{}, {1, 0}, 30}
     end
   end
+
+  describe "signed int" do
+    defparsec :signed_int,
+              optional(ascii_char([?-]))
+              |> integer(min: 1)
+              |> traverse({:sign_int_value, []})
+              |> tag(:signed_int)
+
+    defp sign_int_value(_rest, [int, _neg], context, _, _) do
+      {[int * -1], context}
+    end
+
+    defp sign_int_value(_rest, res, context, _, _) do
+      {res, context}
+    end
+
+    test "returns ok/error" do
+      assert signed_int("-1") == {:ok, [signed_int: [-1]], "", %{}, {1, 0}, 2}
+    end
+  end
 end

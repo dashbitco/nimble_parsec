@@ -291,7 +291,7 @@ defmodule NimbleParsec.Compiler do
 
     quote do
       with unquote(pattern) <- unquote(acc_context), unquote_splicing(entries) do
-        unquote(pattern)
+        {acc, context}
       end
     end
   end
