@@ -77,8 +77,8 @@ defmodule Mix.Tasks.NimbleParsec.Compile do
     Mix.Task.run("compile")
 
     case files do
-      [] -> Mix.raise("Expected a single file to be given to nimble_parsec.compile")
       [file] -> compile(file, opts)
+      _ -> Mix.raise("Expected a single file to be given to nimble_parsec.compile")
     end
   end
 
