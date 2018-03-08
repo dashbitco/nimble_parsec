@@ -1,12 +1,10 @@
 defmodule Mix.Tasks.NimbleParsec.Compile do
-  @usage "mix nimble_parsec.compile template.ex.exs"
-
   @shortdoc "Compiles a parser and injects its content into the parser file"
 
   @moduledoc ~S"""
   Compiles a parser from a template.
 
-      #{@usage}
+      mix nimble_parsec.compile template.ex.exs
 
   This task is useful to generate parsers that have no runtime dependency
   on NimbleParsec.
