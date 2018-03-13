@@ -31,6 +31,6 @@ defmodule SimpleLanguage do
   defparsec :language, choice([string, integer])
 end
 
-IO.inspect SimpleLanguage.language(~S(123))
-IO.inspect SimpleLanguage.language(~S("string with quotes \" inside"))
-IO.inspect SimpleLanguage.language(~S("string with #{123} interpolation inside"))
+IO.inspect(SimpleLanguage.language(~S(123)))
+IO.inspect(SimpleLanguage.language(~S("string with quotes \" inside")))
+IO.inspect(SimpleLanguage.language(~S("string with #{123} interpolation inside")))
