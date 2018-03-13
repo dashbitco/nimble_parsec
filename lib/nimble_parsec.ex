@@ -298,6 +298,12 @@ defmodule NimbleParsec do
       MyParser.two_digits_integer("1a3")
       #=> {:error, "expected a two digits integer", "1a3", %{}, {1, 0}, 0}
 
+  If the size of the integer has a min and max close to each other, such as
+  from 2 to 4 or from 1 to 2, using choice may emit more efficient code:
+
+      choice([integer(4), integer(3), integer(2)])
+
+  Note you should start from bigger to smaller.
   """
   @spec integer(t, pos_integer | [min_and_max]) :: t
   def integer(combinator \\ empty(), count_or_opts)
