@@ -667,11 +667,51 @@ defmodule NimbleParsec do
   @doc """
   Tags the result of the given combinator in `to_tag` in a tuple with
   `tag` as first element.
+
+  ## Examples
+
+      defmodule MyParser do
+        import NimbleParsec
+
+        defparsec integer(min: 1) |> tag(:integer)
+      end
+
+      MyParser.integer("1234")
+      #=> {:ok, [integer: [1234]], "", %{}, {1, 0}, 4}
+
+  Notice, however, that the integer result is wrapped in a list, because
+  the parser is expected to emit multiple tokens. When you are sure that
+  only a single token is emitted, you should use `unwrap_and_tag/3`.
   """
   @spec tag(t, t) :: t
   def tag(combinator \\ empty(), to_tag, tag)
       when is_combinator(combinator) and is_combinator(to_tag) do
     quoted_traverse(combinator, to_tag, {__MODULE__, :__tag__, [Macro.escape(tag)]})
+  end
+
+  @doc """
+  Unwraps and tags the result of the given combinator in `to_tag` in a tuple with
+  `tag` as first element.
+
+  ## Examples
+
+      defmodule MyParser do
+        import NimbleParsec
+
+        defparsec integer(min: 1) |> unwrap_and_tag(:integer)
+      end
+
+      MyParser.integer("1234")
+      #=> {:ok, [integer: 1234], "", %{}, {1, 0}, 4}
+
+
+  In case the combinator emits more than one token, an error will be raised.
+  See `tag/3` for more information.
+  """
+  @spec unwrap_and_tag(t, t) :: t
+  def unwrap_and_tag(combinator \\ empty(), to_tag, tag)
+      when is_combinator(combinator) and is_combinator(to_tag) do
+    quoted_traverse(combinator, to_tag, {__MODULE__, :__unwrap_and_tag__, [Macro.escape(tag)]})
   end
 
   @doc """
@@ -1138,6 +1178,26 @@ defmodule NimbleParsec do
   @doc false
   def __tag__(_rest, acc, context, _line, _offset, tag) do
     {[{tag, reverse_now_or_later(acc)}], context}
+  end
+
+  @doc false
+  def __unwrap_and_tag__(_rest, acc, context, _line, _offset, tag) when is_list(acc) do
+    case acc do
+      [one] -> {[{tag, one}], context}
+      many -> raise "unwrap_and_tag/3 expected a single token, got: #{inspect(many)}"
+    end
+  end
+
+  def __unwrap_and_tag__(_rest, acc, context, _line, _offset, tag) do
+    quoted =
+      quote do
+        case :lists.reverse(unquote(acc)) do
+          [one] -> one
+          many -> raise "unwrap_and_tag/3 expected a single token, got: #{inspect(many)}"
+        end
+      end
+
+    {[{tag, quoted}], context}
   end
 
   @doc false

@@ -565,7 +565,7 @@ defmodule NimbleParsecTest do
     end
   end
 
-  describe "tag/2 combinator" do
+  describe "tag/3 combinator" do
     defparsec :two_integers_tagged,
               integer(1)
               |> integer(1)
@@ -577,6 +577,26 @@ defmodule NimbleParsecTest do
       assert two_integers_tagged("12") == {:ok, [{:ints, [1, 2]}], "", %{}, {1, 0}, 2}
       assert two_integers_tagged("123") == {:ok, [{:ints, [1, 2]}], "3", %{}, {1, 0}, 2}
       assert two_integers_tagged("a12") == {:error, @error, "a12", %{}, {1, 0}, 0}
+    end
+  end
+
+  describe "unwrap_and_tag/3 combinator" do
+    defparsec :maybe_two_integers_unwrapped_and_tagged,
+              integer(1)
+              |> optional(integer(1))
+              |> unwrap_and_tag(:ints)
+
+    @error "expected byte in the range ?0..?9"
+
+    test "returns ok/error" do
+      assert maybe_two_integers_unwrapped_and_tagged("1") ==
+               {:ok, [{:ints, 1}], "", %{}, {1, 0}, 1}
+
+      assert maybe_two_integers_unwrapped_and_tagged("a") == {:error, @error, "a", %{}, {1, 0}, 0}
+
+      assert_raise RuntimeError,
+                   ~r"unwrap_and_tag/3 expected a single token, got: \[1, 2\]",
+                   fn -> maybe_two_integers_unwrapped_and_tagged("12") end
     end
   end
 
