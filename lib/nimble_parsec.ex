@@ -1129,10 +1129,15 @@ defmodule NimbleParsec do
     raise ArgumentError, "unknown call given to #{context}, got: #{inspect(unknown)}"
   end
 
-  defp non_empty!([], action),
-    do: raise(ArgumentError, "cannot call #{action} on empty combinator")
+  defp non_empty!([], action) do
+    raise ArgumentError, "cannot call #{action} on empty combinator"
+  end
 
-  defp non_empty!(combinator, _action), do: combinator
+  defp non_empty!(combinator, action) do
+    if Enum.any?(combinator, &is_list/1) do
+      raise ArgumentError, "invalid combinator given to #{action}, got a list of combinators instead"
+    end
+  end
 
   defp check_until_choices!(choices) do
     for choice <- choices do
