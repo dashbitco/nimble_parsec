@@ -1135,7 +1135,8 @@ defmodule NimbleParsec do
 
   defp non_empty!(combinator, action) do
     if Enum.any?(combinator, &is_list/1) do
-      raise ArgumentError, "invalid combinator given to #{action}, got a list of combinators instead"
+      raise ArgumentError,
+            "invalid combinator given to #{action}, got a list of combinators instead"
     end
   end
 
