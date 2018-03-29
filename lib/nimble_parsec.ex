@@ -134,8 +134,6 @@ defmodule NimbleParsec do
            | {:repeat, t, mfargs}
            | {:times, t, min :: non_neg_integer, pos_integer}
 
-  @cont_context {__MODULE__, :__cont_context__, []}
-
   @doc ~S"""
   Returns an empty combinator.
 
@@ -997,7 +995,7 @@ defmodule NimbleParsec do
       if max do
         [{:times, to_repeat, 0, max - min} | combinator]
       else
-        [{:repeat, to_repeat, @cont_context} | combinator]
+        [{:repeat, to_repeat, {__MODULE__, :__cont_context__, []}} | combinator]
       end
 
     combinator
