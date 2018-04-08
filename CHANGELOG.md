@@ -1,5 +1,12 @@
 # Changelog for NimbleParsec
 
+## v0.3.0 (2018-04-08)
+
+### Enhancements
+
+  * Add `unwrap`, `tag` and `unwrap_and_tag`
+  * Add `nimble_parsec.compile` to compile parsers without a NimbleParsec dependency
+
 ## v0.2.2 (2018-03-08)
 
 ### Bug fix
