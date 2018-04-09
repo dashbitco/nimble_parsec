@@ -1,5 +1,7 @@
 # NimbleParsec
 
+[Online Documentation](https://hexdocs.pm/nimble_parsec).
+
 <!-- MDOC !-->
 
 `NimbleParsec` is a simple and fast library for binary parser

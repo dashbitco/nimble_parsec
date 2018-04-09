@@ -155,6 +155,37 @@ defmodule NimbleParsec do
   this function. The tree size built at compile time will be
   reduce although runtime performance is degraded as every time
   this function is invoked it introduces a stacktrace entry.
+
+  ## Examples
+
+  A very limited but recursive XML parser could be written as follows:
+
+      defmodule SimpleXML do
+        import NimbleParsec
+
+        tag = ascii_string([?a..?z, ?A..?Z], min: 1)
+        text = ascii_string([not: ?<], min: 1)
+
+        opening_tag =
+          ignore(string("<"))
+          |> concat(tag)
+          |> ignore(string(">"))
+
+        closing_tag =
+          ignore(string("</"))
+          |> concat(tag)
+          |> ignore(string(">"))
+
+        defparsec :xml,
+                  opening_tag
+                  |> repeat_until(choice([parsec(:xml), text]), [string("</")])
+                  |> concat(closing_tag)
+                  |> wrap()
+      end
+
+      SimpleXML.xml("<foo>bar</foo>")
+      #=> {:ok, [["foo", "bar", "foo"]], "", %{}, {1, 0}, 14}
+
   """
   def parsec(combinator \\ empty(), name) when is_combinator(combinator) and is_atom(name) do
     [{:parsec, name} | combinator]
