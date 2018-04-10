@@ -1,5 +1,11 @@
 # Changelog for NimbleParsec
 
+## v0.3.1 (2018-04-10)
+
+### Bug fixes
+
+  * Avoid exponential compilation time when line break is unknown
+
 ## v0.3.0 (2018-04-08)
 
 ### Enhancements
