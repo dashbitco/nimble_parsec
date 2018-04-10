@@ -614,9 +614,11 @@ defmodule NimbleParsec.Compiler do
     line =
       if newline_allowed?(inclusive) and not newline_forbidden?(exclusive) do
         quote do
+          line = unquote(line)
+
           case unquote(var) do
-            ?\n -> {elem(unquote(line), 0) + 1, unquote(offset)}
-            _ -> unquote(line)
+            ?\n -> {elem(line, 0) + 1, unquote(offset)}
+            _ -> line
           end
         end
       else
