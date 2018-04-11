@@ -1,4 +1,4 @@
-# Run it from root with `mix run examples/simple_matn.exs`
+# Run it from root with `mix run examples/simple_math.exs`
 
 # Language to describe basic math expression with two operands: + and *
 defmodule SimpleMath do
