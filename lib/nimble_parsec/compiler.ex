@@ -206,7 +206,11 @@ defmodule NimbleParsec.Compiler do
   end
 
   defp compile_unbound_combinator({:choice, choices} = combinator, current, step, config) do
-    config = update_in(config.labels, &[label(combinator) | &1])
+    config =
+      update_in(config.labels, fn
+        [] -> [label(combinator)]
+        other -> other
+      end)
 
     if Enum.all?(choices, &all_bound_combinators?/1) do
       compile_bound_choice(choices, current, step, config)

@@ -925,6 +925,9 @@ defmodule NimbleParsecTest do
     defparsec :simple_choice,
               choice([ascii_char([?a..?z]), ascii_char([?A..?Z]), ascii_char([?0..?9])])
 
+    defparsec :choice_label,
+              choice([ascii_char([?a..?z]), ascii_char([?A..?Z]), ascii_char([?0..?9])]) |> label("something")
+
     defparsec :choice_inner_repeat,
               choice([repeat(ascii_char([?a..?z])), repeat(ascii_char([?A..?Z]))])
 
@@ -962,6 +965,15 @@ defmodule NimbleParsecTest do
       assert simple_choice("A=") == {:ok, [?A], "=", %{}, {1, 0}, 1}
       assert simple_choice("0=") == {:ok, [?0], "=", %{}, {1, 0}, 1}
       assert simple_choice("+=") == {:error, @error, "+=", %{}, {1, 0}, 0}
+    end
+
+    @error "expected something"
+
+    test "returns ok/error with wrapping label" do
+      assert choice_label("a=") == {:ok, [?a], "=", %{}, {1, 0}, 1}
+      assert choice_label("A=") == {:ok, [?A], "=", %{}, {1, 0}, 1}
+      assert choice_label("0=") == {:ok, [?0], "=", %{}, {1, 0}, 1}
+      assert choice_label("+=") == {:error, @error, "+=", %{}, {1, 0}, 0}
     end
 
     test "returns ok/error with repeat inside" do
