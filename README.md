@@ -4,7 +4,7 @@
 
 <!-- MDOC !-->
 
-`NimbleParsec` is a simple and fast library for binary parser
+`NimbleParsec` is a simple and fast library for text-based parser
 combinators.
 
 Combinators are built during runtime and compiled into multiple
@@ -31,6 +31,9 @@ clauses with binary matching. This provides the following benefits:
 The goal of this library is to focus on a set of primitives for writing
 efficient parser combinators. The composition aspect means you should be
 able to use those primitives to implement higher level combinators.
+
+Note this library does not handle low-level binary parsing. In such cases,
+we recommend using [Elixir's bitstring syntax](https://hexdocs.pm/elixir/Kernel.SpecialForms.html#%3C%3C%3E%3E/1).
 
 ## Examples
 
