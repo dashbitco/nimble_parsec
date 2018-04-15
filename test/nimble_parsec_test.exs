@@ -926,7 +926,8 @@ defmodule NimbleParsecTest do
               choice([ascii_char([?a..?z]), ascii_char([?A..?Z]), ascii_char([?0..?9])])
 
     defparsec :choice_label,
-              choice([ascii_char([?a..?z]), ascii_char([?A..?Z]), ascii_char([?0..?9])]) |> label("something")
+              choice([ascii_char([?a..?z]), ascii_char([?A..?Z]), ascii_char([?0..?9])])
+              |> label("something")
 
     defparsec :choice_inner_repeat,
               choice([repeat(ascii_char([?a..?z])), repeat(ascii_char([?A..?Z]))])

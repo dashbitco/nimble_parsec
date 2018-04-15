@@ -1399,7 +1399,7 @@ defmodule NimbleParsec do
   defp reverse_now_or_later(expr), do: quote(do: :lists.reverse(unquote(expr)))
 
   defp quoted_ascii_to_integer([var | vars], 1) do
-    [quote(do: (unquote(var) - ?0)) | quoted_ascii_to_integer(vars, 10)]
+    [quote(do: unquote(var) - ?0) | quoted_ascii_to_integer(vars, 10)]
   end
 
   defp quoted_ascii_to_integer([var | vars], index) do
