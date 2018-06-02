@@ -100,9 +100,9 @@ defmodule NimbleParsec.IntegrationTest do
 
   describe "language code" do
     language_code =
-      ascii_string([?a..?z], 2) |>
-      traverse(:atomize_language_code) |>
-      tag(:language)
+      ascii_string([?a..?z], 2)
+      |> traverse(:atomize_language_code)
+      |> tag(:language)
 
     defparsec :language_code, language_code
 
