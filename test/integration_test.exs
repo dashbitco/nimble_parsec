@@ -97,4 +97,21 @@ defmodule NimbleParsec.IntegrationTest do
       assert signed_int("-1") == {:ok, [signed_int: [-1]], "", %{}, {1, 0}, 2}
     end
   end
+
+  describe "language code" do
+    language_code =
+      ascii_string([?a..?z], 2) |>
+      traverse(:atomize_language_code) |>
+      tag(:language)
+
+    defparsec :language_code, language_code
+
+    defp atomize_language_code(_rest, [language_code], context, _line, _offset) do
+      {[String.to_atom(language_code)], context}
+    end
+
+    test "returns ok/error" do
+      assert language_code("pt") == {:ok, [language: [:pt]], "", %{}, {1, 0}, 2}
+    end
+  end
 end

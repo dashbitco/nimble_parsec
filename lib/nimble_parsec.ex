@@ -1363,6 +1363,11 @@ defmodule NimbleParsec do
     {[{:<<>>, [], acc}], context}
   end
 
+  def __compile_string__(_rest, acc, context, _line, _offset, _count, _type) do
+    ast = quote(do: List.to_string(unquote(reverse_now_or_later(acc))))
+    {[ast], context}
+  end
+
   @doc false
   def __runtime_integer__(_rest, acc, context, _line, _offset, min, _max)
       when is_integer(min) and min > 0 do
