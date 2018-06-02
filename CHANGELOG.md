@@ -1,5 +1,12 @@
 # Changelog for NimbleParsec
 
+## v0.3.2 (2018-06-02)
+
+### Bug fixes
+
+  * Fix compilation error for certain combinations of ascii_string/utf8_string + traverse
+  * Respect the `label` construct when wrapping a `choice`
+
 ## v0.3.1 (2018-04-10)
 
 ### Bug fixes
