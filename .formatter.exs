@@ -1,5 +1,12 @@
 # Used by "mix format"
-locals_without_parens = [defparsec: 2, defparsec: 3, defparsecp: 2, defparsecp: 3]
+locals_without_parens = [
+  defparsec: 2,
+  defparsec: 3,
+  defparsecp: 2,
+  defparsecp: 3,
+  defcombinatorp: 2,
+  defcombinatorp: 3
+]
 
 [
   inputs: ["mix.exs", "{examples,lib,test}/**/*.{ex,exs}"],

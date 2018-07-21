@@ -20,7 +20,7 @@ defmodule NimbleParsec.Recorder do
   @doc """
   Records the given call and potentially debugs it.
   """
-  def record(module, kind, name, defs, inline, opts) do
+  def record(module, entry_point, name, defs, inline, opts) do
     inline? = Keyword.get(opts, :inline, false)
 
     if Keyword.get(opts, :debug, false) do
@@ -29,14 +29,18 @@ defmodule NimbleParsec.Recorder do
 
     if Process.whereis(@name) do
       Agent.update(@name, fn state ->
-        update_in(state[module], &[{kind, name, defs, inline, inline?} | &1 || []])
+        update_in(state[module], &[{entry_point, name, defs, inline, inline?} | &1 || []])
       end)
     end
 
     :ok
   end
 
-  defp format_entry_point(name) do
+  defp format_entry_point(nil, _name) do
+    []
+  end
+
+  defp format_entry_point(:def, name) do
     {doc, spec, def} = NimbleParsec.Compiler.entry_point(name)
 
     """
@@ -45,6 +49,15 @@ defmodule NimbleParsec.Recorder do
     "\""
     @spec #{Macro.to_string(spec)}
     #{format_def(:def, def)}
+    """
+  end
+
+  defp format_entry_point(:defp, name) do
+    {_doc, spec, def} = NimbleParsec.Compiler.entry_point(name)
+
+    """
+    @spec #{Macro.to_string(spec)}
+    #{format_def(:defp, def)}
     """
   end
 
@@ -101,15 +114,8 @@ defmodule NimbleParsec.Recorder do
     end)
   end
 
-  defp format_recorded({kind, name, defs, inline, inline?}) do
-    entry_point =
-      if kind == :def do
-        format_entry_point(name)
-      else
-        []
-      end
-
-    [entry_point | format_defs(defs, inline, inline?)]
+  defp format_recorded({entry_point, name, defs, inline, inline?}) do
+    [format_entry_point(entry_point, name) | format_defs(defs, inline, inline?)]
   end
 
   defp maybe_format_code(code) do

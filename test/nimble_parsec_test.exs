@@ -5,11 +5,11 @@ defmodule NimbleParsecTest do
   import ExUnit.CaptureIO
 
   describe "ascii_char/2 combinator without newlines" do
-    defparsec :only_ascii, ascii_char([?0..?9]) |> ascii_char([])
-    defparsec :multi_ascii, ascii_char([?0..?9, ?z..?a])
-    defparsec :multi_ascii_with_not, ascii_char([?0..?9, ?z..?a, not: ?c])
-    defparsec :multi_ascii_with_multi_not, ascii_char([?0..?9, ?z..?a, not: ?c, not: ?d..?e])
-    defparsec :ascii_newline, ascii_char([?0..?9, ?\n]) |> ascii_char([?a..?z, ?\n])
+    defparsecp :only_ascii, ascii_char([?0..?9]) |> ascii_char([])
+    defparsecp :multi_ascii, ascii_char([?0..?9, ?z..?a])
+    defparsecp :multi_ascii_with_not, ascii_char([?0..?9, ?z..?a, not: ?c])
+    defparsecp :multi_ascii_with_multi_not, ascii_char([?0..?9, ?z..?a, not: ?c, not: ?d..?e])
+    defparsecp :ascii_newline, ascii_char([?0..?9, ?\n]) |> ascii_char([?a..?z, ?\n])
 
     @error "expected byte in the range ?0..?9, followed by byte"
 
@@ -59,8 +59,8 @@ defmodule NimbleParsecTest do
   end
 
   describe "utf8_char/2 combinator without newlines" do
-    defparsec :only_utf8, utf8_char([?0..?9]) |> utf8_char([])
-    defparsec :utf8_newline, utf8_char([]) |> utf8_char([?a..?z, ?\n])
+    defparsecp :only_utf8, utf8_char([?0..?9]) |> utf8_char([])
+    defparsecp :utf8_newline, utf8_char([]) |> utf8_char([?a..?z, ?\n])
 
     @error "expected utf8 codepoint in the range ?0..?9, followed by utf8 codepoint"
 
@@ -86,8 +86,8 @@ defmodule NimbleParsecTest do
   end
 
   describe "integer/2 combinator with exact length" do
-    defparsec :exact_integer, integer(2)
-    defparsec :prefixed_integer, string("T") |> integer(2)
+    defparsecp :exact_integer, integer(2)
+    defparsecp :prefixed_integer, string("T") |> integer(2)
 
     @error "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
@@ -113,9 +113,9 @@ defmodule NimbleParsecTest do
   end
 
   describe "integer/2 combinator with min/max" do
-    defparsec :min_integer, integer(min: 2)
-    defparsec :max_integer, integer(max: 3)
-    defparsec :min_max_integer, integer(min: 2, max: 3)
+    defparsecp :min_integer, integer(min: 2)
+    defparsecp :max_integer, integer(max: 3)
+    defparsecp :min_max_integer, integer(min: 2, max: 3)
 
     @error "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
@@ -151,8 +151,8 @@ defmodule NimbleParsecTest do
   end
 
   describe "string/2 combinator" do
-    defparsec :only_string, string("TO")
-    defparsec :only_string_with_newline, string("T\nO")
+    defparsecp :only_string, string("TO")
+    defparsecp :only_string_with_newline, string("T\nO")
 
     test "returns ok/error" do
       assert only_string("TO") == {:ok, ["TO"], "", %{}, {1, 0}, 2}
@@ -174,7 +174,7 @@ defmodule NimbleParsecTest do
   end
 
   describe "ascii_string/2 combinator with exact length" do
-    defparsec :exact_ascii_string, ascii_string([?a..?z], 2)
+    defparsecp :exact_ascii_string, ascii_string([?a..?z], 2)
 
     @error "expected byte in the range ?a..?z, followed by byte in the range ?a..?z"
 
@@ -190,9 +190,9 @@ defmodule NimbleParsecTest do
   end
 
   describe "ascii_string/2 combinator with min/max" do
-    defparsec :min_ascii_string, ascii_string([?0..?9], min: 2)
-    defparsec :max_ascii_string, ascii_string([?0..?9], max: 3)
-    defparsec :min_max_ascii_string, ascii_string([?0..?9], min: 2, max: 3)
+    defparsecp :min_ascii_string, ascii_string([?0..?9], min: 2)
+    defparsecp :max_ascii_string, ascii_string([?0..?9], max: 3)
+    defparsecp :min_max_ascii_string, ascii_string([?0..?9], min: 2, max: 3)
 
     @error "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
@@ -228,7 +228,7 @@ defmodule NimbleParsecTest do
   end
 
   describe "utf8_string/2 combinator with exact length" do
-    defparsec :exact_utf8_string, utf8_string([], 2)
+    defparsecp :exact_utf8_string, utf8_string([], 2)
 
     @error "expected utf8 codepoint, followed by utf8 codepoint"
 
@@ -244,9 +244,9 @@ defmodule NimbleParsecTest do
   end
 
   describe "utf8_string/2 combinator with min/max" do
-    defparsec :min_utf8_string, utf8_string([], min: 2)
-    defparsec :max_utf8_string, utf8_string([], max: 3)
-    defparsec :min_max_utf8_string, utf8_string([], min: 2, max: 3)
+    defparsecp :min_utf8_string, utf8_string([], min: 2)
+    defparsecp :max_utf8_string, utf8_string([], max: 3)
+    defparsecp :min_max_utf8_string, utf8_string([], min: 2, max: 3)
 
     @error "expected utf8 codepoint, followed by utf8 codepoint"
 
@@ -282,8 +282,8 @@ defmodule NimbleParsecTest do
   end
 
   describe "ignore/2 combinator at compile time" do
-    defparsec :compile_ignore, ignore(string("TO"))
-    defparsec :compile_ignore_with_newline, ignore(string("T\nO"))
+    defparsecp :compile_ignore, ignore(string("TO"))
+    defparsecp :compile_ignore_with_newline, ignore(string("T\nO"))
 
     test "returns ok/error" do
       assert compile_ignore("TO") == {:ok, [], "", %{}, {1, 0}, 2}
@@ -305,10 +305,10 @@ defmodule NimbleParsecTest do
   end
 
   describe "ignore/2 combinator at runtime" do
-    defparsec :runtime_ignore,
-              ascii_char([?a..?z])
-              |> times(min: 1)
-              |> ignore()
+    defparsecp :runtime_ignore,
+               ascii_char([?a..?z])
+               |> times(min: 1)
+               |> ignore()
 
     test "returns ok/error" do
       assert runtime_ignore("abc") == {:ok, [], "", %{}, {1, 0}, 3}
@@ -322,9 +322,9 @@ defmodule NimbleParsecTest do
   end
 
   describe "replace/3 combinator at compile time" do
-    defparsec :compile_replace, replace(string("TO"), "OTHER")
-    defparsec :compile_replace_with_newline, replace(string("T\nO"), "OTHER")
-    defparsec :compile_replace_empty, replace(empty(), "OTHER")
+    defparsecp :compile_replace, replace(string("TO"), "OTHER")
+    defparsecp :compile_replace_with_newline, replace(string("T\nO"), "OTHER")
+    defparsecp :compile_replace_empty, replace(empty(), "OTHER")
 
     test "returns ok/error" do
       assert compile_replace("TO") == {:ok, ["OTHER"], "", %{}, {1, 0}, 2}
@@ -351,10 +351,10 @@ defmodule NimbleParsecTest do
   end
 
   describe "replace/2 combinator at runtime" do
-    defparsec :runtime_replace,
-              ascii_char([?a..?z])
-              |> times(min: 1)
-              |> replace("OTHER")
+    defparsecp :runtime_replace,
+               ascii_char([?a..?z])
+               |> times(min: 1)
+               |> replace("OTHER")
 
     test "returns ok/error" do
       assert runtime_replace("abc") == {:ok, ["OTHER"], "", %{}, {1, 0}, 3}
@@ -368,8 +368,8 @@ defmodule NimbleParsecTest do
   end
 
   describe "label/3 combinator at compile time" do
-    defparsec :compile_label, label(string("TO"), "label")
-    defparsec :compile_label_with_newline, label(string("T\nO"), "label")
+    defparsecp :compile_label, label(string("TO"), "label")
+    defparsecp :compile_label_with_newline, label(string("T\nO"), "label")
 
     test "returns ok/error" do
       assert compile_label("TO") == {:ok, ["TO"], "", %{}, {1, 0}, 2}
@@ -391,11 +391,11 @@ defmodule NimbleParsecTest do
   end
 
   describe "label/3 combinator at runtime" do
-    defparsec :runtime_label,
-              label(times(ascii_char([?a..?z]), min: 1), "first label")
-              |> label(times(ascii_char([?A..?Z]), min: 1), "second label")
-              |> times(ascii_char([?0..?9]), min: 1)
-              |> label("third label")
+    defparsecp :runtime_label,
+               label(times(ascii_char([?a..?z]), min: 1), "first label")
+               |> label(times(ascii_char([?A..?Z]), min: 1), "second label")
+               |> times(ascii_char([?0..?9]), min: 1)
+               |> label("third label")
 
     test "returns ok/error" do
       assert runtime_label("aA0") == {:ok, [?a, ?A, ?0], "", %{}, {1, 0}, 3}
@@ -418,14 +418,14 @@ defmodule NimbleParsecTest do
   describe "remote traverse/3 combinator" do
     @three_ascii_letters times(ascii_char([?a..?z]), min: 3)
 
-    defparsec :remote_traverse,
-              string("T")
-              |> integer(2)
-              |> traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]})
-              |> integer(2)
+    defparsecp :remote_traverse,
+               string("T")
+               |> integer(2)
+               |> traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]})
+               |> integer(2)
 
-    defparsec :remote_traverse_error_when_last_is_z,
-              traverse(@three_ascii_letters, {__MODULE__, :error_when_last_is_z, []})
+    defparsecp :remote_traverse_error_when_last_is_z,
+               traverse(@three_ascii_letters, {__MODULE__, :error_when_last_is_z, []})
 
     test "returns ok/error" do
       assert remote_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", %{}, {1, 0}, 8}
@@ -460,14 +460,14 @@ defmodule NimbleParsecTest do
   describe "local traverse/3 combinator" do
     @three_ascii_letters times(ascii_char([?a..?z]), min: 3)
 
-    defparsec :local_traverse,
-              string("T")
-              |> integer(2)
-              |> traverse(@three_ascii_letters, {:private_join_and_wrap, ["-"]})
-              |> integer(2)
+    defparsecp :local_traverse,
+               string("T")
+               |> integer(2)
+               |> traverse(@three_ascii_letters, {:private_join_and_wrap, ["-"]})
+               |> integer(2)
 
-    defparsec :local_traverse_error_when_last_is_z,
-              traverse(@three_ascii_letters, {__MODULE__, :error_when_last_is_z, []})
+    defparsecp :local_traverse_error_when_last_is_z,
+               traverse(@three_ascii_letters, {__MODULE__, :error_when_last_is_z, []})
 
     test "returns ok/error" do
       assert local_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", %{}, {1, 0}, 8}
@@ -499,10 +499,10 @@ defmodule NimbleParsecTest do
   end
 
   describe "remote lookahead/2 combinator" do
-    defparsec :remote_zero_lookahead,
-              ascii_char([?a..?z])
-              |> times(min: 3)
-              |> lookahead({__MODULE__, :error_when_next_is_0, []})
+    defparsecp :remote_zero_lookahead,
+               ascii_char([?a..?z])
+               |> times(min: 3)
+               |> lookahead({__MODULE__, :error_when_next_is_0, []})
 
     test "returns ok/error" do
       assert remote_zero_lookahead("abcdef") == {:ok, 'abcdef', "", %{}, {1, 0}, 6}
@@ -512,10 +512,10 @@ defmodule NimbleParsecTest do
   end
 
   describe "local lookahead/2 combinator" do
-    defparsec :local_zero_lookahead,
-              ascii_char([?a..?z])
-              |> times(min: 3)
-              |> lookahead(:error_when_next_is_0)
+    defparsecp :local_zero_lookahead,
+               ascii_char([?a..?z])
+               |> times(min: 3)
+               |> lookahead(:error_when_next_is_0)
 
     test "returns ok/error" do
       assert local_zero_lookahead("abcdef") == {:ok, 'abcdef', "", %{}, {1, 0}, 6}
@@ -525,11 +525,11 @@ defmodule NimbleParsecTest do
   end
 
   describe "line/2 combinator" do
-    defparsec :ascii_line,
-              ascii_char([])
-              |> ascii_char([])
-              |> ascii_char([])
-              |> line()
+    defparsecp :ascii_line,
+               ascii_char([])
+               |> ascii_char([])
+               |> ascii_char([])
+               |> line()
 
     test "returns ok/error" do
       assert ascii_line("abc") == {:ok, [{[?a, ?b, ?c], {1, 0}}], "", %{}, {1, 0}, 3}
@@ -538,11 +538,11 @@ defmodule NimbleParsecTest do
   end
 
   describe "byte_offset/2 combinator" do
-    defparsec :ascii_byte_offset,
-              ascii_char([])
-              |> ascii_char([])
-              |> ascii_char([])
-              |> byte_offset()
+    defparsecp :ascii_byte_offset,
+               ascii_char([])
+               |> ascii_char([])
+               |> ascii_char([])
+               |> byte_offset()
 
     test "returns ok/error" do
       assert ascii_byte_offset("abc") == {:ok, [{[?a, ?b, ?c], 3}], "", %{}, {1, 0}, 3}
@@ -551,10 +551,10 @@ defmodule NimbleParsecTest do
   end
 
   describe "wrap/2 combinator" do
-    defparsec :two_integers_wrapped,
-              integer(1)
-              |> integer(1)
-              |> wrap()
+    defparsecp :two_integers_wrapped,
+               integer(1)
+               |> integer(1)
+               |> wrap()
 
     @error "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
@@ -566,10 +566,10 @@ defmodule NimbleParsecTest do
   end
 
   describe "tag/3 combinator" do
-    defparsec :two_integers_tagged,
-              integer(1)
-              |> integer(1)
-              |> tag(:ints)
+    defparsecp :two_integers_tagged,
+               integer(1)
+               |> integer(1)
+               |> tag(:ints)
 
     @error "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
@@ -581,10 +581,10 @@ defmodule NimbleParsecTest do
   end
 
   describe "unwrap_and_tag/3 combinator" do
-    defparsec :maybe_two_integers_unwrapped_and_tagged,
-              integer(1)
-              |> optional(integer(1))
-              |> unwrap_and_tag(:ints)
+    defparsecp :maybe_two_integers_unwrapped_and_tagged,
+               integer(1)
+               |> optional(integer(1))
+               |> unwrap_and_tag(:ints)
 
     @error "expected byte in the range ?0..?9"
 
@@ -601,10 +601,10 @@ defmodule NimbleParsecTest do
   end
 
   describe "debug/2 combinator" do
-    defparsec :two_integers_debugged,
-              integer(1)
-              |> integer(1)
-              |> debug()
+    defparsecp :two_integers_debugged,
+               integer(1)
+               |> integer(1)
+               |> debug()
 
     @error "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
@@ -627,13 +627,13 @@ defmodule NimbleParsecTest do
   end
 
   describe "remote map/3 combinator" do
-    defparsec :remote_map,
-              ascii_char([?a..?z])
-              |> ascii_char([?a..?z])
-              |> ascii_char([?a..?z])
-              |> map({Integer, :to_string, []})
+    defparsecp :remote_map,
+               ascii_char([?a..?z])
+               |> ascii_char([?a..?z])
+               |> ascii_char([?a..?z])
+               |> map({Integer, :to_string, []})
 
-    defparsec :empty_map, map(empty(), {Integer, :to_string, []})
+    defparsecp :empty_map, map(empty(), {Integer, :to_string, []})
 
     test "returns ok/error" do
       assert remote_map("abc") == {:ok, ["97", "98", "99"], "", %{}, {1, 0}, 3}
@@ -647,11 +647,11 @@ defmodule NimbleParsecTest do
   end
 
   describe "local map/3 combinator" do
-    defparsec :local_map,
-              ascii_char([?a..?z])
-              |> ascii_char([?a..?z])
-              |> ascii_char([?a..?z])
-              |> map({:local_to_string, []})
+    defparsecp :local_map,
+               ascii_char([?a..?z])
+               |> ascii_char([?a..?z])
+               |> ascii_char([?a..?z])
+               |> map({:local_to_string, []})
 
     test "returns ok/error" do
       assert local_map("abc") == {:ok, ["97", "98", "99"], "", %{}, {1, 0}, 3}
@@ -665,13 +665,13 @@ defmodule NimbleParsecTest do
   end
 
   describe "remote reduce/3 combinator" do
-    defparsec :remote_reduce,
-              ascii_char([?a..?z])
-              |> ascii_char([?a..?z])
-              |> ascii_char([?a..?z])
-              |> reduce({Enum, :join, ["-"]})
+    defparsecp :remote_reduce,
+               ascii_char([?a..?z])
+               |> ascii_char([?a..?z])
+               |> ascii_char([?a..?z])
+               |> reduce({Enum, :join, ["-"]})
 
-    defparsec :empty_reduce, reduce(empty(), {Enum, :join, ["-"]})
+    defparsecp :empty_reduce, reduce(empty(), {Enum, :join, ["-"]})
 
     test "returns ok/error" do
       assert remote_reduce("abc") == {:ok, ["97-98-99"], "", %{}, {1, 0}, 3}
@@ -685,11 +685,11 @@ defmodule NimbleParsecTest do
   end
 
   describe "local reduce/3 combinator" do
-    defparsec :local_reduce,
-              ascii_char([?a..?z])
-              |> ascii_char([?a..?z])
-              |> ascii_char([?a..?z])
-              |> reduce({:local_join, ["-"]})
+    defparsecp :local_reduce,
+               ascii_char([?a..?z])
+               |> ascii_char([?a..?z])
+               |> ascii_char([?a..?z])
+               |> reduce({:local_join, ["-"]})
 
     test "returns ok/error" do
       assert local_reduce("abc") == {:ok, ["97-98-99"], "", %{}, {1, 0}, 3}
@@ -703,11 +703,11 @@ defmodule NimbleParsecTest do
   end
 
   describe "concat/2 combinator" do
-    defparsec :concat_digit_upper_lower_plus,
-              concat(
-                concat(ascii_char([?0..?9]), ascii_char([?A..?Z])),
-                concat(ascii_char([?a..?z]), ascii_char([?+..?+]))
-              )
+    defparsecp :concat_digit_upper_lower_plus,
+               concat(
+                 concat(ascii_char([?0..?9]), ascii_char([?A..?Z])),
+                 concat(ascii_char([?a..?z]), ascii_char([?+..?+]))
+               )
 
     test "returns ok/error" do
       assert concat_digit_upper_lower_plus("1Az+") == {:ok, [?1, ?A, ?z, ?+], "", %{}, {1, 0}, 4}
@@ -715,24 +715,24 @@ defmodule NimbleParsecTest do
   end
 
   describe "repeat/2 combinator" do
-    defparsec :repeat_digits, repeat(ascii_char([?0..?9]) |> ascii_char([?0..?9]))
+    defparsecp :repeat_digits, repeat(ascii_char([?0..?9]) |> ascii_char([?0..?9]))
 
     ascii_to_string = map(ascii_char([?0..?9]), :to_string)
-    defparsec :repeat_digits_to_string, repeat(ascii_to_string)
+    defparsecp :repeat_digits_to_string, repeat(ascii_to_string)
 
-    defparsec :repeat_digits_to_same_inner,
-              repeat(map(ascii_to_string, {String, :to_integer, []}))
+    defparsecp :repeat_digits_to_same_inner,
+               repeat(map(ascii_to_string, {String, :to_integer, []}))
 
-    defparsec :repeat_digits_to_same_outer,
-              map(repeat(ascii_to_string), {String, :to_integer, []})
+    defparsecp :repeat_digits_to_same_outer,
+               map(repeat(ascii_to_string), {String, :to_integer, []})
 
-    defparsec :repeat_double_digits_to_string,
-              repeat(
-                concat(
-                  map(ascii_char([?0..?9]), :to_string),
-                  map(ascii_char([?0..?9]), :to_string)
-                )
-              )
+    defparsecp :repeat_double_digits_to_string,
+               repeat(
+                 concat(
+                   map(ascii_char([?0..?9]), :to_string),
+                   map(ascii_char([?0..?9]), :to_string)
+                 )
+               )
 
     test "returns ok/error" do
       assert repeat_digits("12") == {:ok, [?1, ?2], "", %{}, {1, 0}, 2}
@@ -757,26 +757,29 @@ defmodule NimbleParsecTest do
   end
 
   describe "repeat_while/3 combinator" do
-    defparsec :repeat_while_digits,
-              repeat_while(ascii_char([?0..?9]) |> ascii_char([?0..?9]), {__MODULE__, :not_3, []})
+    defparsecp :repeat_while_digits,
+               repeat_while(
+                 ascii_char([?0..?9]) |> ascii_char([?0..?9]),
+                 {__MODULE__, :not_3, []}
+               )
 
     ascii_to_string = map(ascii_char([?0..?9]), :to_string)
-    defparsec :repeat_while_digits_to_string, repeat_while(ascii_to_string, {:not_3, []})
+    defparsecp :repeat_while_digits_to_string, repeat_while(ascii_to_string, {:not_3, []})
 
-    defparsec :repeat_while_digits_to_same_inner,
-              repeat_while(map(ascii_to_string, {String, :to_integer, []}), {:not_3, []})
+    defparsecp :repeat_while_digits_to_same_inner,
+               repeat_while(map(ascii_to_string, {String, :to_integer, []}), {:not_3, []})
 
-    defparsec :repeat_while_digits_to_same_outer,
-              map(repeat_while(ascii_to_string, {:not_3, []}), {String, :to_integer, []})
+    defparsecp :repeat_while_digits_to_same_outer,
+               map(repeat_while(ascii_to_string, {:not_3, []}), {String, :to_integer, []})
 
-    defparsec :repeat_while_double_digits_to_string,
-              repeat_while(
-                concat(
-                  map(ascii_char([?0..?9]), :to_string),
-                  map(ascii_char([?0..?9]), :to_string)
-                ),
-                {:not_3, []}
-              )
+    defparsecp :repeat_while_double_digits_to_string,
+               repeat_while(
+                 concat(
+                   map(ascii_char([?0..?9]), :to_string),
+                   map(ascii_char([?0..?9]), :to_string)
+                 ),
+                 {:not_3, []}
+               )
 
     test "returns ok/error" do
       assert repeat_while_digits("1245") == {:ok, [?1, ?2, ?4, ?5], "", %{}, {1, 0}, 4}
@@ -822,26 +825,26 @@ defmodule NimbleParsecTest do
   end
 
   describe "repeat_until/3 combinator" do
-    defparsec :repeat_until_digits,
-              repeat_until(ascii_char([?0..?9]) |> ascii_char([?0..?9]), [string("3")])
+    defparsecp :repeat_until_digits,
+               repeat_until(ascii_char([?0..?9]) |> ascii_char([?0..?9]), [string("3")])
 
     ascii_to_string = map(ascii_char([?0..?9]), :to_string)
-    defparsec :repeat_until_digits_to_string, repeat_until(ascii_to_string, [ascii_char([?3])])
+    defparsecp :repeat_until_digits_to_string, repeat_until(ascii_to_string, [ascii_char([?3])])
 
-    defparsec :repeat_until_digits_to_same_inner,
-              repeat_until(map(ascii_to_string, {String, :to_integer, []}), [ascii_char([?3])])
+    defparsecp :repeat_until_digits_to_same_inner,
+               repeat_until(map(ascii_to_string, {String, :to_integer, []}), [ascii_char([?3])])
 
-    defparsec :repeat_until_digits_to_same_outer,
-              map(repeat_until(ascii_to_string, [ascii_char([?3])]), {String, :to_integer, []})
+    defparsecp :repeat_until_digits_to_same_outer,
+               map(repeat_until(ascii_to_string, [ascii_char([?3])]), {String, :to_integer, []})
 
-    defparsec :repeat_until_double_digits_to_string,
-              repeat_until(
-                concat(
-                  map(ascii_char([?0..?9]), :to_string),
-                  map(ascii_char([?0..?9]), :to_string)
-                ),
-                [ascii_char([?3])]
-              )
+    defparsecp :repeat_until_double_digits_to_string,
+               repeat_until(
+                 concat(
+                   map(ascii_char([?0..?9]), :to_string),
+                   map(ascii_char([?0..?9]), :to_string)
+                 ),
+                 [ascii_char([?3])]
+               )
 
     test "returns ok/error" do
       assert repeat_until_digits("1245") == {:ok, [?1, ?2, ?4, ?5], "", %{}, {1, 0}, 4}
@@ -877,14 +880,14 @@ defmodule NimbleParsecTest do
   end
 
   describe "times/2 combinator" do
-    defparsec :times_digits, times(ascii_char([?0..?9]) |> ascii_char([?0..?9]), max: 4)
-    defparsec :times_choice, times(choice([ascii_char([?0..?4]), ascii_char([?5..?9])]), max: 4)
+    defparsecp :times_digits, times(ascii_char([?0..?9]) |> ascii_char([?0..?9]), max: 4)
+    defparsecp :times_choice, times(choice([ascii_char([?0..?4]), ascii_char([?5..?9])]), max: 4)
 
-    defparsec :choice_times,
-              choice([
-                times(ascii_char([?0..?9]), min: 1, max: 4),
-                times(ascii_char([?a..?z]), min: 1, max: 4)
-              ])
+    defparsecp :choice_times,
+               choice([
+                 times(ascii_char([?0..?9]), min: 1, max: 4),
+                 times(ascii_char([?a..?z]), min: 1, max: 4)
+               ])
 
     test "returns ok/error when bound" do
       assert times_digits("12") == {:ok, [?1, ?2], "", %{}, {1, 0}, 2}
@@ -922,42 +925,42 @@ defmodule NimbleParsecTest do
   end
 
   describe "choice/2 combinator" do
-    defparsec :simple_choice,
-              choice([ascii_char([?a..?z]), ascii_char([?A..?Z]), ascii_char([?0..?9])])
+    defparsecp :simple_choice,
+               choice([ascii_char([?a..?z]), ascii_char([?A..?Z]), ascii_char([?0..?9])])
 
-    defparsec :choice_label,
-              choice([ascii_char([?a..?z]), ascii_char([?A..?Z]), ascii_char([?0..?9])])
-              |> label("something")
+    defparsecp :choice_label,
+               choice([ascii_char([?a..?z]), ascii_char([?A..?Z]), ascii_char([?0..?9])])
+               |> label("something")
 
-    defparsec :choice_inner_repeat,
-              choice([repeat(ascii_char([?a..?z])), repeat(ascii_char([?A..?Z]))])
+    defparsecp :choice_inner_repeat,
+               choice([repeat(ascii_char([?a..?z])), repeat(ascii_char([?A..?Z]))])
 
-    defparsec :choice_outer_repeat, repeat(choice([ascii_char([?a..?z]), ascii_char([?A..?Z])]))
+    defparsecp :choice_outer_repeat, repeat(choice([ascii_char([?a..?z]), ascii_char([?A..?Z])]))
 
-    defparsec :choice_repeat_and_inner_map,
-              repeat(
-                choice([
-                  map(ascii_char([?a..?z]), :to_string),
-                  map(ascii_char([?A..?Z]), :to_string)
-                ])
-              )
+    defparsecp :choice_repeat_and_inner_map,
+               repeat(
+                 choice([
+                   map(ascii_char([?a..?z]), :to_string),
+                   map(ascii_char([?A..?Z]), :to_string)
+                 ])
+               )
 
-    defparsec :choice_repeat_and_maps,
-              map(
-                repeat(
-                  choice([
-                    map(ascii_char([?a..?z]), :to_string),
-                    map(ascii_char([?A..?Z]), :to_string)
-                  ])
-                ),
-                {String, :to_integer, []}
-              )
+    defparsecp :choice_repeat_and_maps,
+               map(
+                 repeat(
+                   choice([
+                     map(ascii_char([?a..?z]), :to_string),
+                     map(ascii_char([?A..?Z]), :to_string)
+                   ])
+                 ),
+                 {String, :to_integer, []}
+               )
 
-    defparsec :choice_with_empty,
-              choice([
-                ascii_char([?a..?z]),
-                empty()
-              ])
+    defparsecp :choice_with_empty,
+               choice([
+                 ascii_char([?a..?z]),
+                 empty()
+               ])
 
     @error "expected byte in the range ?a..?z or byte in the range ?A..?Z or byte in the range ?0..?9"
 
@@ -1009,7 +1012,7 @@ defmodule NimbleParsecTest do
   end
 
   describe "optional/2 combinator" do
-    defparsec :optional_ascii, optional(ascii_char([?a..?z]))
+    defparsecp :optional_ascii, optional(ascii_char([?a..?z]))
 
     test "returns ok/error on empty" do
       assert optional_ascii("az") == {:ok, [?a], "z", %{}, {1, 0}, 1}
@@ -1018,16 +1021,16 @@ defmodule NimbleParsecTest do
   end
 
   describe "parsec/2 combinator" do
-    defparsecp :parsec_inner,
-               choice([
-                 map(ascii_char([?a..?z]), {:to_string, []}),
-                 map(ascii_char([?A..?Z]), {:to_string, []})
-               ])
+    defcombinatorp :parsec_inner,
+                   choice([
+                     map(ascii_char([?a..?z]), {:to_string, []}),
+                     map(ascii_char([?A..?Z]), {:to_string, []})
+                   ])
 
-    defparsec :parsec_string, string("T") |> parsec(:parsec_inner) |> string("O")
-    defparsec :parsec_repeat, repeat(parsec(:parsec_inner))
-    defparsec :parsec_map, map(parsec(:parsec_inner), {String, :to_integer, []})
-    defparsec :parsec_choice, choice([parsec(:parsec_inner), string("+")])
+    defparsecp :parsec_string, string("T") |> parsec(:parsec_inner) |> string("O")
+    defparsecp :parsec_repeat, repeat(parsec(:parsec_inner))
+    defparsecp :parsec_map, map(parsec(:parsec_inner), {String, :to_integer, []})
+    defparsecp :parsec_choice, choice([parsec(:parsec_inner), string("+")])
 
     test "returns ok/error with string" do
       assert parsec_string("TaO") == {:ok, ["T", "97", "O"], "", %{}, {1, 0}, 3}

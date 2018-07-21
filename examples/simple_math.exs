@@ -21,23 +21,23 @@ defmodule SimpleMath do
 
   # Recursive definitions require using defparsec with the parsec combinator
 
-  defparsecp :term,
-             choice([
-               factor
-               |> ignore(ascii_char([?*]))
-               |> concat(parsec(:term))
-               |> tag(:mul),
-               factor
-             ])
+  defcombinatorp :term,
+                 choice([
+                   factor
+                   |> ignore(ascii_char([?*]))
+                   |> concat(parsec(:term))
+                   |> tag(:mul),
+                   factor
+                 ])
 
-  defparsecp :expr,
-             choice([
-               parsec(:term)
-               |> ignore(ascii_char([?+]))
-               |> concat(parsec(:expr))
-               |> tag(:plus),
-               parsec(:term)
-             ])
+  defcombinatorp :expr,
+                 choice([
+                   parsec(:term)
+                   |> ignore(ascii_char([?+]))
+                   |> concat(parsec(:expr))
+                   |> tag(:plus),
+                   parsec(:term)
+                 ])
 
   defparsec :parse, parsec(:expr)
 end

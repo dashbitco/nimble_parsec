@@ -11,7 +11,15 @@ defmodule NimbleParsec do
   end
 
   @doc """
-  Defines a public parser `combinator` with the given `name` and `opts`.
+  Defines a parser (and a combinator) with the given `name` and `opts`.
+
+  The parser is a function that receives two arguments, the binary
+  to be parsed and a set of options. You can consult the documentation
+  of the generated parser function for more information.
+
+  This function will also define a combinator that can be used as
+  `parsec(name)` when building other parsers. See `parsec/2` for
+  more information on invoking compiled combinators.
 
   ## Beware!
 
@@ -61,44 +69,70 @@ defmodule NimbleParsec do
 
   """
   defmacro defparsec(name, combinator, opts \\ []) do
-    {doc, spec, {name, args, guards, body}} = NimbleParsec.Compiler.entry_point(name)
-
-    quote do
-      @doc unquote(doc)
-      @spec unquote(spec)
-      def unquote(name)(unquote_splicing(args)) when unquote(guards) do
-        unquote(body)
-      end
-
-      unquote(compile(:def, name, combinator, opts))
-    end
+    compile(:def, name, combinator, opts)
   end
 
   @doc """
-  Defines a private parser combinator.
+  Defines a private parser (and a combinator) with the given `name` and `opts`.
 
-  It cannot be invoked directly, only via `parsec/2`.
-
-  Receives the same options as `defparsec/3`.
+  The same as `defparsec/3` but the parsing function is private.
   """
   defmacro defparsecp(name, combinator, opts \\ []) do
     compile(:defp, name, combinator, opts)
   end
 
+  @doc """
+  Defines a combinator with the given `name` and `opts`.
+
+  It is similar to `defparsec/3` except it does not define
+  an entry-point parsing function, just the combinator function
+  to be used with `parsec/2`.
+  """
+  defmacro defcombinatorp(name, combinator, opts \\ []) do
+    compile(nil, name, combinator, opts)
+  end
+
   defp compile(kind, name, combinator, opts) do
-    quote bind_quoted: [kind: kind, name: name, combinator: combinator, opts: opts] do
-      {defs, inline} = NimbleParsec.Compiler.compile(name, combinator, opts)
-      NimbleParsec.Recorder.record(__MODULE__, kind, name, defs, inline, opts)
+    combinator =
+      quote bind_quoted: [kind: kind, name: name, combinator: combinator, opts: opts] do
+        {defs, inline} = NimbleParsec.Compiler.compile(name, combinator, opts)
+        NimbleParsec.Recorder.record(__MODULE__, kind, name, defs, inline, opts)
 
-      if inline != [] do
-        @compile {:inline, inline}
+        if inline != [] do
+          @compile {:inline, inline}
+        end
+
+        for {name, args, guards, body} <- defs do
+          defp unquote(name)(unquote_splicing(args)) when unquote(guards), do: unquote(body)
+        end
       end
 
-      for {name, args, guards, body} <- defs do
-        defp unquote(name)(unquote_splicing(args)) when unquote(guards), do: unquote(body)
-      end
+    parser = compile_parser(kind)
 
-      :ok
+    quote do
+      unquote(combinator)
+      unquote(parser)
+    end
+  end
+
+  defp compile_parser(nil) do
+    :ok
+  end
+
+  defp compile_parser(:def) do
+    quote unquote: false do
+      {doc, spec, {name, args, guards, body}} = NimbleParsec.Compiler.entry_point(name)
+      Module.get_attribute(__MODULE__, :doc) || @doc doc
+      @spec unquote(spec)
+      def unquote(name)(unquote_splicing(args)) when unquote(guards), do: unquote(body)
+    end
+  end
+
+  defp compile_parser(:defp) do
+    quote unquote: false do
+      {_doc, spec, {name, args, guards, body}} = NimbleParsec.Compiler.entry_point(name)
+      @spec unquote(spec)
+      defp unquote(name)(unquote_splicing(args)) when unquote(guards), do: unquote(body)
     end
   end
 
@@ -144,10 +178,18 @@ defmodule NimbleParsec do
   end
 
   @doc """
-  Invokes an already compiled parsec with name `name` in the
+  Invokes an already compiled combinator with name `name` in the
   same module.
 
-  It is useful to implement recursive definitions.
+  Every parser defined via `defparsec/3` or `defparsecp/3` can be
+  used as combinators. However, the `defparsec/3` and `defparsecp/3`
+  functions also define an entry-point parsing function, as implied
+  by their names. If you want to define a combinator with the sole
+  purpose of using it in combinator, use `defcombinatorp/3` instead.
+
+  ## Use cases
+
+  `parsec/2` is useful to implement recursive definitions.
 
   It can also be used to exchange compilation time by runtime
   performance. If you have a parser used over and over again,
@@ -185,6 +227,25 @@ defmodule NimbleParsec do
 
       SimpleXML.xml("<foo>bar</foo>")
       #=> {:ok, [["foo", "bar", "foo"]], "", %{}, {1, 0}, 14}
+
+  In the example above, `defparsec/3` has defined the entry-point
+  parsing function as well as a combinator which we have invoked
+  with `parsec(:xml)`.
+
+  In many cases, however, you want to define recursive combinators
+  without the entry-point parsing function. We can do this by
+  replacing `defparsec/3` by `defcombinatorp`:
+
+      defcombinatorp :xml,
+                     opening_tag
+                     |> repeat_until(choice([parsec(:xml), text]), [string("</")])
+                     |> concat(closing_tag)
+                     |> wrap()
+
+  Note that now you can no longer invoke `SimpleXML.xml(xml)` as
+  there is no associating parsing function. Eventually you will
+  have to define a `defparsec/3` or `defparsecp/3`, that invokes
+  the combinator above via `parsec/3`.
 
   """
   def parsec(combinator \\ empty(), name) when is_combinator(combinator) and is_atom(name) do

@@ -13,7 +13,7 @@ defmodule SimpleXML do
   def parse(xml, opts \\ []) do
     opts = Keyword.put(opts, :context, %{tags: []})
 
-    case __xml__(xml, opts) do
+    case xml(xml, opts) do
       {:ok, acc, "", %{tags: []}, _line, _offset} ->
         {:ok, acc}
 
@@ -41,19 +41,19 @@ defmodule SimpleXML do
     |> concat(tag)
     |> ignore(string(">"))
 
-  defparsec :__xml__,
-            opening_tag
-            |> traverse(:store_tag_in_context)
-            |> repeat_until(
-              choice([
-                parsec(:__xml__),
-                text
-              ]),
-              [string("</")]
-            )
-            |> wrap()
-            |> concat(closing_tag)
-            |> traverse(:check_close_tag_and_emit_tag)
+  defparsecp :xml,
+             opening_tag
+             |> traverse(:store_tag_in_context)
+             |> repeat_until(
+               choice([
+                 parsec(:xml),
+                 text
+               ]),
+               [string("</")]
+             )
+             |> wrap()
+             |> concat(closing_tag)
+             |> traverse(:check_close_tag_and_emit_tag)
 
   defp store_tag_in_context(_rest, [tag], %{tags: tags} = context, _line, _offset) do
     {[tag], %{context | tags: [tag | tags]}}
