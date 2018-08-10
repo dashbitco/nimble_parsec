@@ -44,6 +44,6 @@ defmodule NimbleParsec.MixProject do
     args = ["NimbleParsec", @version, Mix.Project.compile_path()]
     opts = ~w[--main NimbleParsec --source-ref v#{@version} --source-url #{@url}]
     System.cmd(ex_doc, args ++ opts)
-    Mix.shell.info("Docs built successfully")
+    Mix.shell().info("Docs built successfully")
   end
 end
