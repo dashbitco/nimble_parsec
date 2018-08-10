@@ -1,5 +1,11 @@
 # Changelog for NimbleParsec
 
+## v0.4.0 (2018-08-10)
+
+### Enhancements
+
+  * Add `defcombinatorp` and clarify the role of `defparsecp`
+
 ## v0.3.2 (2018-06-02)
 
 ### Bug fixes
