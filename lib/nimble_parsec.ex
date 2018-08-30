@@ -1128,7 +1128,7 @@ defmodule NimbleParsec do
       {:ok, ["\"string with quotes \" inside\""], "", %{}, {1, 0}, 30}
 
   """
-  @spec repeat_until(t, t, [t]) :: t
+  @spec repeat_until(t, t, nonempty_list(t)) :: t
   def repeat_until(combinator \\ empty(), to_repeat, [_ | _] = choices)
       when is_combinator(combinator) and is_combinator(to_repeat) and is_list(choices) do
     non_empty!(to_repeat, "repeat_until")
@@ -1246,7 +1246,7 @@ defmodule NimbleParsec do
   Instead of `repeat/2`, you may want to use `times/3` with the flags `:min`
   and `:max`.
   """
-  @spec choice(t, t) :: t
+  @spec choice(t, nonempty_list(t)) :: t
   def choice(combinator \\ empty(), [_, _ | _] = choices) when is_combinator(combinator) do
     choices = Enum.map(choices, &Enum.reverse/1)
     [{:choice, choices} | combinator]
