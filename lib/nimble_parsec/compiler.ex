@@ -9,8 +9,9 @@ defmodule NimbleParsec.Compiler do
     doc = """
     Parses the given `binary` as #{name}.
 
-    Returns `{:ok, [token], rest, context, line, byte_offset}` or
-    `{:error, reason, rest, context, line, byte_offset}`.
+    Returns `{:ok, [token], rest, context, position, byte_offset}` or
+    `{:error, reason, rest, context, line, byte_offset}` where `position`
+    describes the location of the #{name} (start position) as {line, column_on_line}.
 
     ## Options
 
