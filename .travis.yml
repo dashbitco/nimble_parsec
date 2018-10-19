@@ -1,11 +1,14 @@
 sudo: false
 language: elixir
 script:
-  - if [[ `elixir -v` = *"1.6"* ]]; then mix format --check-formatted; fi
+  - if [ -z "$SKIP_FORMAT_CHECK" ]; then mix format --check-formatted; fi
   - mix test
 matrix:
   include:
     - elixir: 1.4.5
       otp_release: 18.3
+      env: SKIP_FORMAT_CHECK=true
     - elixir: 1.6.2
       otp_release: 20.1
+    - elixir: 1.7.3
+      otp_release: 21.1
