@@ -161,7 +161,7 @@ defmodule NimbleParsec do
     end
   end
 
-  @type t :: [combinator]
+  @opaque t :: [combinator]
   @type bin_modifiers :: :integer | :utf8 | :utf16 | :utf32
   @type range :: inclusive_range | exclusive_range
   @type inclusive_range :: Range.t() | char()
