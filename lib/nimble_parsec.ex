@@ -1027,6 +1027,17 @@ defmodule NimbleParsec do
   Instead of `repeat/2`, you may want to use `times/3` with the flags `:min`
   and `:max`.
 
+  Also beware! If you attempt to repeat a combinator that can match nothing,
+  like `optional/2`, `repeat/2` will not terminate. For example, consider
+  this combinator:
+
+       repeat(optional(utf8_char([?a])))
+
+  This combinator will never terminate because `repeat/2` chooses the empty
+  option of `optional/2` every time. This parser attempts to parse 0 or more
+  `?a` characters, and so can be represented by `repeat(utf8_char([?a]))`,
+  because `repeat/2` allows 0 or more matches.
+
   ## Examples
 
       defmodule MyParser do
