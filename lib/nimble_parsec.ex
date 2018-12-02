@@ -789,6 +789,11 @@ defmodule NimbleParsec do
 
   The number of elements returned does not need to be
   the same as the number of elements given.
+
+  This function must be used only when you want to emit code that
+  has no runtime dependencies in other modules. In most cases,
+  using `traverse/3` is better, since it doesn't work on ASTs
+  and instead works at runtime.
   """
   @spec quoted_traverse(t, t, mfargs) :: t
   def quoted_traverse(combinator, to_traverse, {_, _, _} = call)
