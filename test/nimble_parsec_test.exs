@@ -600,7 +600,6 @@ defmodule NimbleParsecTest do
                |> pre_traverse({:location, [:pre_traverse]})
                |> post_traverse({:location, [:post_traverse]})
 
-
     test "when bound" do
       assert bound_pre_and_post_traverse("ok") ==
                {:ok, [{:post_traverse, [{:pre_traverse, ["ok"], {1, 0}, 0}], {1, 0}, 2}], "", %{},

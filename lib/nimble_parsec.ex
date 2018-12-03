@@ -976,7 +976,11 @@ defmodule NimbleParsec do
   @spec unwrap_and_tag(t, t) :: t
   def unwrap_and_tag(combinator \\ empty(), to_tag, tag)
       when is_combinator(combinator) and is_combinator(to_tag) do
-    quoted_post_traverse(combinator, to_tag, {__MODULE__, :__unwrap_and_tag__, [Macro.escape(tag)]})
+    quoted_post_traverse(
+      combinator,
+      to_tag,
+      {__MODULE__, :__unwrap_and_tag__, [Macro.escape(tag)]}
+    )
   end
 
   @doc """
