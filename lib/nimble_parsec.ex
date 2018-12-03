@@ -185,7 +185,7 @@ defmodule NimbleParsec do
 
   @typep maybe_bound_combinator ::
            {:label, t, binary}
-           | {:traverse, t, constant? :: boolean, [mfargs]}
+           | {:traverse, t, :pre | :post | :constant, [mfargs]}
 
   @typep unbound_combinator ::
            {:choice, [t]}
@@ -646,7 +646,7 @@ defmodule NimbleParsec do
   @spec byte_offset(t, t) :: t
   def byte_offset(combinator \\ empty(), to_wrap)
       when is_combinator(combinator) and is_combinator(to_wrap) do
-    quoted_traverse(combinator, to_wrap, {__MODULE__, :__byte_offset__, []})
+    quoted_post_traverse(combinator, to_wrap, {__MODULE__, :__byte_offset__, []})
   end
 
   @doc """
@@ -660,7 +660,7 @@ defmodule NimbleParsec do
   @spec line(t, t) :: t
   def line(combinator \\ empty(), to_wrap)
       when is_combinator(combinator) and is_combinator(to_wrap) do
-    quoted_traverse(combinator, to_wrap, {__MODULE__, :__line__, []})
+    quoted_post_traverse(combinator, to_wrap, {__MODULE__, :__line__, []})
   end
 
   @doc ~S"""
@@ -671,10 +671,13 @@ defmodule NimbleParsec do
   or an atom `function` representing `{function, []}`.
 
   The function given in `call` will receive 5 additional arguments.
-  The rest of the parsed binary, the parser results to be traversed,
+  The rest of the parsed binary, the parser results to be post_traversed,
   the parser context, the current line and the current offset will
   be prepended to the given `args`. The `args` will be injected at
   the compile site and therefore must be escapable via `Macro.escape/1`.
+
+  The line and offset will represent the location after the combinators.
+  To retrieve the position before the combinators, use `pre_traverse/3`.
 
   The `call` must return a tuple `{acc, context}` with list of results
   to be added to the accumulator as first argument and a context as
@@ -702,7 +705,7 @@ defmodule NimbleParsec do
                   ascii_char([?a..?z])
                   |> ascii_char([?a..?z])
                   |> ascii_char([?a..?z])
-                  |> traverse({:join_and_wrap, ["-"]})
+                  |> post_traverse({:join_and_wrap, ["-"]})
 
         defp join_and_wrap(_rest, args, context, _line, _offset, joiner) do
           {args |> Enum.join(joiner) |> List.wrap(), context}
@@ -713,11 +716,32 @@ defmodule NimbleParsec do
       #=> {:ok, ["99-98-97"], "", %{}, {1, 0}, 3}
 
   """
-  @spec traverse(t, t, call) :: t
-  def traverse(combinator \\ empty(), to_traverse, call)
-      when is_combinator(combinator) and is_combinator(to_traverse) do
-    compile_call!([], call, "traverse")
-    quoted_traverse(combinator, to_traverse, {__MODULE__, :__traverse__, [call]})
+  @spec post_traverse(t, t, call) :: t
+  def post_traverse(combinator \\ empty(), to_post_traverse, call)
+      when is_combinator(combinator) and is_combinator(to_post_traverse) do
+    compile_call!([], call, "post_traverse")
+    quoted_post_traverse(combinator, to_post_traverse, {__MODULE__, :__post_traverse__, [call]})
+  end
+
+  @doc """
+  The same as `post_traverse/3` but receives the line and offset
+  from before the wrapped combinators.
+
+  `post_traverse/3` should be preferred as it keeps less stack
+  information. Use `pre_traverse/3` only if you have to access
+  the line and offset from before the given combinators.
+  """
+  @spec pre_traverse(t, t, call) :: t
+  def pre_traverse(combinator \\ empty(), to_pre_traverse, call)
+      when is_combinator(combinator) and is_combinator(to_pre_traverse) do
+    compile_call!([], call, "pre_traverse")
+    quoted_pre_traverse(combinator, to_pre_traverse, {__MODULE__, :__pre_traverse__, [call]})
+  end
+
+  @deprecated "Use post_traverse/3 instead"
+  @doc false
+  def traverse(combinator, to_traverse, call) do
+    quoted_post_traverse(combinator, to_traverse, call)
   end
 
   @doc ~S"""
@@ -770,11 +794,11 @@ defmodule NimbleParsec do
   @spec lookahead(t, call) :: t
   def lookahead(combinator \\ empty(), call) when is_combinator(combinator) do
     compile_call!([], call, "lookahead")
-    quoted_traverse(combinator, [], {__MODULE__, :__lookahead__, [call]})
+    quoted_post_traverse(combinator, [], {__MODULE__, :__lookahead__, [call]})
   end
 
   @doc """
-  Invokes `call` to emit the AST that traverses the `to_traverse`
+  Invokes `call` to emit the AST that post_traverses the `to_post_traverse`
   combinator results.
 
   `call` is a `{module, function, args}` and it will receive 5
@@ -782,6 +806,9 @@ defmodule NimbleParsec do
   parsed binary, the parser results, context, line and offset will
   be prepended to `args`. `call` is invoked at compile time and is
   useful in combinators that avoid injecting runtime dependencies.
+
+  The line and offset will represent the location after the combinators.
+  To retrieve the position before the combinators, use `quoted_pre_traverse/3`.
 
   The `call` must return a list of results to be added to
   the accumulator. Notice the received results are in reverse
@@ -792,13 +819,33 @@ defmodule NimbleParsec do
 
   This function must be used only when you want to emit code that
   has no runtime dependencies in other modules. In most cases,
-  using `traverse/3` is better, since it doesn't work on ASTs
+  using `post_traverse/3` is better, since it doesn't work on ASTs
   and instead works at runtime.
   """
-  @spec quoted_traverse(t, t, mfargs) :: t
-  def quoted_traverse(combinator, to_traverse, {_, _, _} = call)
-      when is_combinator(combinator) and is_combinator(to_traverse) do
-    quoted_traverse(combinator, to_traverse, false, call)
+  @spec quoted_post_traverse(t, t, mfargs) :: t
+  def quoted_post_traverse(combinator, to_post_traverse, {_, _, _} = call)
+      when is_combinator(combinator) and is_combinator(to_post_traverse) do
+    quoted_traverse(combinator, to_post_traverse, :post, call)
+  end
+
+  @doc """
+  The same as `quoted_post_traverse/3` but receives the line and offset
+  from before the wrapped combinators.
+
+  `quoted_post_traverse/3` should be preferred as it keeps less stack
+  information. Use `quoted_pre_traverse/3` only if you have to access
+  the line and offset from before the given combinators.
+  """
+  @spec quoted_pre_traverse(t, t, mfargs) :: t
+  def quoted_pre_traverse(combinator, to_pre_traverse, {_, _, _} = call)
+      when is_combinator(combinator) and is_combinator(to_pre_traverse) do
+    quoted_traverse(combinator, to_pre_traverse, :pre, call)
+  end
+
+  @deprecated "Use quoted_post_traverse/3 instead"
+  @doc false
+  def quoted_traverse(combinator, to_traverse, call) do
+    quoted_post_traverse(combinator, to_traverse, call)
   end
 
   @doc ~S"""
@@ -809,11 +856,11 @@ defmodule NimbleParsec do
   or an atom `function` representing `{function, []}`.
 
   Each parser result will be invoked individually for the `call`.
-  Each result  be prepended to the given `args`. The `args` will
+  Each result be prepended to the given `args`. The `args` will
   be injected at the compile site and therefore must be escapable
   via `Macro.escape/1`.
 
-  See `traverse/3` for a low level version of this function.
+  See `post_traverse/3` for a low level version of this function.
 
   ## Examples
 
@@ -835,7 +882,7 @@ defmodule NimbleParsec do
       when is_combinator(combinator) and is_combinator(to_map) do
     var = Macro.var(:var, __MODULE__)
     call = compile_call!([var], call, "map")
-    quoted_traverse(combinator, to_map, {__MODULE__, :__map__, [var, call]})
+    quoted_post_traverse(combinator, to_map, {__MODULE__, :__map__, [var, call]})
   end
 
   @doc ~S"""
@@ -849,7 +896,7 @@ defmodule NimbleParsec do
   given `args`. The `args` will be injected at the compile site
   and therefore must be escapable via `Macro.escape/1`.
 
-  See `traverse/3` for a low level version of this function.
+  See `post_traverse/3` for a low level version of this function.
 
   ## Examples
 
@@ -870,7 +917,7 @@ defmodule NimbleParsec do
   def reduce(combinator \\ empty(), to_reduce, call)
       when is_combinator(combinator) and is_combinator(to_reduce) do
     compile_call!([], call, "reduce")
-    quoted_traverse(combinator, to_reduce, {__MODULE__, :__reduce__, [call]})
+    quoted_post_traverse(combinator, to_reduce, {__MODULE__, :__reduce__, [call]})
   end
 
   @doc """
@@ -879,7 +926,7 @@ defmodule NimbleParsec do
   @spec wrap(t, t) :: t
   def wrap(combinator \\ empty(), to_wrap)
       when is_combinator(combinator) and is_combinator(to_wrap) do
-    quoted_traverse(combinator, to_wrap, {__MODULE__, :__wrap__, []})
+    quoted_post_traverse(combinator, to_wrap, {__MODULE__, :__wrap__, []})
   end
 
   @doc """
@@ -904,7 +951,7 @@ defmodule NimbleParsec do
   @spec tag(t, t) :: t
   def tag(combinator \\ empty(), to_tag, tag)
       when is_combinator(combinator) and is_combinator(to_tag) do
-    quoted_traverse(combinator, to_tag, {__MODULE__, :__tag__, [Macro.escape(tag)]})
+    quoted_post_traverse(combinator, to_tag, {__MODULE__, :__tag__, [Macro.escape(tag)]})
   end
 
   @doc """
@@ -929,7 +976,7 @@ defmodule NimbleParsec do
   @spec unwrap_and_tag(t, t) :: t
   def unwrap_and_tag(combinator \\ empty(), to_tag, tag)
       when is_combinator(combinator) and is_combinator(to_tag) do
-    quoted_traverse(combinator, to_tag, {__MODULE__, :__unwrap_and_tag__, [Macro.escape(tag)]})
+    quoted_post_traverse(combinator, to_tag, {__MODULE__, :__unwrap_and_tag__, [Macro.escape(tag)]})
   end
 
   @doc """
@@ -938,7 +985,7 @@ defmodule NimbleParsec do
   @spec debug(t, t) :: t
   def debug(combinator \\ empty(), to_debug)
       when is_combinator(combinator) and is_combinator(to_debug) do
-    quoted_traverse(combinator, to_debug, {__MODULE__, :__debug__, []})
+    quoted_pre_traverse(combinator, to_debug, {__MODULE__, :__debug__, []})
   end
 
   @doc ~S"""
@@ -986,7 +1033,7 @@ defmodule NimbleParsec do
     if to_ignore == empty() do
       to_ignore
     else
-      quoted_traverse(combinator, to_ignore, true, {__MODULE__, :__constant__, [[]]})
+      quoted_constant_traverse(combinator, to_ignore, {__MODULE__, :__constant__, [[]]})
     end
   end
 
@@ -1012,7 +1059,7 @@ defmodule NimbleParsec do
   def replace(combinator \\ empty(), to_replace, value)
       when is_combinator(combinator) and is_combinator(to_replace) do
     value = Macro.escape(value)
-    quoted_traverse(combinator, to_replace, true, {__MODULE__, :__constant__, [[value]]})
+    quoted_constant_traverse(combinator, to_replace, {__MODULE__, :__constant__, [[value]]})
   end
 
   @doc """
@@ -1378,15 +1425,18 @@ defmodule NimbleParsec do
 
   ## Inner combinators
 
-  defp quoted_traverse(combinator, to_traverse, constant?, call) do
+  defp quoted_constant_traverse(combinator, to_traverse, call) do
     case to_traverse do
-      [{:traverse, inner_traverse, inner_constant?, inner_call}] ->
-        constant? = inner_constant? and constant?
-        [{:traverse, inner_traverse, constant?, [call | inner_call]} | combinator]
+      [{:traverse, inner_traverse, :constant, inner_call}] ->
+        [{:traverse, inner_traverse, :constant, [call | inner_call]} | combinator]
 
       _ ->
-        [{:traverse, Enum.reverse(to_traverse), constant?, [call]} | combinator]
+        [{:traverse, Enum.reverse(to_traverse), :constant, [call]} | combinator]
     end
+  end
+
+  defp quoted_traverse(combinator, to_traverse, pre_or_pos, call) do
+    [{:traverse, Enum.reverse(to_traverse), pre_or_pos, [call]} | combinator]
   end
 
   defp bin_segment(combinator, inclusive, exclusive, [_ | _] = modifiers) do
@@ -1396,8 +1446,13 @@ defmodule NimbleParsec do
   ## Traverse callbacks
 
   @doc false
-  def __traverse__(rest, acc, context, line, offset, call) do
-    compile_call!([rest, acc, context, line, offset], call, "traverse")
+  def __pre_traverse__(rest, acc, context, line, offset, call) do
+    compile_call!([rest, acc, context, line, offset], call, "pre_traverse")
+  end
+
+  @doc false
+  def __post_traverse__(rest, acc, context, line, offset, call) do
+    compile_call!([rest, acc, context, line, offset], call, "post_traverse")
   end
 
   @doc false
@@ -1517,7 +1572,7 @@ defmodule NimbleParsec do
   defp min_max_compile_runtime_chars(combinator, to_repeat, count, compile, _runtime, args)
        when is_integer(count) and count > 0 do
     chars = duplicate(to_repeat, count)
-    quoted_traverse(combinator, chars, {__MODULE__, compile, [count | args]})
+    quoted_post_traverse(combinator, chars, {__MODULE__, compile, [count | args]})
   end
 
   defp min_max_compile_runtime_chars(combinator, to_repeat, opts, compile, runtime, args)
@@ -1538,7 +1593,7 @@ defmodule NimbleParsec do
         repeat(chars, to_repeat)
       end
 
-    quoted_traverse(combinator, chars, {__MODULE__, runtime, [min, max | args]})
+    quoted_post_traverse(combinator, chars, {__MODULE__, runtime, [min, max | args]})
   end
 
   @doc false

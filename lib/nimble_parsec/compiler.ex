@@ -177,14 +177,14 @@ defmodule NimbleParsec.Compiler do
   end
 
   defp compile_unbound_combinator(
-         {:traverse, combinators, constant?, traversal},
+         {:traverse, combinators, kind, traversal},
          current,
          step,
          config
        ) do
     fun = &traverse(traversal, &1, &2, &3, &4, &5, &6, config)
-    config = if constant?, do: put_in(config.replace, true), else: config
-    compile_unbound_traverse(combinators, current, step, config, fun)
+    config = if kind == :constant, do: put_in(config.replace, true), else: config
+    compile_unbound_traverse(combinators, kind, current, step, config, fun)
   end
 
   defp compile_unbound_combinator({:times, combinators, 0, count}, current, step, config) do
@@ -222,20 +222,27 @@ defmodule NimbleParsec.Compiler do
 
   ## Traverse
 
-  defp compile_unbound_traverse([], current, step, config, fun) do
+  defp compile_unbound_traverse([], _kind, current, step, config, fun) do
     {next, step} = build_next(step, config)
-
     head = quote(do: [rest, acc, stack, context, line, offset])
     [rest, _, _, context, line, offset] = head
+
     body = fun.(next, rest, [], context, line, offset)
     def = {current, head, true, body}
     {[def], [{current, @arity}], next, step, :catch_none}
   end
 
-  defp compile_unbound_traverse(combinators, current, step, config, fun) do
+  defp compile_unbound_traverse(combinators, kind, current, step, config, fun) do
     {next, step} = build_next(step, config)
     head = quote(do: [rest, acc, stack, context, line, offset])
-    args = quote(do: [rest, [], [acc | stack], context, line, offset])
+
+    args =
+      if kind == :pre do
+        quote(do: [rest, [], [{acc, line, offset} | stack], context, line, offset])
+      else
+        quote(do: [rest, [], [acc | stack], context, line, offset])
+      end
+
     body = {next, [], args}
     first_def = {current, head, true, body}
 
@@ -245,20 +252,32 @@ defmodule NimbleParsec.Compiler do
     # Now we need to traverse the accumulator with the user code and
     # concatenate with the previous accumulator at the top of the stack.
     {next, step} = build_next(step, config)
-    head = quote(do: [rest, user_acc, [acc | stack], context, line, offset])
-    [rest, user_acc, _, context, line, offset] = head
-    body = fun.(next, rest, user_acc, context, line, offset)
+
+    {head, {traverse_line, traverse_offset}} =
+      if kind == :pre do
+        quote do
+          {[rest, user_acc, [{acc, stack_line, stack_offset} | stack], context, line, offset],
+           {stack_line, stack_offset}}
+        end
+      else
+        quote do
+          {[rest, user_acc, [acc | stack], context, line, offset], {line, offset}}
+        end
+      end
+
+    [rest, user_acc, _, context | _] = head
+    body = fun.(next, rest, user_acc, context, traverse_line, traverse_offset)
     last_def = {last, head, true, body}
 
     inline = [{current, @arity}, {last, @arity} | inline]
     {Enum.reverse([last_def | defs]), inline, next, step, :catch_none}
   end
 
-  defp traverse(_traversal, next, _rest, _user_acc, _context, _line, _offset, %{replace: true}) do
+  defp traverse(_traversal, next, _, _, _, _, _, %{replace: true}) do
     quote(do: unquote(next)(rest, acc, stack, context, line, offset))
   end
 
-  defp traverse(traversal, next, rest, user_acc, context, line, offset, %{replace: false}) do
+  defp traverse(traversal, next, rest, user_acc, context, line, offset, _) do
     case apply_traverse(traversal, rest, user_acc, context, line, offset) do
       {user_acc, ^context} when user_acc != :error ->
         quote(do: unquote(next)(rest, unquote(user_acc) ++ acc, stack, context, line, offset))
@@ -643,14 +662,17 @@ defmodule NimbleParsec.Compiler do
     end
   end
 
-  defp bound_combinator({:traverse, combinators, _constant?, mfargs}, line, offset, counter) do
-    case take_bound_combinators(combinators, [], [], [], [], line, offset, counter) do
-      {[], inputs, guards, outputs, _, line, offset, counter} ->
+  defp bound_combinator({:traverse, combinators, kind, mfargs}, pre_line, pre_offset, counter) do
+    case take_bound_combinators(combinators, [], [], [], [], pre_line, pre_offset, counter) do
+      {[], inputs, guards, outputs, _, post_line, post_offset, counter} ->
         {rest, context} = quote(do: {rest, context})
 
-        case apply_traverse(mfargs, rest, outputs, context, line, offset) do
+        {traverse_line, traverse_offset} =
+          pre_post_traverse(kind, pre_line, pre_offset, post_line, post_offset)
+
+        case apply_traverse(mfargs, rest, outputs, context, traverse_line, traverse_offset) do
           {outputs, ^context} when outputs != :error ->
-            {:ok, inputs, guards, outputs, line, offset, counter}
+            {:ok, inputs, guards, outputs, post_line, post_offset, counter}
 
           _ ->
             :error
@@ -666,6 +688,11 @@ defmodule NimbleParsec.Compiler do
   end
 
   ## Line and offset handling
+
+  # For pre traversal returns the AST before, otherwise the AST after
+  # for post. For constant, line/offset are never used.
+  defp pre_post_traverse(:pre, pre_line, pre_offset, _, _), do: {pre_line, pre_offset}
+  defp pre_post_traverse(_, _, _, post_line, post_offset), do: {post_line, post_offset}
 
   defp line_offset_pair() do
     quote(do: {comb__line, comb__offset})

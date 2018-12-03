@@ -415,86 +415,202 @@ defmodule NimbleParsecTest do
     end
   end
 
-  describe "remote traverse/3 combinator" do
+  describe "remote post_traverse/3 combinator" do
     @three_ascii_letters times(ascii_char([?a..?z]), min: 3)
 
-    defparsecp :remote_traverse,
+    defparsecp :remote_post_traverse,
                string("T")
                |> integer(2)
-               |> traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]})
+               |> post_traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]})
                |> integer(2)
 
-    defparsecp :remote_traverse_error_when_last_is_z,
-               traverse(@three_ascii_letters, {__MODULE__, :error_when_last_is_z, []})
+    defparsecp :remote_post_traverse_error_when_last_is_z,
+               post_traverse(@three_ascii_letters, {__MODULE__, :error_when_last_is_z, []})
 
     test "returns ok/error" do
-      assert remote_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", %{}, {1, 0}, 8}
+      assert remote_post_traverse("T12abc34") ==
+               {:ok, ["T", 12, "99-98-97", 34], "", %{}, {1, 0}, 8}
 
       error =
         "expected string \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
-      assert remote_traverse("Tabc34") == {:error, error, "Tabc34", %{}, {1, 0}, 0}
+      assert remote_post_traverse("Tabc34") == {:error, error, "Tabc34", %{}, {1, 0}, 0}
 
       error = "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
-      assert remote_traverse("T12abcdf") == {:error, error, "", %{}, {1, 0}, 8}
+      assert remote_post_traverse("T12abcdf") == {:error, error, "", %{}, {1, 0}, 8}
 
       error =
         "expected byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z"
 
-      assert remote_traverse("T12ab34") == {:error, error, "ab34", %{}, {1, 0}, 3}
+      assert remote_post_traverse("T12ab34") == {:error, error, "ab34", %{}, {1, 0}, 3}
     end
 
     test "returns error from traversal" do
-      assert remote_traverse_error_when_last_is_z("abcdef") == {:ok, 'abcdef', "", %{}, {1, 0}, 6}
+      assert remote_post_traverse_error_when_last_is_z("abcdef") ==
+               {:ok, 'abcdef', "", %{}, {1, 0}, 6}
 
-      assert remote_traverse_error_when_last_is_z("abcdez") ==
+      assert remote_post_traverse_error_when_last_is_z("abcdez") ==
                {:error, "last is z", "", %{}, {1, 0}, 6}
     end
 
     test "is not bound" do
-      combinator = traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]})
+      combinator = post_traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]})
       assert not_bound?(combinator)
     end
   end
 
-  describe "local traverse/3 combinator" do
+  describe "local post_traverse/3 combinator" do
     @three_ascii_letters times(ascii_char([?a..?z]), min: 3)
 
-    defparsecp :local_traverse,
+    defparsecp :local_post_traverse,
                string("T")
                |> integer(2)
-               |> traverse(@three_ascii_letters, {:private_join_and_wrap, ["-"]})
+               |> post_traverse(@three_ascii_letters, {:private_join_and_wrap, ["-"]})
                |> integer(2)
 
-    defparsecp :local_traverse_error_when_last_is_z,
-               traverse(@three_ascii_letters, {__MODULE__, :error_when_last_is_z, []})
+    defparsecp :local_post_traverse_error_when_last_is_z,
+               post_traverse(@three_ascii_letters, {__MODULE__, :error_when_last_is_z, []})
 
     test "returns ok/error" do
-      assert local_traverse("T12abc34") == {:ok, ["T", 12, "99-98-97", 34], "", %{}, {1, 0}, 8}
+      assert local_post_traverse("T12abc34") ==
+               {:ok, ["T", 12, "99-98-97", 34], "", %{}, {1, 0}, 8}
 
       error =
         "expected string \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
 
-      assert local_traverse("Tabc34") == {:error, error, "Tabc34", %{}, {1, 0}, 0}
+      assert local_post_traverse("Tabc34") == {:error, error, "Tabc34", %{}, {1, 0}, 0}
 
       error = "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
-      assert local_traverse("T12abcdf") == {:error, error, "", %{}, {1, 0}, 8}
+      assert local_post_traverse("T12abcdf") == {:error, error, "", %{}, {1, 0}, 8}
 
       error =
         "expected byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z"
 
-      assert local_traverse("T12ab34") == {:error, error, "ab34", %{}, {1, 0}, 3}
+      assert local_post_traverse("T12ab34") == {:error, error, "ab34", %{}, {1, 0}, 3}
     end
 
     test "returns error from traversal" do
-      assert local_traverse_error_when_last_is_z("abcdef") == {:ok, 'abcdef', "", %{}, {1, 0}, 6}
+      assert local_post_traverse_error_when_last_is_z("abcdef") ==
+               {:ok, 'abcdef', "", %{}, {1, 0}, 6}
 
-      assert local_traverse_error_when_last_is_z("abcdez") ==
+      assert local_post_traverse_error_when_last_is_z("abcdez") ==
                {:error, "last is z", "", %{}, {1, 0}, 6}
     end
 
     test "is not bound" do
-      assert not_bound?(traverse(@three_ascii_letters, {:private_join_and_wrap, ["-"]}))
+      assert not_bound?(post_traverse(@three_ascii_letters, {:private_join_and_wrap, ["-"]}))
+    end
+  end
+
+  describe "remote pre_traverse/3 combinator" do
+    @three_ascii_letters times(ascii_char([?a..?z]), min: 3)
+
+    defparsecp :remote_pre_traverse,
+               string("T")
+               |> integer(2)
+               |> pre_traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]})
+               |> integer(2)
+
+    defparsecp :remote_pre_traverse_error_when_last_is_z,
+               pre_traverse(@three_ascii_letters, {__MODULE__, :error_when_last_is_z, []})
+
+    test "returns ok/error" do
+      assert remote_pre_traverse("T12abc34") ==
+               {:ok, ["T", 12, "99-98-97", 34], "", %{}, {1, 0}, 8}
+
+      error =
+        "expected string \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
+
+      assert remote_pre_traverse("Tabc34") == {:error, error, "Tabc34", %{}, {1, 0}, 0}
+
+      error = "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
+      assert remote_pre_traverse("T12abcdf") == {:error, error, "", %{}, {1, 0}, 8}
+
+      error =
+        "expected byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z"
+
+      assert remote_pre_traverse("T12ab34") == {:error, error, "ab34", %{}, {1, 0}, 3}
+    end
+
+    test "returns error from traversal" do
+      assert remote_pre_traverse_error_when_last_is_z("abcdef") ==
+               {:ok, 'abcdef', "", %{}, {1, 0}, 6}
+
+      assert remote_pre_traverse_error_when_last_is_z("abcdez") ==
+               {:error, "last is z", "", %{}, {1, 0}, 6}
+    end
+
+    test "is not bound" do
+      combinator = pre_traverse(@three_ascii_letters, {__MODULE__, :public_join_and_wrap, ["-"]})
+      assert not_bound?(combinator)
+    end
+  end
+
+  describe "local pre_traverse/3 combinator" do
+    @three_ascii_letters times(ascii_char([?a..?z]), min: 3)
+
+    defparsecp :local_pre_traverse,
+               string("T")
+               |> integer(2)
+               |> pre_traverse(@three_ascii_letters, {:private_join_and_wrap, ["-"]})
+               |> integer(2)
+
+    defparsecp :local_pre_traverse_error_when_last_is_z,
+               pre_traverse(@three_ascii_letters, {__MODULE__, :error_when_last_is_z, []})
+
+    test "returns ok/error" do
+      assert local_pre_traverse("T12abc34") ==
+               {:ok, ["T", 12, "99-98-97", 34], "", %{}, {1, 0}, 8}
+
+      error =
+        "expected string \"T\", followed by byte in the range ?0..?9, followed by byte in the range ?0..?9"
+
+      assert local_pre_traverse("Tabc34") == {:error, error, "Tabc34", %{}, {1, 0}, 0}
+
+      error = "expected byte in the range ?0..?9, followed by byte in the range ?0..?9"
+      assert local_pre_traverse("T12abcdf") == {:error, error, "", %{}, {1, 0}, 8}
+
+      error =
+        "expected byte in the range ?a..?z, followed by byte in the range ?a..?z, followed by byte in the range ?a..?z"
+
+      assert local_pre_traverse("T12ab34") == {:error, error, "ab34", %{}, {1, 0}, 3}
+    end
+
+    test "returns error from traversal" do
+      assert local_pre_traverse_error_when_last_is_z("abcdef") ==
+               {:ok, 'abcdef', "", %{}, {1, 0}, 6}
+
+      assert local_pre_traverse_error_when_last_is_z("abcdez") ==
+               {:error, "last is z", "", %{}, {1, 0}, 6}
+    end
+
+    test "is not bound" do
+      assert not_bound?(pre_traverse(@three_ascii_letters, {:private_join_and_wrap, ["-"]}))
+    end
+  end
+
+  describe "pre_traverse/3 and post_traverse/3 locations" do
+    defparsecp :bound_pre_and_post_traverse,
+               string("ok")
+               |> pre_traverse({:location, [:pre_traverse]})
+               |> post_traverse({:location, [:post_traverse]})
+
+    defparsecp :unbound_pre_and_post_traverse,
+               integer(min: 2)
+               |> pre_traverse({:location, [:pre_traverse]})
+               |> post_traverse({:location, [:post_traverse]})
+
+
+    test "when bound" do
+      assert bound_pre_and_post_traverse("ok") ==
+               {:ok, [{:post_traverse, [{:pre_traverse, ["ok"], {1, 0}, 0}], {1, 0}, 2}], "", %{},
+                {1, 0}, 2}
+    end
+
+    test "when unbound" do
+      assert unbound_pre_and_post_traverse("12") ==
+               {:ok, [{:post_traverse, [{:pre_traverse, [12], {1, 0}, 0}], {1, 0}, 2}], "", %{},
+                {1, 0}, 2}
     end
   end
 
@@ -620,7 +736,7 @@ defmodule NimbleParsecTest do
              Acc: [1, 2]
              Ctx: %{}
              Lin: {1, 0}
-             Off: 2
+             Off: 0
 
              """
     end
@@ -1067,6 +1183,10 @@ defmodule NimbleParsecTest do
       assert parsec_map("AZ") == {:ok, [?A], "Z", %{}, {1, 0}, 1}
       assert parsec_map("1aAzZ") == {:error, @error, "1aAzZ", %{}, {1, 0}, 0}
     end
+  end
+
+  defp location(_rest, args, %{} = context, line, offset, tag) do
+    {[{tag, args, line, offset}], context}
   end
 
   defp bound?(document) do

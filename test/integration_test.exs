@@ -82,7 +82,7 @@ defmodule NimbleParsec.IntegrationTest do
     defparsec :signed_int,
               optional(ascii_char([?-]))
               |> integer(min: 1)
-              |> traverse({:sign_int_value, []})
+              |> post_traverse({:sign_int_value, []})
               |> tag(:signed_int)
 
     defp sign_int_value(_rest, [int, _neg], context, _, _) do
@@ -101,7 +101,7 @@ defmodule NimbleParsec.IntegrationTest do
   describe "language code" do
     language_code =
       ascii_string([?a..?z], 2)
-      |> traverse(:atomize_language_code)
+      |> post_traverse(:atomize_language_code)
       |> tag(:language)
 
     defparsec :language_code, language_code

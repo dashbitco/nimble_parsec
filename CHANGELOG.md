@@ -1,5 +1,11 @@
 # Changelog for NimbleParsec
 
+## v0.5.0-dev
+
+### Enhancements
+
+  * Introduce `pre_traverse/3` and deprecate `traverse/3` in favor of `post_traverse/3`
+
 ## v0.4.0 (2018-08-10)
 
 ### Enhancements

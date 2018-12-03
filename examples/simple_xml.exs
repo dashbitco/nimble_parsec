@@ -43,7 +43,7 @@ defmodule SimpleXML do
 
   defparsecp :xml,
              opening_tag
-             |> traverse(:store_tag_in_context)
+             |> post_traverse(:store_tag_in_context)
              |> repeat_until(
                choice([
                  parsec(:xml),
@@ -53,7 +53,7 @@ defmodule SimpleXML do
              )
              |> wrap()
              |> concat(closing_tag)
-             |> traverse(:check_close_tag_and_emit_tag)
+             |> post_traverse(:check_close_tag_and_emit_tag)
 
   defp store_tag_in_context(_rest, [tag], %{tags: tags} = context, _line, _offset) do
     {[tag], %{context | tags: [tag | tags]}}
