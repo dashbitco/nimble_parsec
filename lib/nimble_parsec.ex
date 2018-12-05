@@ -740,8 +740,8 @@ defmodule NimbleParsec do
 
   @deprecated "Use post_traverse/3 instead"
   @doc false
-  def traverse(combinator, to_traverse, call) do
-    quoted_post_traverse(combinator, to_traverse, call)
+  def traverse(combinator \\ empty(), to_traverse, call) do
+    post_traverse(combinator, to_traverse, call)
   end
 
   @doc ~S"""
@@ -823,7 +823,7 @@ defmodule NimbleParsec do
   and instead works at runtime.
   """
   @spec quoted_post_traverse(t, t, mfargs) :: t
-  def quoted_post_traverse(combinator, to_post_traverse, {_, _, _} = call)
+  def quoted_post_traverse(combinator \\ empty(), to_post_traverse, {_, _, _} = call)
       when is_combinator(combinator) and is_combinator(to_post_traverse) do
     quoted_traverse(combinator, to_post_traverse, :post, call)
   end
@@ -837,14 +837,14 @@ defmodule NimbleParsec do
   the line and offset from before the given combinators.
   """
   @spec quoted_pre_traverse(t, t, mfargs) :: t
-  def quoted_pre_traverse(combinator, to_pre_traverse, {_, _, _} = call)
+  def quoted_pre_traverse(combinator \\ empty(), to_pre_traverse, {_, _, _} = call)
       when is_combinator(combinator) and is_combinator(to_pre_traverse) do
     quoted_traverse(combinator, to_pre_traverse, :pre, call)
   end
 
   @deprecated "Use quoted_post_traverse/3 instead"
   @doc false
-  def quoted_traverse(combinator, to_traverse, call) do
+  def quoted_traverse(combinator \\ empty(), to_traverse, call) do
     quoted_post_traverse(combinator, to_traverse, call)
   end
 
