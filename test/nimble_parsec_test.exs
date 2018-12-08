@@ -1184,6 +1184,19 @@ defmodule NimbleParsecTest do
     end
   end
 
+  describe "eof/1 combinator" do
+    defparsecp :only_eof, eof()
+    defparsecp :multi_eof, eof() |> eof()
+
+    @error "expected end of file"
+
+    test "returns ok/error" do
+      assert only_eof("") == {:ok, [], "", %{}, {1, 0}, 0}
+      assert only_eof("a") == {:error, @error, "a", %{}, {1, 0}, 0}
+      assert multi_eof("") == {:ok, [], "", %{}, {1, 0}, 0}
+    end
+  end
+
   defp location(_rest, args, %{} = context, line, offset, tag) do
     {[{tag, args, line, offset}], context}
   end
