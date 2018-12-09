@@ -63,7 +63,7 @@ defmodule NimbleParsec.Recorder do
 
   defp format_defs(defs, inline, inline?) do
     functions = Enum.map(defs, &format_def(:defp, &1))
-    inline = if inline?, do: "@compile {:inline, #{inline}}\n", else: ""
+    inline = if inline?, do: "@compile {:inline, #{inspect inline}}\n\n", else: ""
     [inline | functions]
   end
 
