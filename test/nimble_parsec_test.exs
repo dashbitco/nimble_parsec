@@ -1199,8 +1199,7 @@ defmodule NimbleParsecTest do
     end
 
     test "never succeeds on bad eof" do
-      assert bad_eof("a") ==
-               {:error, "expected byte in the range ?a..?z", "", %{}, {1, 0}, 1}
+      assert bad_eof("a") == {:error, "expected byte in the range ?a..?z", "", %{}, {1, 0}, 1}
 
       assert bad_eof("aa") ==
                {:error, "expected byte in the range ?a..?z, followed by end of file", "aa", %{},
