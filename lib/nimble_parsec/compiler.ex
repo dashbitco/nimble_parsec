@@ -63,7 +63,7 @@ defmodule NimbleParsec.Compiler do
 
   def compile_pattern(combinators) do
     case take_bound_combinators(Enum.reverse(combinators)) do
-      {[], inputs, guards, _, _, %{eof: eof}} -> {inputs, guards_list_to_quoted(guards), eof}
+      {[], inputs, guards, _, _, %{eos: eos}} -> {inputs, guards_list_to_quoted(guards), eos}
       _ -> :error
     end
   end
@@ -550,9 +550,9 @@ defmodule NimbleParsec.Compiler do
   # in case of errors but such can be addressed if desired.
 
   defp compile_bound_combinator(inputs, guards, outputs, metadata, current, step, config) do
-    %{eof: eof?, line: line, offset: offset} = metadata
+    %{eos: eos?, line: line, offset: offset} = metadata
     {next, step} = build_next(step, config)
-    rest = if eof?, do: "", else: quote(do: rest)
+    rest = if eos?, do: "", else: quote(do: rest)
 
     bin = {:<<>>, [], inputs ++ [quote(do: unquote(rest) :: binary)]}
     acc = if config.replace, do: quote(do: acc), else: quote(do: unquote(outputs) ++ acc)
@@ -574,13 +574,13 @@ defmodule NimbleParsec.Compiler do
 
   defp take_bound_combinators(combinators) do
     {line, offset} = line_offset_pair()
-    metadata = %{eof: false, line: line, offset: offset, counter: 0}
+    metadata = %{eos: false, line: line, offset: offset, counter: 0}
     take_bound_combinators(combinators, [], [], [], [], metadata)
   end
 
-  defp take_bound_combinators([:eof | combinators], inputs, guards, outputs, acc, metadata) do
-    combinators = Enum.drop_while(combinators, &(&1 == :eof))
-    {combinators, inputs, guards, outputs, [:eof | acc], %{metadata | eof: true}}
+  defp take_bound_combinators([:eos | combinators], inputs, guards, outputs, acc, metadata) do
+    combinators = Enum.drop_while(combinators, &(&1 == :eos))
+    {combinators, inputs, guards, outputs, [:eos | acc], %{metadata | eos: true}}
   end
 
   defp take_bound_combinators(combinators, inputs, guards, outputs, acc, metadata) do
@@ -761,8 +761,8 @@ defmodule NimbleParsec.Compiler do
     prefix <> Enum.join([Enum.join(inclusive, " or") | exclusive], ", and not")
   end
 
-  defp label(:eof) do
-    "end of file"
+  defp label(:eos) do
+    "end of string"
   end
 
   defp label({:repeat, combinators, _}) do

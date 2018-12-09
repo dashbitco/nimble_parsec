@@ -1184,31 +1184,31 @@ defmodule NimbleParsecTest do
     end
   end
 
-  describe "eof/1 combinator" do
-    defparsecp :only_eof, eof()
-    defparsecp :multi_eof, eof() |> eof()
-    defparsecp :bad_eof, ascii_char([?a..?z]) |> eof() |> ascii_char([?a..?z])
-    defparsecp :repeat_until_eof, repeat_until(ascii_char([?0..?9]), [string("3") |> eof()])
+  describe "eos/1 combinator" do
+    defparsecp :only_eos, eos()
+    defparsecp :multi_eos, eos() |> eos()
+    defparsecp :bad_eos, ascii_char([?a..?z]) |> eos() |> ascii_char([?a..?z])
+    defparsecp :repeat_until_eos, repeat_until(ascii_char([?0..?9]), [string("3") |> eos()])
 
-    @error "expected end of file"
+    @error "expected end of string"
 
     test "returns ok/error" do
-      assert only_eof("") == {:ok, [], "", %{}, {1, 0}, 0}
-      assert only_eof("a") == {:error, @error, "a", %{}, {1, 0}, 0}
-      assert multi_eof("") == {:ok, [], "", %{}, {1, 0}, 0}
+      assert only_eos("") == {:ok, [], "", %{}, {1, 0}, 0}
+      assert only_eos("a") == {:error, @error, "a", %{}, {1, 0}, 0}
+      assert multi_eos("") == {:ok, [], "", %{}, {1, 0}, 0}
     end
 
-    test "never succeeds on bad eof" do
-      assert bad_eof("a") == {:error, "expected byte in the range ?a..?z", "", %{}, {1, 0}, 1}
+    test "never succeeds on bad eos" do
+      assert bad_eos("a") == {:error, "expected byte in the range ?a..?z", "", %{}, {1, 0}, 1}
 
-      assert bad_eof("aa") ==
-               {:error, "expected byte in the range ?a..?z, followed by end of file", "aa", %{},
+      assert bad_eos("aa") ==
+               {:error, "expected byte in the range ?a..?z, followed by end of string", "aa", %{},
                 {1, 0}, 0}
     end
 
-    test "eof works in repeat_until" do
-      assert repeat_until_eof("12345") == {:ok, '12345', "", %{}, {1, 0}, 5}
-      assert repeat_until_eof("123") == {:ok, '12', "3", %{}, {1, 0}, 2}
+    test "eos works in repeat_until" do
+      assert repeat_until_eos("12345") == {:ok, '12345', "", %{}, {1, 0}, 5}
+      assert repeat_until_eos("123") == {:ok, '12', "3", %{}, {1, 0}, 2}
     end
   end
 
