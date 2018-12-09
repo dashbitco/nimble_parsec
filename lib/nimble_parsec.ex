@@ -132,20 +132,20 @@ defmodule NimbleParsec do
         end
       end
 
-    parser = compile_parser(kind)
+    parser = compile_parser(name, kind)
 
     quote do
-      unquote(combinator)
       unquote(parser)
+      unquote(combinator)
     end
   end
 
-  defp compile_parser(nil) do
+  defp compile_parser(_name, nil) do
     :ok
   end
 
-  defp compile_parser(:def) do
-    quote unquote: false do
+  defp compile_parser(name, :def) do
+    quote bind_quoted: [name: name] do
       {doc, spec, {name, args, guards, body}} = NimbleParsec.Compiler.entry_point(name)
       Module.get_attribute(__MODULE__, :doc) || @doc doc
       @spec unquote(spec)
@@ -153,8 +153,8 @@ defmodule NimbleParsec do
     end
   end
 
-  defp compile_parser(:defp) do
-    quote unquote: false do
+  defp compile_parser(name, :defp) do
+    quote bind_quoted: [name: name] do
       {_doc, spec, {name, args, guards, body}} = NimbleParsec.Compiler.entry_point(name)
       @spec unquote(spec)
       defp unquote(name)(unquote_splicing(args)) when unquote(guards), do: unquote(body)

@@ -4,6 +4,9 @@ defmodule NimbleParsec.IntegrationTest do
   import NimbleParsec
 
   describe "markdown heading" do
+    @doc """
+    Docs should apply correctly.
+    """
     defparsec :markdown_h1,
               string("#")
               |> ignore()
