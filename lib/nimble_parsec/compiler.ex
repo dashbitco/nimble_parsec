@@ -63,7 +63,7 @@ defmodule NimbleParsec.Compiler do
 
   def compile_pattern(combinators) do
     case take_bound_combinators(Enum.reverse(combinators)) do
-      {[], inputs, guards, _, _, _, _, _} -> {inputs, guards_list_to_quoted(guards)}
+      {[], inputs, guards, _, _, %{eof: eof}} -> {inputs, guards_list_to_quoted(guards), eof}
       _ -> :error
     end
   end
@@ -116,7 +116,7 @@ defmodule NimbleParsec.Compiler do
   defp compile(combinators, defs, inline, current, step, config) do
     {next_combinators, used_combinators, {new_defs, new_inline, next, step, catch_all}} =
       case take_bound_combinators(combinators) do
-        {[combinator | combinators], [], [], [], [], _, _, _} ->
+        {[combinator | combinators], [], [], [], [], _metadata} ->
           case combinator do
             {:label, label_combinators, label} ->
               pre_combinators = [{:update, :labels, &[label | &1]} | label_combinators]
@@ -130,9 +130,9 @@ defmodule NimbleParsec.Compiler do
                compile_unbound_combinator(combinator, current, step, config)}
           end
 
-        {combinators, inputs, guards, outputs, acc, line, offset, _} ->
+        {combinators, inputs, guards, outputs, acc, metadata} ->
           {combinators, Enum.reverse(acc),
-           compile_bound_combinator(inputs, guards, outputs, line, offset, current, step, config)}
+           compile_bound_combinator(inputs, guards, outputs, metadata, current, step, config)}
       end
 
     catch_all_defs =
@@ -549,13 +549,18 @@ defmodule NimbleParsec.Compiler do
   # Currently error reporting will accuse the beginning of the bound combinator
   # in case of errors but such can be addressed if desired.
 
-  defp compile_bound_combinator(inputs, guards, outputs, line, offset, current, step, config) do
+  defp compile_bound_combinator(inputs, guards, outputs, metadata, current, step, config) do
+    %{eof: eof?, line: line, offset: offset} = metadata
     {next, step} = build_next(step, config)
-    bin = {:<<>>, [], inputs ++ [quote(do: rest :: binary)]}
+    rest = if eof?, do: "", else: quote(do: rest)
+
+    bin = {:<<>>, [], inputs ++ [quote(do: unquote(rest) :: binary)]}
     acc = if config.replace, do: quote(do: acc), else: quote(do: unquote(outputs) ++ acc)
 
+    args =
+      quote(do: [unquote(rest), unquote(acc), stack, context, unquote(line), unquote(offset)])
+
     head = quote(do: [unquote(bin), acc, stack, context, comb__line, comb__offset])
-    args = quote(do: [rest, unquote(acc), stack, context, unquote(line), unquote(offset)])
     body = {next, [], args}
 
     guards = guards_list_to_quoted(guards)
@@ -564,45 +569,42 @@ defmodule NimbleParsec.Compiler do
   end
 
   defp all_bound_combinators?(combinators) do
-    {line, offset} = line_offset_pair()
-
-    Enum.all?(combinators, fn combinator ->
-      case bound_combinator(combinator, line, offset, 0) do
-        {:ok, _, _, _, _, _, _} -> true
-        :error -> false
-      end
-    end)
+    match?({[], _, _, _, _, _}, take_bound_combinators(combinators))
   end
 
   defp take_bound_combinators(combinators) do
     {line, offset} = line_offset_pair()
-    take_bound_combinators(combinators, [], [], [], [], line, offset, 0)
+    metadata = %{eof: false, line: line, offset: offset, counter: 0}
+    take_bound_combinators(combinators, [], [], [], [], metadata)
   end
 
-  defp take_bound_combinators(combinators, inputs, guards, outputs, acc, line, offset, counter) do
+  defp take_bound_combinators([:eof | combinators], inputs, guards, outputs, acc, metadata) do
+    combinators = Enum.drop_while(combinators, &(&1 == :eof))
+    {combinators, inputs, guards, outputs, [:eof | acc], %{metadata | eof: true}}
+  end
+
+  defp take_bound_combinators(combinators, inputs, guards, outputs, acc, metadata) do
     with [combinator | combinators] <- combinators,
-         {:ok, new_inputs, new_guards, new_outputs, new_line, new_offset, new_counter} <-
-           bound_combinator(combinator, line, offset, counter) do
+         {:ok, new_inputs, new_guards, new_outputs, metadata} <-
+           bound_combinator(combinator, metadata) do
       take_bound_combinators(
         combinators,
         inputs ++ new_inputs,
         guards ++ new_guards,
         merge_output(new_outputs, outputs),
         [combinator | acc],
-        new_line,
-        new_offset,
-        new_counter
+        metadata
       )
     else
       _ ->
-        {combinators, inputs, guards, outputs, acc, line, offset, counter}
+        {combinators, inputs, guards, outputs, acc, metadata}
     end
   end
 
   defp merge_output(left, right) when is_list(left) and is_list(right), do: left ++ right
   defp merge_output(left, right), do: quote(do: unquote(left) ++ unquote(right))
 
-  defp bound_combinator({:string, string}, line, offset, counter) do
+  defp bound_combinator({:string, string}, %{line: line, offset: offset} = metadata) do
     size = byte_size(string)
 
     line =
@@ -620,10 +622,12 @@ defmodule NimbleParsec.Compiler do
       end
 
     offset = add_offset(offset, size)
-    {:ok, [string], [], [string], line, offset, counter}
+    {:ok, [string], [], [string], %{metadata | line: line, offset: offset}}
   end
 
-  defp bound_combinator({:bin_segment, inclusive, exclusive, modifiers}, line, offset, counter) do
+  defp bound_combinator({:bin_segment, inclusive, exclusive, modifiers}, metadata) do
+    %{line: line, offset: offset, counter: counter} = metadata
+
     {var, counter} = build_var(counter)
     input = apply_bin_modifiers(var, modifiers)
     guards = compile_bin_ranges(var, inclusive, exclusive)
@@ -649,46 +653,40 @@ defmodule NimbleParsec.Compiler do
         line
       end
 
-    {:ok, [input], guards, [var], line, offset, counter}
+    metadata = %{metadata | line: line, offset: offset, counter: counter}
+    {:ok, [input], guards, [var], metadata}
   end
 
-  defp bound_combinator({:label, combinators, _labels}, line, offset, counter) do
-    case take_bound_combinators(combinators, [], [], [], [], line, offset, counter) do
-      {[], inputs, guards, outputs, _, line, offset, counter} ->
-        {:ok, inputs, guards, outputs, line, offset, counter}
+  defp bound_combinator({:label, combinators, _labels}, metadata) do
+    case take_bound_combinators(combinators, [], [], [], [], metadata) do
+      {[], inputs, guards, outputs, _, metadata} ->
+        {:ok, inputs, guards, outputs, metadata}
 
-      {_, _, _, _, _, _, _, _} ->
+      {_, _, _, _, _, _} ->
         :error
     end
   end
 
-  defp bound_combinator({:traverse, combinators, kind, mfargs}, pre_line, pre_offset, counter) do
-    case take_bound_combinators(combinators, [], [], [], [], pre_line, pre_offset, counter) do
-      {[], inputs, guards, outputs, _, post_line, post_offset, counter} ->
+  defp bound_combinator({:traverse, combinators, kind, mfargs}, pre_metadata) do
+    case take_bound_combinators(combinators, [], [], [], [], pre_metadata) do
+      {[], inputs, guards, outputs, _, post_metadata} ->
         {rest, context} = quote(do: {rest, context})
-
-        {traverse_line, traverse_offset} =
-          pre_post_traverse(kind, pre_line, pre_offset, post_line, post_offset)
+        {traverse_line, traverse_offset} = pre_post_traverse(kind, pre_metadata, post_metadata)
 
         case apply_traverse(mfargs, rest, outputs, context, traverse_line, traverse_offset) do
           {outputs, ^context} when outputs != :error ->
-            {:ok, inputs, guards, outputs, post_line, post_offset, counter}
+            {:ok, inputs, guards, outputs, post_metadata}
 
           _ ->
             :error
         end
 
-      {_, _, _, _, _, _, _, _} ->
+      {_, _, _, _, _, _} ->
         :error
     end
   end
 
-  defp bound_combinator(:eof, line, offset, counter) do
-    guard = quote(do: byte_size(rest) == 0)
-    {:ok, [], [guard], [], line, offset, counter}
-  end
-
-  defp bound_combinator(_, _line, _offset, _counter) do
+  defp bound_combinator(_, _) do
     :error
   end
 
@@ -696,8 +694,8 @@ defmodule NimbleParsec.Compiler do
 
   # For pre traversal returns the AST before, otherwise the AST after
   # for post. For constant, line/offset are never used.
-  defp pre_post_traverse(:pre, pre_line, pre_offset, _, _), do: {pre_line, pre_offset}
-  defp pre_post_traverse(_, _, _, post_line, post_offset), do: {post_line, post_offset}
+  defp pre_post_traverse(:pre, %{line: line, offset: offset}, _), do: {line, offset}
+  defp pre_post_traverse(_, _, %{line: line, offset: offset}), do: {line, offset}
 
   defp line_offset_pair() do
     quote(do: {comb__line, comb__offset})

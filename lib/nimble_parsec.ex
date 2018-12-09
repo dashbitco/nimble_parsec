@@ -1147,6 +1147,10 @@ defmodule NimbleParsec do
   Repeats while the given remote or local function `while` returns
   `{:cont, context}`.
 
+  If the combinator `to_repeat` stops matching, then the whole repeat
+  loop stops successfully, hence it is important to assert the terminated
+  value after repeating.
+
   In case repetition should stop, `while` must return `{:halt, context}`.
 
   `while` is either a `{module, function, args}` representing
@@ -1194,6 +1198,10 @@ defmodule NimbleParsec do
 
   @doc ~S"""
   Repeats `to_repeat` until one of the combinators in `choices` match.
+
+  If the combinator `to_repeat` stops matching, then the whole repeat
+  loop stops successfully, hence it is important to assert the terminated
+  value after repeating.
 
   Each of the combinators given in choice must be optimizable into
   a single pattern, otherwise this function will refuse to compile.
@@ -1448,7 +1456,7 @@ defmodule NimbleParsec do
       end
 
       case NimbleParsec.Compiler.compile_pattern(choice) do
-        {_inputs, _guards} = pair -> pair
+        {_inputs, _guards, _eof} = triplet -> triplet
         :error -> raise "cannot compile combinator as choice given in repeat_until"
       end
     end
@@ -1582,11 +1590,12 @@ defmodule NimbleParsec do
   @doc false
   def __repeat_until__(rest, context, _line, _offset, clauses) do
     clauses =
-      for {inputs, guards} <- clauses do
+      for {inputs, guards, eof?} <- clauses do
+        inputs = if eof?, do: inputs, else: inputs ++ [quote(do: _ :: binary)]
+
         hd(
           quote do
-            <<unquote_splicing(inputs), _::binary>> when unquote(guards) ->
-              {:halt, unquote(context)}
+            <<unquote_splicing(inputs)>> when unquote(guards) -> {:halt, unquote(context)}
           end
         )
       end

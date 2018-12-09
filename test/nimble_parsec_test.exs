@@ -1187,6 +1187,8 @@ defmodule NimbleParsecTest do
   describe "eof/1 combinator" do
     defparsecp :only_eof, eof()
     defparsecp :multi_eof, eof() |> eof()
+    defparsecp :bad_eof, ascii_char([?a..?z]) |> eof() |> ascii_char([?a..?z])
+    defparsecp :repeat_until_eof, repeat_until(ascii_char([?0..?9]), [string("3") |> eof()])
 
     @error "expected end of file"
 
@@ -1194,6 +1196,20 @@ defmodule NimbleParsecTest do
       assert only_eof("") == {:ok, [], "", %{}, {1, 0}, 0}
       assert only_eof("a") == {:error, @error, "a", %{}, {1, 0}, 0}
       assert multi_eof("") == {:ok, [], "", %{}, {1, 0}, 0}
+    end
+
+    test "never succeeds on bad eof" do
+      assert bad_eof("a") ==
+               {:error, "expected byte in the range ?a..?z", "", %{}, {1, 0}, 1}
+
+      assert bad_eof("aa") ==
+               {:error, "expected byte in the range ?a..?z, followed by end of file", "aa", %{},
+                {1, 0}, 0}
+    end
+
+    test "eof works in repeat_until" do
+      assert repeat_until_eof("12345") == {:ok, '12345', "", %{}, {1, 0}, 5}
+      assert repeat_until_eof("123") == {:ok, '12', "3", %{}, {1, 0}, 2}
     end
   end
 
