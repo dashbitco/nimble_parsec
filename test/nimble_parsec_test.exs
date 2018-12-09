@@ -1039,6 +1039,16 @@ defmodule NimbleParsecTest do
     end
   end
 
+  describe "duplicate/3 combinator" do
+    defparsec :duplicate_twice, ascii_char([?0..?9]) |> duplicate(ascii_char([?a..?z]), 2)
+    defparsec :duplicate_zero, ascii_char([?0..?9]) |> duplicate(ascii_char([?a..?z]), 0)
+
+    test "returns ok/error when bound" do
+      assert duplicate_twice("0ab") == {:ok, [?0, ?a, ?b], "", %{}, {1, 0}, 3}
+      assert duplicate_zero("0ab") == {:ok, [?0], "ab", %{}, {1, 0}, 1}
+    end
+  end
+
   describe "choice/2 combinator" do
     defparsecp :simple_choice,
                choice([ascii_char([?a..?z]), ascii_char([?A..?Z]), ascii_char([?0..?9])])

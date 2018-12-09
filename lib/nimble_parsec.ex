@@ -629,7 +629,7 @@ defmodule NimbleParsec do
 
   def duplicate(combinator, to_duplicate, 0)
       when is_combinator(combinator) and is_combinator(to_duplicate) do
-    empty()
+    combinator
   end
 
   def duplicate(combinator, to_duplicate, n)
