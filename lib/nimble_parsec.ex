@@ -182,6 +182,7 @@ defmodule NimbleParsec do
   @typep bound_combinator ::
            {:bin_segment, [inclusive_range], [exclusive_range], [bin_modifiers]}
            | {:string, binary}
+           | :eof
 
   @typep maybe_bound_combinator ::
            {:label, t, binary}
@@ -595,6 +596,32 @@ defmodule NimbleParsec do
       :__runtime_string__,
       [quote(do: utf8)]
     )
+  end
+
+  @doc ~S"""
+  Defines an end of file combinator.
+
+  The end of file does not produce a token and can be parsed multiple times.
+  This function is useful to avoid having to check for an empty remainder after
+  a successful parse.
+
+  ## Examples
+
+      defmodule MyParser do
+        import NimbleParsec
+
+        defparsec :letter_pairs, utf8_string([], 2) |> repeat() |> eof()
+      end
+
+      MyParser.letter_pairs("hi")
+      #=> {:ok, ["hi"], "", %{}, {1, 0}, 2}
+
+      MyParser.letter_pairs("hello")
+      #=> {:error, "expected end of file", "o", %{}, {1, 0}, 4}
+  """
+  @spec eof(t) :: t
+  def eof(combinator \\ empty()) do
+    [:eof | combinator]
   end
 
   @doc ~S"""

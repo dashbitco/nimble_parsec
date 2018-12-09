@@ -683,6 +683,11 @@ defmodule NimbleParsec.Compiler do
     end
   end
 
+  defp bound_combinator(:eof, line, offset, counter) do
+    guard = quote(do: byte_size(rest) == 0)
+    {:ok, [], [guard], [], line, offset, counter}
+  end
+
   defp bound_combinator(_, _line, _offset, _counter) do
     :error
   end
@@ -756,6 +761,10 @@ defmodule NimbleParsec.Compiler do
       end
 
     prefix <> Enum.join([Enum.join(inclusive, " or") | exclusive], ", and not")
+  end
+
+  defp label(:eof) do
+    "end of file"
   end
 
   defp label({:repeat, combinators, _}) do
