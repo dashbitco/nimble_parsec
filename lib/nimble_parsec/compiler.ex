@@ -137,7 +137,7 @@ defmodule NimbleParsec.Compiler do
 
     catch_all_defs =
       case catch_all do
-        :catch_all -> [build_catch_all(current, used_combinators, config)]
+        :catch_all -> [build_catch_all(:positive, current, used_combinators, config)]
         :catch_none -> []
       end
 
@@ -177,47 +177,32 @@ defmodule NimbleParsec.Compiler do
   end
 
   defp compile_unbound_combinator({:lookahead, combinators, kind}, current, step, config) do
-    {inner, step} = build_next(step, config)
-    {defs, inline, last, step} = compile(combinators, [], [], inner, step, config)
-
-    catch_all =
-      case config do
-        %{catch_all: nil} ->
-          nil
-
-        %{catch_all: catch_all, acc_depth: n} ->
-          {_, _, _, body} = build_proxy_to(current, catch_all, n)
-          body
-      end
+    {_, _, _, catch_all} = build_catch_all(kind, current, combinators, config)
 
     {next, step} = build_next(step, config)
     head = quote(do: [rest, acc, stack, context, line, offset])
+    args = quote(do: [rest, [], [{rest, acc, context, line, offset} | stack], context, line, offset])
+    body = {next, [], args}
+    entry_point = {current, head, true, body}
 
-    clauses =
-      case kind do
-        :positive ->
-          catch_all = catch_all || quote(do: error)
+    {failure, step} = build_next(step, config)
+    config = %{config | catch_all: failure, acc_depth: 0}
+    {defs, inline, success, step} = compile(combinators, [entry_point], [], next, step, config)
 
-          quote do
-            {:ok, _, _, _, _, _} -> unquote(next)(unquote_splicing(head))
-            {:error, _, _, _, _, _} = error -> unquote(catch_all)
-          end
+    {next, step} = build_next(step, config)
+    head = quote(do: [_, _, [{rest, acc, context, line, offset} | stack], _, _, _])
+    args = quote(do: [rest, acc, stack, context, line, offset])
+    body = {next, [], args}
 
-        :negative ->
-          catch_all =
-            catch_all ||
-              quote do: {:error, "negative lookahead failed", rest, context, line, offset}
-
-          quote do
-            {:ok, _, _, _, _, _} -> unquote(catch_all)
-            {:error, _, _, _, _, _} -> unquote(next)(unquote_splicing(head))
-          end
+    success_failure =
+      if kind == :positive do
+        [{success, head, true, body}, {failure, head, true, catch_all}]
+      else
+        [{failure, head, true, body}, {success, head, true, catch_all}]
       end
 
-    body = quote do: case(unquote(inner)(unquote_splicing(head)), do: unquote(clauses))
-    def = {current, head, true, body}
-    inline = [{current, @arity}, {last, @arity} | inline]
-    {Enum.reverse([def, build_ok(last) | defs]), inline, next, step, :catch_none}
+    inline = [{current, @arity}, {success, @arity}, {failure, @arity} | inline]
+    {Enum.reverse(success_failure ++ defs), inline, next, step, :catch_none}
   end
 
   defp compile_unbound_combinator(
@@ -288,10 +273,10 @@ defmodule NimbleParsec.Compiler do
       end
 
     body = {next, [], args}
-    first_def = {current, head, true, body}
+    entry_point = {current, head, true, body}
 
     config = update_in(config.acc_depth, &(&1 + 1))
-    {defs, inline, last, step} = compile(combinators, [first_def], [], next, step, config)
+    {defs, inline, last, step} = compile(combinators, [entry_point], [], next, step, config)
 
     # Now we need to traverse the accumulator with the user code and
     # concatenate with the previous accumulator at the top of the stack.
@@ -930,14 +915,15 @@ defmodule NimbleParsec.Compiler do
     {current, head, true, body}
   end
 
-  defp build_catch_all(name, combinators, %{catch_all: nil, labels: labels}) do
+  defp build_catch_all(kind, name, combinators, %{catch_all: nil, labels: labels}) do
     reason = error_reason(combinators, labels)
+    reason = if kind == :positive, do: "expected " <> reason, else: "did not expect " <> reason
     args = quote(do: [rest, _acc, _stack, context, line, offset])
     body = quote(do: {:error, unquote(reason), rest, context, line, offset})
     {name, args, true, body}
   end
 
-  defp build_catch_all(name, _combinators, %{catch_all: next, acc_depth: n}) do
+  defp build_catch_all(_kind, name, _combinators, %{catch_all: next, acc_depth: n}) do
     build_proxy_to(name, next, n)
   end
 
@@ -964,14 +950,14 @@ defmodule NimbleParsec.Compiler do
   end
 
   defp error_reason(combinators, []) do
-    "expected " <> labels(combinators)
+    labels(combinators)
   end
 
   defp error_reason(_combinators, [head]) do
-    "expected #{head}"
+    head
   end
 
   defp error_reason(_combinators, [head | tail]) do
-    "expected #{head} while processing #{Enum.join(tail, " inside ")}"
+    "#{head} while processing #{Enum.join(tail, " inside ")}"
   end
 end
