@@ -630,22 +630,14 @@ defmodule NimbleParsecTest do
                times(ascii_char([]) |> lookahead(ascii_char([?0..?9])), min: 1)
 
     test "aborts choice on match" do
-      assert lookahead_with_choice_digits_first("a0") ==
-               {:ok, [first: 'a'], "0", %{}, {1, 0}, 1}
-
-      assert lookahead_with_choice_digits_first("aa") ==
-               {:ok, [first: 'a'], "a", %{}, {1, 0}, 1}
-
-      assert lookahead_with_choice_digits_last("a0") ==
-               {:ok, [first: 'a'], "0", %{}, {1, 0}, 1}
-
-      assert lookahead_with_choice_digits_last("aa") ==
-               {:ok, [first: 'a'], "a", %{}, {1, 0}, 1}
+      assert lookahead_with_choice_digits_first("a0") == {:ok, [first: 'a'], "0", %{}, {1, 0}, 1}
+      assert lookahead_with_choice_digits_first("aa") == {:ok, [first: 'a'], "a", %{}, {1, 0}, 1}
+      assert lookahead_with_choice_digits_last("a0") == {:ok, [first: 'a'], "0", %{}, {1, 0}, 1}
+      assert lookahead_with_choice_digits_last("aa") == {:ok, [first: 'a'], "a", %{}, {1, 0}, 1}
     end
 
     test "aborts times" do
-      assert lookahead_with_times("a0") ==
-               {:ok, 'a0', "", %{}, {1, 0}, 2}
+      assert lookahead_with_times("a0") == {:ok, 'a0', "", %{}, {1, 0}, 2}
 
       assert lookahead_with_times("aa0") ==
                {:error, "expected byte in the range ?0..?9", "a0", %{}, {1, 0}, 1}
@@ -689,11 +681,9 @@ defmodule NimbleParsecTest do
       assert lookahead_not_with_times("a0") ==
                {:error, "negative lookahead failed", "0", %{}, {1, 0}, 1}
 
-      assert lookahead_not_with_times("aa0") ==
-               {:ok, 'a', "a0", %{}, {1, 0}, 1}
+      assert lookahead_not_with_times("aa0") == {:ok, 'a', "a0", %{}, {1, 0}, 1}
 
-      assert lookahead_not_with_times("aaa0") ==
-               {:ok, 'a', "aa0", %{}, {1, 0}, 1}
+      assert lookahead_not_with_times("aaa0") == {:ok, 'a', "aa0", %{}, {1, 0}, 1}
     end
   end
 
