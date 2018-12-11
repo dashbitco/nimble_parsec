@@ -193,6 +193,7 @@ defmodule NimbleParsec do
            | {:parsec, atom}
            | {:repeat, t, mfargs}
            | {:times, t, min :: non_neg_integer, pos_integer}
+           | {:lookahead, t, :positive | :negative}
 
   @doc ~S"""
   Returns an empty combinator.
@@ -772,56 +773,27 @@ defmodule NimbleParsec do
   end
 
   @doc ~S"""
-  Looks ahead the rest of the binary to be parsed alongside the context.
+  Lookahead combinator.
 
-  `call` is either a `{module, function, args}` representing
-  a remote call, a `{function, args}` representing a local call
-  or an atom `function` representing `{function, []}`.
-
-  The function given in `call` will receive 4 additional arguments.
-  The rest of the parsed binary, the parser context, the current line
-  and the current offset will be prepended to the given `args`.
-  The `args` will be injected at the compile site and therefore must
-  be escapable via `Macro.escape/1`.
-
-  The `call` must return a tuple `{acc, context}` with list of results
-  to be added to the accumulator in reverse order as first argument
-  and a context as second argument. It may also return `{:error, reason}`
-  to stop processing.
-
-  ## Examples
-
-      defmodule MyParser do
-        import NimbleParsec
-
-        defparsec :letters_no_zero,
-                  ascii_char([?a..?z])
-                  |> times(min: 3)
-                  |> lookahead(:error_when_next_is_0)
-
-        defp error_when_next_is_0(<<?0, _::binary>>, context, _line, _offset) do
-          {:error, "next is 0"}
-        end
-
-        defp error_when_next_is_0(_rest, context, _line, _offset) do
-          {[], context}
-        end
-      end
-
-      MyParser.letters_no_zero("abc")
-      #=> {:ok, ["99-98-97"], "", %{}, {1, 0}, 3}
-
-      MyParser.letters_no_zero("abc1")
-      #=> {:ok, ["99-98-97"], "1", %{}, {1, 0}, 3}
-
-      MyParser.letters_no_zero("abc0")
-      #=> {:error, "next is zero", "0", %{}, {1, 0}, 3}
-
+  If it succeeds, it continues, otherwise it aborts the closest
+  choice. If there is no closest `choice`, then it errors.
   """
-  @spec lookahead(t, call) :: t
-  def lookahead(combinator \\ empty(), call) when is_combinator(combinator) do
-    compile_call!([], call, "lookahead")
-    quoted_post_traverse(combinator, [], {__MODULE__, :__lookahead__, [call]})
+  @spec lookahead(t, t) :: t
+  def lookahead(combinator \\ empty(), to_lookahead)
+      when is_combinator(combinator) and is_combinator(to_lookahead) do
+    [{:lookahead, to_lookahead, :positive} | combinator]
+  end
+
+  @doc ~S"""
+  Negative lookahead a combinator.
+
+  If it succeeds, it aborts the closest choice. If there is no
+  closest `choice`, then it errors.
+  """
+  @spec lookahead_not(t, t) :: t
+  def lookahead_not(combinator \\ empty(), to_lookahead)
+      when is_combinator(combinator) and is_combinator(to_lookahead) do
+    [{:lookahead, to_lookahead, :negative} | combinator]
   end
 
   @doc """

@@ -176,6 +176,50 @@ defmodule NimbleParsec.Compiler do
     {[def], [{current, @arity}], next, step, :catch_none}
   end
 
+  defp compile_unbound_combinator({:lookahead, combinators, kind}, current, step, config) do
+    {inner, step} = build_next(step, config)
+    {defs, inline, last, step} = compile(combinators, [], [], inner, step, config)
+
+    catch_all =
+      case config do
+        %{catch_all: nil} ->
+          nil
+
+        %{catch_all: catch_all, acc_depth: n} ->
+          {_, _, _, body} = build_proxy_to(current, catch_all, n)
+          body
+      end
+
+    {next, step} = build_next(step, config)
+    head = quote(do: [rest, acc, stack, context, line, offset])
+
+    clauses =
+      case kind do
+        :positive ->
+          catch_all = catch_all || quote(do: error)
+
+          quote do
+            {:ok, _, _, _, _, _} -> unquote(next)(unquote_splicing(head))
+            {:error, _, _, _, _, _} = error -> unquote(catch_all)
+          end
+
+        :negative ->
+          catch_all =
+            catch_all ||
+              quote do: {:error, "negative lookahead failed", rest, context, line, offset}
+
+          quote do
+            {:ok, _, _, _, _, _} -> unquote(catch_all)
+            {:error, _, _, _, _, _} -> unquote(next)(unquote_splicing(head))
+          end
+      end
+
+    body = quote do: case(unquote(inner)(unquote_splicing(head)), do: unquote(clauses))
+    def = {current, head, true, body}
+    inline = [{current, @arity}, {last, @arity} | inline]
+    {Enum.reverse([def, build_ok(last) | defs]), inline, next, step, :catch_none}
+  end
+
   defp compile_unbound_combinator(
          {:traverse, combinators, kind, traversal},
          current,
@@ -763,6 +807,10 @@ defmodule NimbleParsec.Compiler do
 
   defp label(:eos) do
     "end of string"
+  end
+
+  defp label({:lookahead, combinators, _}) do
+    labels(combinators)
   end
 
   defp label({:repeat, combinators, _}) do

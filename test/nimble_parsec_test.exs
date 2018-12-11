@@ -613,29 +613,87 @@ defmodule NimbleParsecTest do
     end
   end
 
-  describe "remote lookahead/2 combinator" do
-    defparsecp :remote_zero_lookahead,
-               ascii_char([?a..?z])
-               |> times(min: 3)
-               |> lookahead({__MODULE__, :error_when_next_is_0, []})
+  describe "lookahead/2" do
+    defparsecp :lookahead_with_choice_digits_first,
+               choice([
+                 ascii_char([]) |> lookahead(ascii_char([?0..?9])) |> tag(:first),
+                 ascii_char([]) |> lookahead(ascii_char([?a..?z])) |> tag(:second)
+               ])
 
-    test "returns ok/error" do
-      assert remote_zero_lookahead("abcdef") == {:ok, 'abcdef', "", %{}, {1, 0}, 6}
-      assert remote_zero_lookahead("abcdef1") == {:ok, 'abcdef', "1", %{}, {1, 0}, 6}
-      assert remote_zero_lookahead("abcdef0") == {:error, "next is 0", "0", %{}, {1, 0}, 6}
+    defparsecp :lookahead_with_choice_digits_last,
+               choice([
+                 ascii_char([]) |> tag(:first) |> lookahead(ascii_char([?a..?z])),
+                 ascii_char([]) |> tag(:second) |> lookahead(ascii_char([?0..?9]))
+               ])
+
+    defparsecp :lookahead_with_times,
+               times(ascii_char([]) |> lookahead(ascii_char([?0..?9])), min: 1)
+
+    test "aborts choice on match" do
+      assert lookahead_with_choice_digits_first("a0") ==
+               {:ok, [first: 'a'], "0", %{}, {1, 0}, 1}
+
+      assert lookahead_with_choice_digits_first("aa") ==
+               {:ok, [first: 'a'], "a", %{}, {1, 0}, 1}
+
+      assert lookahead_with_choice_digits_last("a0") ==
+               {:ok, [first: 'a'], "0", %{}, {1, 0}, 1}
+
+      assert lookahead_with_choice_digits_last("aa") ==
+               {:ok, [first: 'a'], "a", %{}, {1, 0}, 1}
+    end
+
+    test "aborts times" do
+      assert lookahead_with_times("a0") ==
+               {:ok, 'a0', "", %{}, {1, 0}, 2}
+
+      assert lookahead_with_times("aa0") ==
+               {:error, "expected byte in the range ?0..?9", "a0", %{}, {1, 0}, 1}
+
+      assert lookahead_with_times("aaa0") ==
+               {:error, "expected byte in the range ?0..?9", "aa0", %{}, {1, 0}, 1}
     end
   end
 
-  describe "local lookahead/2 combinator" do
-    defparsecp :local_zero_lookahead,
-               ascii_char([?a..?z])
-               |> times(min: 3)
-               |> lookahead(:error_when_next_is_0)
+  describe "lookahead_not/2" do
+    defparsecp :lookahead_not_with_choice_digits_first,
+               choice([
+                 ascii_char([]) |> lookahead_not(ascii_char([?0..?9])) |> tag(:first),
+                 ascii_char([]) |> lookahead_not(ascii_char([?a..?z])) |> tag(:second)
+               ])
 
-    test "returns ok/error" do
-      assert local_zero_lookahead("abcdef") == {:ok, 'abcdef', "", %{}, {1, 0}, 6}
-      assert local_zero_lookahead("abcdef1") == {:ok, 'abcdef', "1", %{}, {1, 0}, 6}
-      assert local_zero_lookahead("abcdef0") == {:error, "next is 0", "0", %{}, {1, 0}, 6}
+    defparsecp :lookahead_not_with_choice_digits_last,
+               choice([
+                 ascii_char([]) |> tag(:first) |> lookahead_not(ascii_char([?a..?z])),
+                 ascii_char([]) |> tag(:second) |> lookahead_not(ascii_char([?0..?9]))
+               ])
+
+    defparsecp :lookahead_not_with_times,
+               times(ascii_char([]) |> lookahead_not(ascii_char([?0..?9])), min: 1)
+
+    test "aborts choice on match" do
+      assert lookahead_not_with_choice_digits_first("a0") ==
+               {:ok, [second: 'a'], "0", %{}, {1, 0}, 1}
+
+      assert lookahead_not_with_choice_digits_first("aa") ==
+               {:ok, [first: 'a'], "a", %{}, {1, 0}, 1}
+
+      assert lookahead_not_with_choice_digits_last("a0") ==
+               {:ok, [first: 'a'], "0", %{}, {1, 0}, 1}
+
+      assert lookahead_not_with_choice_digits_last("aa") ==
+               {:ok, [second: 'a'], "a", %{}, {1, 0}, 1}
+    end
+
+    test "aborts times" do
+      assert lookahead_not_with_times("a0") ==
+               {:error, "negative lookahead failed", "0", %{}, {1, 0}, 1}
+
+      assert lookahead_not_with_times("aa0") ==
+               {:ok, 'a', "a0", %{}, {1, 0}, 1}
+
+      assert lookahead_not_with_times("aaa0") ==
+               {:ok, 'a', "aa0", %{}, {1, 0}, 1}
     end
   end
 
