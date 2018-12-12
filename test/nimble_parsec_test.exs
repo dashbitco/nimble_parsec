@@ -626,6 +626,9 @@ defmodule NimbleParsecTest do
                  ascii_char([]) |> tag(:second) |> lookahead(integer(min: 1))
                ])
 
+    defparsecp :lookahead_with_inner_choice,
+               ascii_char([]) |> lookahead(choice([ascii_char([?a..?c]), ascii_char([?d..?f])]))
+
     defparsecp :lookahead_with_times,
                times(ascii_char([]) |> lookahead(ascii_char([?0..?9])), min: 1)
 
@@ -634,6 +637,15 @@ defmodule NimbleParsecTest do
       assert lookahead_with_choice_digits_first("aa") == {:ok, [second: 'a'], "a", %{}, {1, 0}, 1}
       assert lookahead_with_choice_digits_last("a0") == {:ok, [second: 'a'], "0", %{}, {1, 0}, 1}
       assert lookahead_with_choice_digits_last("aa") == {:ok, [first: 'a'], "a", %{}, {1, 0}, 1}
+    end
+
+    test "with inner choice" do
+      assert lookahead_with_inner_choice("aa") == {:ok, 'a', "a", %{}, {1, 0}, 1}
+      assert lookahead_with_inner_choice("af") == {:ok, 'a', "f", %{}, {1, 0}, 1}
+
+      assert lookahead_with_inner_choice("az") ==
+               {:error, "expected byte in the range ?a..?c or byte in the range ?d..?f", "z", %{},
+                {1, 0}, 1}
     end
 
     test "aborts times" do
@@ -660,6 +672,10 @@ defmodule NimbleParsecTest do
                  ascii_char([]) |> tag(:second) |> lookahead_not(integer(min: 1))
                ])
 
+    defparsecp :lookahead_not_with_inner_choice,
+               ascii_char([])
+               |> lookahead_not(choice([ascii_char([?a..?c]), ascii_char([?d..?f])]))
+
     defparsecp :lookahead_not_with_times,
                times(ascii_char([]) |> lookahead_not(ascii_char([?0..?9])), min: 1)
 
@@ -678,6 +694,18 @@ defmodule NimbleParsecTest do
 
       assert lookahead_not_with_choice_digits_last("aa") ==
                {:ok, [second: 'a'], "a", %{}, {1, 0}, 1}
+    end
+
+    test "with inner choice" do
+      assert lookahead_not_with_inner_choice("az") == {:ok, 'a', "z", %{}, {1, 0}, 1}
+
+      assert lookahead_not_with_inner_choice("aa") ==
+               {:error, "did not expect byte in the range ?a..?c or byte in the range ?d..?f",
+                "a", %{}, {1, 0}, 1}
+
+      assert lookahead_not_with_inner_choice("af") ==
+               {:error, "did not expect byte in the range ?a..?c or byte in the range ?d..?f",
+                "f", %{}, {1, 0}, 1}
     end
 
     test "aborts times" do

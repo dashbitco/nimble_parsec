@@ -163,28 +163,30 @@ defmodule NimbleParsec.Compiler do
   end
 
   defp compile_unbound_combinator({:lookahead, combinators, kind}, current, step, config) do
-    case take_bound_combinators(combinators) do
-      {[], inputs, guards, _, _, metadata} ->
-        {_, _, _, catch_all} = build_catch_all(kind, current, combinators, config)
-        {bin, _} = compile_bound_bin_pattern(inputs, metadata, quote(do: _))
-        {next, step} = build_next(step, config)
+    choices = extract_choices_from_lookahead(combinators)
 
-        match_head = quote(do: [unquote(bin) = rest, acc, stack, context, line, offset])
-        head = quote(do: [rest, acc, stack, context, line, offset])
-        body = {next, [], head}
-        guards = guards_list_to_quoted(guards)
+    if Enum.all?(choices, &all_bound_combinators?/1) do
+      {next, step} = build_next(step, config)
+      args = quote(do: [rest, acc, stack, context, line, offset])
+      success_body = {next, [], args}
+      {_, _, _, failure_body} = build_catch_all(kind, current, combinators, config)
 
-        defs =
-          if kind == :positive do
-            [{current, match_head, guards, body}, {current, head, true, catch_all}]
-          else
-            [{current, match_head, guards, catch_all}, {current, head, true, body}]
-          end
+      {success_body, failure_body} =
+        if kind == :positive, do: {success_body, failure_body}, else: {failure_body, success_body}
 
-        {defs, [], next, step, :catch_none}
+      defs =
+        for choice <- choices do
+          {[], inputs, guards, _, _, metadata} = take_bound_combinators(choice)
+          {bin, _} = compile_bound_bin_pattern(inputs, metadata, quote(do: _))
+          head = quote(do: [unquote(bin) = rest, acc, stack, context, line, offset])
+          guards = guards_list_to_quoted(guards)
+          {current, head, guards, success_body}
+        end
 
-      _ ->
-        compile_unbound_lookahead(combinators, kind, current, step, config)
+      defs = if [] in choices, do: defs, else: defs ++ [{current, args, true, failure_body}]
+      {defs, [], next, step, :catch_none}
+    else
+      compile_unbound_lookahead(combinators, kind, current, step, config)
     end
   end
 
@@ -233,6 +235,9 @@ defmodule NimbleParsec.Compiler do
   end
 
   ## Lookahead
+
+  defp extract_choices_from_lookahead([{:choice, choices}]), do: choices
+  defp extract_choices_from_lookahead(other), do: [other]
 
   defp compile_unbound_lookahead(combinators, kind, current, step, config) do
     {_, _, _, catch_all} = build_catch_all(kind, current, combinators, config)
@@ -529,12 +534,12 @@ defmodule NimbleParsec.Compiler do
 
     defs =
       for choice <- choices do
-        if choice == [] do
-          build_proxy_to(current, next_name, 0)
-        else
-          {[_, def], [], ^next_name, ^next_step} = compile(choice, [], [], current, step, config)
-          def
-        end
+        {[], inputs, guards, outputs, _, metadata} = take_bound_combinators(choice)
+
+        {[def], [], ^next_name, ^next_step, _} =
+          compile_bound_combinator(inputs, guards, outputs, metadata, current, step, config)
+
+        def
       end
 
     catch_all = if [] in choices, do: :catch_none, else: :catch_all
