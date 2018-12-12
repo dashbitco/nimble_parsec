@@ -163,35 +163,28 @@ defmodule NimbleParsec.Compiler do
   end
 
   defp compile_unbound_combinator({:lookahead, combinators, kind}, current, step, config) do
-    {_, _, _, catch_all} = build_catch_all(kind, current, combinators, config)
+    case take_bound_combinators(combinators) do
+      {[], inputs, guards, _, _, metadata} ->
+        {_, _, _, catch_all} = build_catch_all(kind, current, combinators, config)
+        {bin, _} = compile_bound_bin_pattern(inputs, metadata, quote(do: _))
+        {next, step} = build_next(step, config)
 
-    {next, step} = build_next(step, config)
-    head = quote(do: [rest, acc, stack, context, line, offset])
+        match_head = quote(do: [unquote(bin) = rest, acc, stack, context, line, offset])
+        head = quote(do: [rest, acc, stack, context, line, offset])
+        body = {next, [], head}
+        guards = guards_list_to_quoted(guards)
 
-    args =
-      quote(do: [rest, [], [{rest, acc, context, line, offset} | stack], context, line, offset])
+        defs =
+          if kind == :positive do
+            [{current, match_head, guards, body}, {current, head, true, catch_all}]
+          else
+            [{current, match_head, guards, catch_all}, {current, head, true, body}]
+          end
 
-    body = {next, [], args}
-    entry_point = {current, head, true, body}
-
-    {failure, step} = build_next(step, config)
-    config = %{config | catch_all: failure, acc_depth: 0}
-    {defs, inline, success, step} = compile(combinators, [entry_point], [], next, step, config)
-
-    {next, step} = build_next(step, config)
-    head = quote(do: [_, _, [{rest, acc, context, line, offset} | stack], _, _, _])
-    args = quote(do: [rest, acc, stack, context, line, offset])
-    body = {next, [], args}
-
-    success_failure =
-      if kind == :positive do
-        [{success, head, true, body}, {failure, head, true, catch_all}]
-      else
-        [{failure, head, true, body}, {success, head, true, catch_all}]
-      end
-
-    inline = [{current, @arity}, {success, @arity}, {failure, @arity} | inline]
-    {Enum.reverse(success_failure ++ defs), inline, next, step, :catch_none}
+        {defs, [], next, step, :catch_none}
+      _ ->
+        compile_unbound_lookahead(combinators, kind, current, step, config)
+    end
   end
 
   defp compile_unbound_combinator(
@@ -236,6 +229,40 @@ defmodule NimbleParsec.Compiler do
     else
       compile_unbound_choice(choices, current, step, config)
     end
+  end
+
+  ## Lookahead
+
+  defp compile_unbound_lookahead(combinators, kind, current, step, config) do
+    {_, _, _, catch_all} = build_catch_all(kind, current, combinators, config)
+
+    {next, step} = build_next(step, config)
+    head = quote(do: [rest, acc, stack, context, line, offset])
+
+    args =
+      quote(do: [rest, [], [{rest, acc, context, line, offset} | stack], context, line, offset])
+
+    body = {next, [], args}
+    entry_point = {current, head, true, body}
+
+    {failure, step} = build_next(step, config)
+    config = %{config | catch_all: failure, acc_depth: 0}
+    {defs, inline, success, step} = compile(combinators, [entry_point], [], next, step, config)
+
+    {next, step} = build_next(step, config)
+    head = quote(do: [_, _, [{rest, acc, context, line, offset} | stack], _, _, _])
+    args = quote(do: [rest, acc, stack, context, line, offset])
+    body = {next, [], args}
+
+    success_failure =
+      if kind == :positive do
+        [{success, head, true, body}, {failure, head, true, catch_all}]
+      else
+        [{failure, head, true, body}, {success, head, true, catch_all}]
+      end
+
+    inline = [{current, @arity}, {success, @arity}, {failure, @arity} | inline]
+    {Enum.reverse(success_failure ++ defs), inline, next, step, :catch_none}
   end
 
   ## Traverse
@@ -568,11 +595,10 @@ defmodule NimbleParsec.Compiler do
   # in case of errors but such can be addressed if desired.
 
   defp compile_bound_combinator(inputs, guards, outputs, metadata, current, step, config) do
-    %{eos: eos?, line: line, offset: offset} = metadata
+    %{line: line, offset: offset} = metadata
     {next, step} = build_next(step, config)
-    rest = if eos?, do: "", else: quote(do: rest)
+    {bin, rest} = compile_bound_bin_pattern(inputs, metadata, quote(do: rest))
 
-    bin = {:<<>>, [], inputs ++ [quote(do: unquote(rest) :: binary)]}
     acc = if config.replace, do: quote(do: acc), else: quote(do: unquote(outputs) ++ acc)
 
     args =
@@ -584,6 +610,12 @@ defmodule NimbleParsec.Compiler do
     guards = guards_list_to_quoted(guards)
     def = {current, head, guards, body}
     {[def], [], next, step, :catch_all}
+  end
+
+  defp compile_bound_bin_pattern(inputs, %{eos: eos?}, var) do
+    rest = if eos?, do: "", else: var
+    bin = {:<<>>, [], inputs ++ [quote(do: unquote(rest) :: binary)]}
+    {bin, rest}
   end
 
   defp all_bound_combinators?(combinators) do

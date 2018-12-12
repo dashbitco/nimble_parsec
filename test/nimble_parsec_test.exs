@@ -616,20 +616,20 @@ defmodule NimbleParsecTest do
   describe "lookahead/2" do
     defparsecp :lookahead_with_choice_digits_first,
                choice([
-                 ascii_char([]) |> lookahead(ascii_char([?0..?9])) |> tag(:first),
+                 ascii_char([]) |> lookahead(integer(min: 1)) |> tag(:first),
                  ascii_char([]) |> lookahead(ascii_char([?a..?z])) |> tag(:second)
                ])
 
     defparsecp :lookahead_with_choice_digits_last,
                choice([
                  ascii_char([]) |> tag(:first) |> lookahead(ascii_char([?a..?z])),
-                 ascii_char([]) |> tag(:second) |> lookahead(ascii_char([?0..?9]))
+                 ascii_char([]) |> tag(:second) |> lookahead(integer(min: 1))
                ])
 
     defparsecp :lookahead_with_times,
                times(ascii_char([]) |> lookahead(ascii_char([?0..?9])), min: 1)
 
-    test "aborts choice on match" do
+    test "aborts choice on no match" do
       assert lookahead_with_choice_digits_first("a0") == {:ok, [first: 'a'], "0", %{}, {1, 0}, 1}
       assert lookahead_with_choice_digits_first("aa") == {:ok, [second: 'a'], "a", %{}, {1, 0}, 1}
       assert lookahead_with_choice_digits_last("a0") == {:ok, [second: 'a'], "0", %{}, {1, 0}, 1}
@@ -650,14 +650,14 @@ defmodule NimbleParsecTest do
   describe "lookahead_not/2" do
     defparsecp :lookahead_not_with_choice_digits_first,
                choice([
-                 ascii_char([]) |> lookahead_not(ascii_char([?0..?9])) |> tag(:first),
+                 ascii_char([]) |> lookahead_not(integer(min: 1)) |> tag(:first),
                  ascii_char([]) |> lookahead_not(ascii_char([?a..?z])) |> tag(:second)
                ])
 
     defparsecp :lookahead_not_with_choice_digits_last,
                choice([
                  ascii_char([]) |> tag(:first) |> lookahead_not(ascii_char([?a..?z])),
-                 ascii_char([]) |> tag(:second) |> lookahead_not(ascii_char([?0..?9]))
+                 ascii_char([]) |> tag(:second) |> lookahead_not(integer(min: 1))
                ])
 
     defparsecp :lookahead_not_with_times,
