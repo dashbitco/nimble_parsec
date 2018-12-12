@@ -12,66 +12,46 @@ defmodule SimpleXML do
   """
   def parse(xml, opts \\ []) do
     opts = Keyword.put(opts, :context, %{tags: []})
-
-    case xml(xml, opts) do
-      {:ok, acc, "", %{tags: []}, _line, _offset} ->
-        {:ok, acc}
-
-      {:ok, _, rest, %{tags: []}, line, offset} ->
-        {:error, "document continued after last closing tag", rest, line, offset}
-
-      {:ok, _, rest, %{tags: [tag | _]}, line, offset} ->
-        {:error, "tag #{inspect(tag)} was not closed", rest, line, offset}
-
-      {:error, reason, rest, _context, line, offset} ->
-        {:error, reason, rest, line, offset}
-    end
+    xml(xml, opts)
   end
 
   tag = ascii_string([?a..?z, ?A..?Z], min: 1)
   text = ascii_string([not: ?<], min: 1)
 
-  opening_tag =
-    ignore(string("<"))
-    |> concat(tag)
-    |> ignore(string(">"))
+  opening_tag = ignore(string("<")) |> concat(tag) |> ignore(string(">"))
+  closing_tag = ignore(string("</")) |> concat(tag) |> ignore(string(">"))
 
-  closing_tag =
-    ignore(string("</"))
-    |> concat(tag)
-    |> ignore(string(">"))
+  defcombinatorp :node,
+                 opening_tag
+                 |> post_traverse(:store_tag_in_context)
+                 |> repeat(
+                   lookahead_not(string("</"))
+                   |> choice([parsec(:node), text])
+                 )
+                 |> wrap()
+                 |> concat(closing_tag)
+                 |> post_traverse(:check_close_tag_and_emit_tag)
 
-  defparsecp :xml,
-             opening_tag
-             |> post_traverse(:store_tag_in_context)
-             |> repeat(
-               lookahead_not(string("</"))
-               |> choice([parsec(:xml), text])
-             )
-             |> wrap()
-             |> concat(closing_tag)
-             |> post_traverse(:check_close_tag_and_emit_tag)
+  defparsecp :xml, parsec(:node) |> eos()
 
   defp store_tag_in_context(_rest, [tag], %{tags: tags} = context, _line, _offset) do
     {[tag], %{context | tags: [tag | tags]}}
   end
 
-  defp check_close_tag_and_emit_tag(_rest, acc, context, _line, _offset) do
-    [closing, [opening | contents]] = acc
+  defp check_close_tag_and_emit_tag(_rest, [tag, [tag | contents]], context, _line, _offset) do
+    context = update_in(context.tags, &tl/1)
 
-    if closing == opening do
-      context = update_in(context.tags, &tl/1)
+    text_or_nodes =
+      case contents do
+        [text] -> text
+        nodes -> nodes
+      end
 
-      element =
-        case contents do
-          [text] -> {String.to_atom(opening), [], text}
-          nodes -> {String.to_atom(opening), [], nodes}
-        end
+    {[{String.to_atom(tag), [], text_or_nodes}], context}
+  end
 
-      {[element], context}
-    else
-      {:error, "closing tag #{inspect(closing)} did not match opening tag #{inspect(opening)}"}
-    end
+  defp check_close_tag_and_emit_tag(_rest, [opening, [closing | _]], _context, _line, _offset) do
+    {:error, "closing tag #{inspect(closing)} did not match opening tag #{inspect(opening)}"}
   end
 end
 
