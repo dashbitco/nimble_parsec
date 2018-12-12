@@ -72,6 +72,7 @@ defmodule Mix.Tasks.NimbleParsec.Compile do
 
   use Mix.Task
 
+  @impl true
   def run(args) do
     Mix.Task.reenable("nimble_parsec.compile")
     {opts, files} = OptionParser.parse!(args, strict: [output: :string], aliases: [o: :output])
