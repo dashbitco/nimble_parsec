@@ -4,7 +4,15 @@
 
 ### Enhancements
 
-  * Introduce `pre_traverse/3` and deprecate `traverse/3` in favor of `post_traverse/3`
+  * Introduce `pre_traverse/3`
+  * Introduce `lookahead/2` and `lookahead_not/2` which accepts combinators
+  * Introduce `eos/1` (end of string combinator)
+
+### Backwards incompatible changes
+
+  * Deprecate `traverse/3` in favor of `post_traverse/3`
+  * `repeat_until/3` has been removed in favor of `repeat/2` with `lookahead_not/2` (see `repeat_while/3` docs for an example)
+  * `lookahead/2` with a call has been removed as it can be easily achieved with a `post_traverse/3`
 
 ## v0.4.0 (2018-08-10)
 

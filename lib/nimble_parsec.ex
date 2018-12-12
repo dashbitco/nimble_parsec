@@ -773,10 +773,77 @@ defmodule NimbleParsec do
   end
 
   @doc ~S"""
-  Lookahead combinator.
+  Checks if a combinator is ahead.
 
-  If it succeeds, it continues, otherwise it aborts the closest
-  choice. If there is no closest `choice`, then it errors.
+  If it succeeds, it continues as usual, otherwise it aborts the
+  closest `choice/2`, `repeat/2`, etc. If there is no closest
+  operation to abort, then it errors.
+
+  Note a lookahead nevers changes the accumulated output nor the
+  context.
+
+  ## Examples
+
+  For example, imagine you want to parse a language that has the
+  keywords "if" and "while" and identifiers made of any letters or
+  number, where keywords and identifiers can be separated by a
+  single white space:
+
+      defmodule IfWhileLang do
+        import NimbleParsec
+
+        keyword =
+          choice([
+            string("if") |> replace(:if),
+            string("while") |> replace(:while)
+          ])
+
+        identifier =
+          ascii_string([?a..?z, ?A..?Z, ?0..?9], min: 1)
+
+        defparsec :expr, repeat(choice([keyword, identifier]) |> optional(string(" ")))
+      end
+
+  The issue with the implementation above is that the following
+  will parse:
+
+      IfWhileLang.expr("iffy")
+      {:ok, [:if, "fy"], "", %{}, {1, 0}, 4}
+
+  However, "iffy" should be treated as a full identifier. We could
+  solve this by inverting the order of `keyword` and `identifier`
+  in `:expr` but that means "if" itself will be considered an identifier
+  and not a keyword. To solve this, we need lookaheads.
+
+  One option is to check that after the keyword we either have an
+  empty string OR the end of the string:
+
+      keyword =
+        choice([
+          string("if") |> replace(:if),
+          string("while") |> replace(:while)
+        ])
+        |> lookahead(choice([string(" "), eos()]))
+
+  However, in this case, a negative lookahead may be clearer,
+  and we can assert that we don't have any identifier character after
+  the keyword:
+
+      keyword =
+        choice([
+          string("if") |> replace(:if),
+          string("while") |> replace(:while)
+        ])
+        |> lookahead_not(ascii_char([?a..?z, ?A..?Z, ?0..?9]))
+
+  Now we get the desired result back:
+
+      IfWhileLang.expr("iffy")
+      #=> {:ok, ["iffy"], "", %{}, {1, 0}, 4}
+
+      IfWhileLang.expr("if fy")
+      #=> {:ok, [:if, " ", "fy"], "", %{}, {1, 0}, 5}
+
   """
   @spec lookahead(t, t) :: t
   def lookahead(combinator \\ empty(), to_lookahead)
@@ -785,10 +852,16 @@ defmodule NimbleParsec do
   end
 
   @doc ~S"""
-  Negative lookahead a combinator.
+  Checks if a combinator is not ahead.
 
-  If it succeeds, it aborts the closest choice. If there is no
-  closest `choice`, then it errors.
+  If it succeeds, it aborts the closest `choice/2`, `repeat/2`, etc.
+  Otherwise it continues as usual. If there is no closest operation
+  to abort, then it errors.
+
+  Note a lookahead nevers changes the accumulated output nor the
+  context.
+
+  For an example, see `lookahead/2`.
   """
   @spec lookahead_not(t, t) :: t
   def lookahead_not(combinator \\ empty(), to_lookahead)
