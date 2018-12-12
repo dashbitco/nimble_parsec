@@ -181,7 +181,10 @@ defmodule NimbleParsec.Compiler do
 
     {next, step} = build_next(step, config)
     head = quote(do: [rest, acc, stack, context, line, offset])
-    args = quote(do: [rest, [], [{rest, acc, context, line, offset} | stack], context, line, offset])
+
+    args =
+      quote(do: [rest, [], [{rest, acc, context, line, offset} | stack], context, line, offset])
+
     body = {next, [], args}
     entry_point = {current, head, true, body}
 
