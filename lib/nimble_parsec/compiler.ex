@@ -55,20 +55,6 @@ defmodule NimbleParsec.Compiler do
   end
 
   @doc """
-  Compiles the given combinators into a clause pattern.
-  """
-  def compile_pattern([]) do
-    raise ArgumentError, "cannot compile empty parser combinator"
-  end
-
-  def compile_pattern(combinators) do
-    case take_bound_combinators(Enum.reverse(combinators)) do
-      {[], inputs, guards, _, _, %{eos: eos}} -> {inputs, guards_list_to_quoted(guards), eos}
-      _ -> :error
-    end
-  end
-
-  @doc """
   Compiles the given combinators into multiple definitions.
   """
   def compile(name, [], _opts) do

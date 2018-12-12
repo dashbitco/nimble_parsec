@@ -1159,6 +1159,31 @@ defmodule NimbleParsec do
       MyParser.string_with_quotes(~S("string with quotes \" inside"))
       {:ok, ["\"string with quotes \" inside\""], "", %{}, {1, 0}, 30}
 
+  Note you can use `lookahead/2` and `lookahead_not/2` with
+  `repeat/2` (instead of `repeat_while/3`) to write a combinator
+  that repeats while a combinator matches (or does not match).
+  For example, the same combinator above could be written as:
+
+      defmodule MyParser do
+        import NimbleParsec
+
+        defparsec :string_with_quotes,
+                  ascii_char([?"])
+                  |> repeat(
+                    lookahead_not(ascii_char([?"]))
+                    |> choice([
+                      ~S(\") |> string() |> replace(?"),
+                      utf8_char([])
+                    ])
+                  )
+                  |> reduce({List, :to_string, []})
+      end
+
+      MyParser.string_with_quotes(~S("string with quotes \" inside"))
+      {:ok, ["\"string with quotes \" inside\""], "", %{}, {1, 0}, 30}
+
+  However, `repeat_while` is still useful when the condition to
+  repeat comes from the context passed around.
   """
   @spec repeat_while(t, t, call) :: t
   def repeat_while(combinator \\ empty(), to_repeat, while)
