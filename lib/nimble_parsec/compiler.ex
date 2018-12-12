@@ -182,6 +182,7 @@ defmodule NimbleParsec.Compiler do
           end
 
         {defs, [], next, step, :catch_none}
+
       _ ->
         compile_unbound_lookahead(combinators, kind, current, step, config)
     end
