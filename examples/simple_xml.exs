@@ -44,12 +44,9 @@ defmodule SimpleXML do
   defparsecp :xml,
              opening_tag
              |> post_traverse(:store_tag_in_context)
-             |> repeat_until(
-               choice([
-                 parsec(:xml),
-                 text
-               ]),
-               [string("</")]
+             |> repeat(
+               lookahead_not(string("</"))
+               |> choice([parsec(:xml), text])
              )
              |> wrap()
              |> concat(closing_tag)

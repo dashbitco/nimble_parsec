@@ -663,6 +663,9 @@ defmodule NimbleParsecTest do
     defparsecp :lookahead_not_with_times,
                times(ascii_char([]) |> lookahead_not(ascii_char([?0..?9])), min: 1)
 
+    defparsecp :lookahead_not_repeat_until,
+               repeat(lookahead_not(string("3")) |> ascii_char([?0..?9]) |> ascii_char([?0..?9]))
+
     test "aborts choice on match" do
       assert lookahead_not_with_choice_digits_first("a0") ==
                {:ok, [second: 'a'], "0", %{}, {1, 0}, 1}
@@ -683,6 +686,14 @@ defmodule NimbleParsecTest do
 
       assert lookahead_not_with_times("aa0") == {:ok, 'a', "a0", %{}, {1, 0}, 1}
       assert lookahead_not_with_times("aaa0") == {:ok, 'aa', "a0", %{}, {1, 0}, 2}
+    end
+
+    test "repeaet_until" do
+      assert lookahead_not_repeat_until("1245") == {:ok, [?1, ?2, ?4, ?5], "", %{}, {1, 0}, 4}
+      assert lookahead_not_repeat_until("12345") == {:ok, [?1, ?2], "345", %{}, {1, 0}, 2}
+      assert lookahead_not_repeat_until("135") == {:ok, [?1, ?3], "5", %{}, {1, 0}, 2}
+      assert lookahead_not_repeat_until("312") == {:ok, [], "312", %{}, {1, 0}, 0}
+      assert lookahead_not_repeat_until("a123") == {:ok, [], "a123", %{}, {1, 0}, 0}
     end
   end
 
@@ -986,61 +997,6 @@ defmodule NimbleParsecTest do
     end
   end
 
-  describe "repeat_until/3 combinator" do
-    defparsecp :repeat_until_digits,
-               repeat_until(ascii_char([?0..?9]) |> ascii_char([?0..?9]), [string("3")])
-
-    ascii_to_string = map(ascii_char([?0..?9]), :to_string)
-    defparsecp :repeat_until_digits_to_string, repeat_until(ascii_to_string, [ascii_char([?3])])
-
-    defparsecp :repeat_until_digits_to_same_inner,
-               repeat_until(map(ascii_to_string, {String, :to_integer, []}), [ascii_char([?3])])
-
-    defparsecp :repeat_until_digits_to_same_outer,
-               map(repeat_until(ascii_to_string, [ascii_char([?3])]), {String, :to_integer, []})
-
-    defparsecp :repeat_until_double_digits_to_string,
-               repeat_until(
-                 concat(
-                   map(ascii_char([?0..?9]), :to_string),
-                   map(ascii_char([?0..?9]), :to_string)
-                 ),
-                 [ascii_char([?3])]
-               )
-
-    test "returns ok/error" do
-      assert repeat_until_digits("1245") == {:ok, [?1, ?2, ?4, ?5], "", %{}, {1, 0}, 4}
-      assert repeat_until_digits("12345") == {:ok, [?1, ?2], "345", %{}, {1, 0}, 2}
-      assert repeat_until_digits("135") == {:ok, [?1, ?3], "5", %{}, {1, 0}, 2}
-      assert repeat_until_digits("312") == {:ok, [], "312", %{}, {1, 0}, 0}
-      assert repeat_until_digits("a123") == {:ok, [], "a123", %{}, {1, 0}, 0}
-    end
-
-    test "returns ok/error with map" do
-      assert repeat_until_digits_to_string("123") == {:ok, ["49", "50"], "3", %{}, {1, 0}, 2}
-      assert repeat_until_digits_to_string("321") == {:ok, [], "321", %{}, {1, 0}, 0}
-    end
-
-    test "returns ok/error with inner and outer map" do
-      assert repeat_until_digits_to_same_inner("123") == {:ok, [?1, ?2], "3", %{}, {1, 0}, 2}
-      assert repeat_until_digits_to_same_outer("123") == {:ok, [?1, ?2], "3", %{}, {1, 0}, 2}
-
-      assert repeat_until_digits_to_same_inner("321") == {:ok, [], "321", %{}, {1, 0}, 0}
-      assert repeat_until_digits_to_same_outer("321") == {:ok, [], "321", %{}, {1, 0}, 0}
-    end
-
-    test "returns ok/error with concat map" do
-      assert repeat_until_double_digits_to_string("12345") ==
-               {:ok, ["49", "50"], "345", %{}, {1, 0}, 2}
-
-      assert repeat_until_double_digits_to_string("135") ==
-               {:ok, ["49", "51"], "5", %{}, {1, 0}, 2}
-
-      assert repeat_until_double_digits_to_string("312") == {:ok, [], "312", %{}, {1, 0}, 0}
-      assert repeat_until_double_digits_to_string("a123") == {:ok, [], "a123", %{}, {1, 0}, 0}
-    end
-  end
-
   describe "times/2 combinator" do
     defparsecp :times_digits, times(ascii_char([?0..?9]) |> ascii_char([?0..?9]), max: 4)
     defparsecp :times_choice, times(choice([ascii_char([?0..?4]), ascii_char([?5..?9])]), max: 4)
@@ -1245,7 +1201,6 @@ defmodule NimbleParsecTest do
     defparsecp :only_eos, eos()
     defparsecp :multi_eos, eos() |> eos()
     defparsecp :bad_eos, ascii_char([?a..?z]) |> eos() |> ascii_char([?a..?z])
-    defparsecp :repeat_until_eos, repeat_until(ascii_char([?0..?9]), [string("3") |> eos()])
 
     @error "expected end of string"
 
@@ -1261,11 +1216,6 @@ defmodule NimbleParsecTest do
       assert bad_eos("aa") ==
                {:error, "expected byte in the range ?a..?z, followed by end of string", "aa", %{},
                 {1, 0}, 0}
-    end
-
-    test "eos works in repeat_until" do
-      assert repeat_until_eos("12345") == {:ok, '12345', "", %{}, {1, 0}, 5}
-      assert repeat_until_eos("123") == {:ok, '12', "3", %{}, {1, 0}, 2}
     end
   end
 

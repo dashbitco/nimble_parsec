@@ -339,7 +339,7 @@ defmodule NimbleParsec do
 
         defparsec :xml,
                   opening_tag
-                  |> repeat_until(choice([parsec(:xml), text]), [string("</")])
+                  |> repeat(lookahead_not(string("</")) |> choice([parsec(:xml), text]))
                   |> concat(closing_tag)
                   |> wrap()
       end
@@ -357,7 +357,7 @@ defmodule NimbleParsec do
 
       defcombinatorp :xml,
                      opening_tag
-                     |> repeat_until(choice([parsec(:xml), text]), [string("</")])
+                     |> repeat(lookahead_not(string("</")) |> choice([parsec(:xml), text]))
                      |> concat(closing_tag)
                      |> wrap()
 
@@ -1168,48 +1168,6 @@ defmodule NimbleParsec do
     quoted_repeat_while(combinator, to_repeat, {__MODULE__, :__repeat_while__, [while]})
   end
 
-  @doc ~S"""
-  Repeats `to_repeat` until one of the combinators in `choices` match.
-
-  If the combinator `to_repeat` stops matching, then the whole repeat
-  loop stops successfully, hence it is important to assert the terminated
-  value after repeating.
-
-  Each of the combinators given in choice must be optimizable into
-  a single pattern, otherwise this function will refuse to compile.
-  Use `repeat_while/3` for a general mechanism for repeating.
-
-  ## Examples
-
-      defmodule MyParser do
-        import NimbleParsec
-
-        defparsec :string_with_quotes,
-                  ascii_char([?"])
-                  |> repeat_until(
-                    choice([
-                      ~S(\") |> string() |> replace(?"),
-                      utf8_char([])
-                    ]),
-                    [ascii_char([?"])]
-                  )
-                  |> ascii_char([?"])
-                  |> reduce({List, :to_string, []})
-
-      end
-
-      MyParser.string_with_quotes(~S("string with quotes \" inside"))
-      {:ok, ["\"string with quotes \" inside\""], "", %{}, {1, 0}, 30}
-
-  """
-  @spec repeat_until(t, t, nonempty_list(t)) :: t
-  def repeat_until(combinator \\ empty(), to_repeat, [_ | _] = choices)
-      when is_combinator(combinator) and is_combinator(to_repeat) and is_list(choices) do
-    non_empty!(to_repeat, "repeat_until")
-    clauses = check_until_choices!(choices)
-    quoted_repeat_while(combinator, to_repeat, {__MODULE__, :__repeat_until__, [clauses]})
-  end
-
   @doc """
   Invokes `while` to emit the AST that will repeat `to_repeat`
   while the AST code returns `{:cont, context}`.
@@ -1421,19 +1379,6 @@ defmodule NimbleParsec do
     end
   end
 
-  defp check_until_choices!(choices) do
-    for choice <- choices do
-      if choice == [] do
-        raise "cannot pass empty combinator as choice in repeat_until"
-      end
-
-      case NimbleParsec.Compiler.compile_pattern(choice) do
-        {_inputs, _guards, _eos} = triplet -> triplet
-        :error -> raise "cannot compile combinator as choice given in repeat_until"
-      end
-    end
-  end
-
   ## Inner combinators
 
   defp quoted_constant_traverse(combinator, to_traverse, call) do
@@ -1557,26 +1502,6 @@ defmodule NimbleParsec do
   @doc false
   def __repeat_while__(quoted, context, line, offset, call) do
     compile_call!([quoted, context, line, offset], call, "repeat_while")
-  end
-
-  @doc false
-  def __repeat_until__(rest, context, _line, _offset, clauses) do
-    clauses =
-      for {inputs, guards, eos?} <- clauses do
-        inputs = if eos?, do: inputs, else: inputs ++ [quote(do: _ :: binary)]
-
-        hd(
-          quote do
-            <<unquote_splicing(inputs)>> when unquote(guards) -> {:halt, unquote(context)}
-          end
-        )
-      end
-
-    clauses = clauses ++ quote(do: (_ -> {:cont, unquote(context)}))
-
-    quote do
-      case unquote(rest), do: unquote(clauses)
-    end
   end
 
   ## Chars callbacks

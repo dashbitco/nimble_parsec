@@ -16,14 +16,14 @@ defmodule SimpleLanguage do
 
   string =
     ascii_char([?"])
-    |> repeat_until(
-      choice([
+    |> repeat(
+      lookahead_not(ascii_char([?"]))
+      |> choice([
         ~S(\") |> string() |> replace(?"),
         ~S(\#) |> string() |> replace(?#),
         interpolation,
         utf8_char([])
-      ]),
-      [ascii_char([?"])]
+      ])
     )
     |> ascii_char([?"])
     |> tag(:string)

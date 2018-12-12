@@ -62,25 +62,6 @@ defmodule NimbleParsec.IntegrationTest do
     end
   end
 
-  describe "string with quotes inside, using repeat_until" do
-    defparsec :string_with_quotes_using_repeat_until,
-              ascii_char([?"])
-              |> repeat_until(
-                choice([
-                  ~S(\") |> string() |> replace(?"),
-                  utf8_char([])
-                ]),
-                [ascii_char([?"])]
-              )
-              |> ascii_char([?"])
-              |> reduce({List, :to_string, []})
-
-    test "returns ok/error" do
-      assert string_with_quotes_using_repeat_until(~S("string with quotes \" inside")) ==
-               {:ok, ["\"string with quotes \" inside\""], "", %{}, {1, 0}, 30}
-    end
-  end
-
   describe "signed int" do
     defparsec :signed_int,
               optional(ascii_char([?-]))
