@@ -372,7 +372,7 @@ defmodule NimbleParsec do
   end
 
   @doc ~S"""
-  Defines a single ascii codepoint in the given ranges.
+  Defines a single ASCII codepoint in the given ranges.
 
   `ranges` is a list containing one of:
 
@@ -407,7 +407,7 @@ defmodule NimbleParsec do
   end
 
   @doc ~S"""
-  Defines a single utf8 codepoint in the given ranges.
+  Defines a single UTF-8 codepoint in the given ranges.
 
   `ranges` is a list containing one of:
 
@@ -528,10 +528,10 @@ defmodule NimbleParsec do
   end
 
   @doc ~S"""
-  Defines an ascii string combinator with of exact length or `min` and `max`
+  Defines an ASCII string combinator with an exact length or `min` and `max`
   length.
 
-  The `ranges` specify the allowed characters in the ascii string.
+  The `ranges` specify the allowed characters in the ASCII string.
   See `ascii_char/2` for more information.
 
   If you want a string of unknown size, use `ascii_string(ranges, min: 1)`.
@@ -564,10 +564,10 @@ defmodule NimbleParsec do
   end
 
   @doc ~S"""
-  Defines an ascii string combinator with of exact length or `min` and `max`
+  Defines an ASCII string combinator with of exact length or `min` and `max`
   codepoint length.
 
-  The `ranges` specify the allowed characters in the ascii string.
+  The `ranges` specify the allowed characters in the ASCII string.
   See `ascii_char/2` for more information.
 
   If you want a string of unknown size, use `utf8_string(ranges, min: 1)`.
