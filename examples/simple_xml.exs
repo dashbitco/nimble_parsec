@@ -20,27 +20,19 @@ defmodule SimpleXML do
 
   defcombinatorp :node,
                  opening_tag
-                 |> repeat(
-                   lookahead_not(string("</"))
-                   |> choice([parsec(:node), text])
-                 )
+                 |> repeat(lookahead_not(string("</")) |> choice([parsec(:node), text]))
                  |> wrap()
                  |> concat(closing_tag)
                  |> post_traverse(:match_and_emit_tag)
 
-  defp match_and_emit_tag(_rest, [tag, [tag | contents]], context, _line, _offset) do
-    text_or_nodes =
-      case contents do
-        [text] -> text
-        nodes -> nodes
-      end
+  defp match_and_emit_tag(_rest, [tag, [tag, text]], context, _line, _offset),
+    do: {[{String.to_atom(tag), [], text}], context}
 
-    {[{String.to_atom(tag), [], text_or_nodes}], context}
-  end
+  defp match_and_emit_tag(_rest, [tag, [tag | nodes]], context, _line, _offset),
+    do: {[{String.to_atom(tag), [], nodes}], context}
 
-  defp match_and_emit_tag(_rest, [opening, [closing | _]], _context, _line, _offset) do
-    {:error, "closing tag #{inspect(closing)} did not match opening tag #{inspect(opening)}"}
-  end
+  defp match_and_emit_tag(_rest, [opening, [closing | _]], _context, _line, _offset),
+    do: {:error, "closing tag #{inspect(closing)} did not match opening tag #{inspect(opening)}"}
 end
 
 inputs = [
