@@ -420,10 +420,28 @@ defmodule NimbleParsec.Compiler do
         [inner_rest, [], [unquote(cont) | stack], inner_context, inner_line, inner_offset]
       end
 
-    false_args = quote(do: [rest, acc, stack, context, line, offset])
-    body = repeat_while(while, recur, true_args, next, false_args)
-    success_def = {success, head, true, body}
+    false_args = quote(do: [rest, stack, context, line, offset])
 
+    # We need to do this dance because of unused variables
+    body =
+      case compile_time_repeat_while(while) do
+        :cont ->
+          quote do
+            _ = {rest, acc, context, line, offset}
+            unquote({recur, [], true_args})
+          end
+
+        :halt ->
+          quote do
+            _ = {inner_rest, inner_acc, inner_context, inner_line, inner_offset}
+            unquote({next, [], false_args})
+          end
+
+        :none ->
+          repeat_while(while, recur, true_args, next, false_args)
+      end
+
+    success_def = {success, head, true, body}
     head = quote(do: [rest, acc, stack, context, line, offset])
 
     true_args =
@@ -440,20 +458,25 @@ defmodule NimbleParsec.Compiler do
     {defs, inline, next, step, :catch_none}
   end
 
-  defp repeat_while({:cont, quote(do: context)}, true_name, true_args, _false_name, _false_args) do
-    {true_name, [], true_args}
-  end
-
-  defp repeat_while({:halt, quote(do: context)}, _true_name, _true_args, false_name, false_args) do
-    {false_name, [], false_args}
-  end
+  defp compile_time_repeat_while({:cont, quote(do: context)}), do: :cont
+  defp compile_time_repeat_while({:halt, quote(do: context)}), do: :halt
+  defp compile_time_repeat_while(_), do: :none
 
   defp repeat_while(quoted, true_name, true_args, false_name, false_args) do
-    quote do
-      case unquote(quoted) do
-        {:cont, context} -> unquote({true_name, [], true_args})
-        {:halt, context} -> unquote({false_name, [], false_args})
-      end
+    case compile_time_repeat_while(quoted) do
+      :cont ->
+        {true_name, [], true_args}
+
+      :halt ->
+        {false_name, [], false_args}
+
+      :none ->
+        quote do
+          case unquote(quoted) do
+            {:cont, context} -> unquote({true_name, [], true_args})
+            {:halt, context} -> unquote({false_name, [], false_args})
+          end
+        end
     end
   end
 
@@ -964,12 +987,11 @@ defmodule NimbleParsec.Compiler do
   end
 
   defp build_proxy_to(name, next, n) do
-    args = quote(do: [rest, acc, stack, context, line, offset])
-    [_, acc, stack, _, _, _] = args
+    args = quote(do: [rest, _acc, stack, context, line, offset])
+    {acc, stack} = quote(do: {acc, stack})
 
     body =
       quote do
-        _ = {acc, stack}
         unquote(build_acc_depth(n, acc, stack)) = stack
         unquote(next)(rest, acc, stack, context, line, offset)
       end
