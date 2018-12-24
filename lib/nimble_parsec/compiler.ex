@@ -969,6 +969,7 @@ defmodule NimbleParsec.Compiler do
 
     body =
       quote do
+        _ = {acc, stack}
         unquote(build_acc_depth(n, acc, stack)) = stack
         unquote(next)(rest, acc, stack, context, line, offset)
       end
