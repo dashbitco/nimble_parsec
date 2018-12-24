@@ -420,7 +420,7 @@ defmodule NimbleParsec.Compiler do
         [inner_rest, [], [unquote(cont) | stack], inner_context, inner_line, inner_offset]
       end
 
-    false_args = quote(do: [rest, stack, context, line, offset])
+    false_args = quote(do: [rest, acc, stack, context, line, offset])
 
     # We need to do this dance because of unused variables
     body =
