@@ -1187,6 +1187,7 @@ defmodule NimbleParsecTest do
     defparsecp :parsec_repeat, repeat(parsec(:parsec_inner))
     defparsecp :parsec_map, map(parsec(:parsec_inner), {String, :to_integer, []})
     defparsecp :parsec_choice, choice([parsec(:parsec_inner), string("+")])
+    defparsecp :parsec_repeat_map, repeat(map(parsec(:parsec_inner), {String, :to_integer, []}))
 
     test "returns ok/error with string" do
       assert parsec_string("TaO") == {:ok, ["T", "97", "O"], "", %{}, {1, 0}, 3}
@@ -1222,6 +1223,12 @@ defmodule NimbleParsecTest do
       assert parsec_map("az") == {:ok, [?a], "z", %{}, {1, 0}, 1}
       assert parsec_map("AZ") == {:ok, [?A], "Z", %{}, {1, 0}, 1}
       assert parsec_map("1aAzZ") == {:error, @error, "1aAzZ", %{}, {1, 0}, 0}
+    end
+
+    test "returns ok/error with repeat + map" do
+      assert parsec_repeat_map("az") == {:ok, [?a, ?z], "", %{}, {1, 0}, 2}
+      assert parsec_repeat_map("AZ") == {:ok, [?A, ?Z], "", %{}, {1, 0}, 2}
+      assert parsec_repeat_map("1aAzZ") == {:ok, [], "1aAzZ", %{}, {1, 0}, 0}
     end
   end
 
