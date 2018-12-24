@@ -143,7 +143,7 @@ defmodule NimbleParsec.Compiler do
           quote(do: error)
 
         %{catch_all: catch_all, acc_depth: n} ->
-          {_, ^head, _, body} = build_proxy_to(current, catch_all, n)
+          {_, _, _, body} = build_proxy_to(current, catch_all, n)
           body
       end
 
