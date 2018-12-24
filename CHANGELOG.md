@@ -1,6 +1,6 @@
 # Changelog for NimbleParsec
 
-## v0.5.1 (2018-12-??)
+## v0.5.1-dev
 
 ### Enhancements
 
