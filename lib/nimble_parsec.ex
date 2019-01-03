@@ -1422,7 +1422,9 @@ defmodule NimbleParsec do
 
   defp validate_min_or_max!(kind, value, min) do
     unless is_integer(value) and value >= min do
-      raise ArgumentError, "expected #{kind} to be an integer more than or equal to #{min}, got: #{inspect(value)}"
+      raise ArgumentError,
+            "expected #{kind} to be an integer more than or equal to #{min}, " <>
+              "got: #{inspect(value)}"
     end
   end
 
