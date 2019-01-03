@@ -229,6 +229,7 @@ defmodule NimbleParsecTest do
 
   describe "utf8_string/2 combinator with exact length" do
     defparsecp :exact_utf8_string, utf8_string([], 2)
+    defparsecp :zero_utf8_string, utf8_string([], 0)
 
     @error "expected utf8 codepoint, followed by utf8 codepoint"
 
@@ -236,6 +237,9 @@ defmodule NimbleParsecTest do
       assert exact_utf8_string("áé") == {:ok, ["áé"], "", %{}, {1, 0}, 4}
       assert exact_utf8_string("áé\xFF") == {:ok, ["áé"], "\xFF", %{}, {1, 0}, 4}
       assert exact_utf8_string("\xFFáé") == {:error, @error, "\xFFáé", %{}, {1, 0}, 0}
+
+      assert zero_utf8_string("áé") == {:ok, [""], "áé", %{}, {1, 0}, 0}
+      assert zero_utf8_string("") == {:ok, [""], "", %{}, {1, 0}, 0}
     end
 
     test "is bound" do
@@ -247,6 +251,7 @@ defmodule NimbleParsecTest do
     defparsecp :min_utf8_string, utf8_string([], min: 2)
     defparsecp :max_utf8_string, utf8_string([], max: 3)
     defparsecp :min_max_utf8_string, utf8_string([], min: 2, max: 3)
+    defparsecp :min_zero_utf8_string, utf8_string([], min: 0)
 
     @error "expected utf8 codepoint, followed by utf8 codepoint"
 
@@ -256,6 +261,9 @@ defmodule NimbleParsecTest do
       assert min_utf8_string("áéí\xFF") == {:ok, ["áéí"], "\xFF", %{}, {1, 0}, 6}
       assert min_utf8_string("áéíó") == {:ok, ["áéíó"], "", %{}, {1, 0}, 8}
       assert min_utf8_string("\xFF") == {:error, @error, "\xFF", %{}, {1, 0}, 0}
+
+      assert min_zero_utf8_string("áé") == {:ok, ["áé"], "", %{}, {1, 0}, 4}
+      assert min_zero_utf8_string("\xFF") == {:ok, [""], "\xFF", %{}, {1, 0}, 0}
     end
 
     test "returns ok/error with max" do

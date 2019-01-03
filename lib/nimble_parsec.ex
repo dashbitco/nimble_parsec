@@ -1400,18 +1400,18 @@ defmodule NimbleParsec do
 
     cond do
       min && max ->
-        validate_min_or_max!(:min, min)
-        validate_min_or_max!(:max, max)
+        validate_min_or_max!(:min, min, 0)
+        validate_min_or_max!(:max, max, 1)
 
         max <= min and
           raise ArgumentError,
                 "expected :max to be strictly more than :min, got: #{min} and #{max}"
 
       min ->
-        validate_min_or_max!(:min, min)
+        validate_min_or_max!(:min, min, 0)
 
       max ->
-        validate_min_or_max!(:max, max)
+        validate_min_or_max!(:max, max, 1)
 
       true ->
         raise ArgumentError, "expected :min or :max to be given"
@@ -1420,9 +1420,9 @@ defmodule NimbleParsec do
     {min || 0, max}
   end
 
-  defp validate_min_or_max!(kind, value) do
-    unless is_integer(value) and value >= 1 do
-      raise ArgumentError, "expected #{kind} to be an integer more than 1, got: #{inspect(value)}"
+  defp validate_min_or_max!(kind, value, min) do
+    unless is_integer(value) and value >= min do
+      raise ArgumentError, "expected #{kind} to be an integer more than or equal to #{min}, got: #{inspect(value)}"
     end
   end
 
@@ -1605,7 +1605,7 @@ defmodule NimbleParsec do
   ## Chars callbacks
 
   defp min_max_compile_runtime_chars(combinator, to_repeat, count, compile, _runtime, args)
-       when is_integer(count) and count > 0 do
+       when is_integer(count) and count >= 0 do
     chars = duplicate(to_repeat, count)
     quoted_post_traverse(combinator, chars, {__MODULE__, compile, [count | args]})
   end
