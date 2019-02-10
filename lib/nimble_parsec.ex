@@ -1045,7 +1045,7 @@ defmodule NimbleParsec do
   In case the combinator emits more than one token, an error will be raised.
   See `tag/3` for more information.
   """
-  @spec unwrap_and_tag(t, t) :: t
+  @spec unwrap_and_tag(t, t, term) :: t
   def unwrap_and_tag(combinator \\ empty(), to_tag, tag)
       when is_combinator(combinator) and is_combinator(to_tag) do
     quoted_post_traverse(
