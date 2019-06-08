@@ -297,7 +297,7 @@ defmodule NimbleParsec do
         end
       end
 
-      defmodule MyParser.Helpers do
+      defmodule MyParser do
         import NimbleParsec
         import MyParser.Helpers
 
