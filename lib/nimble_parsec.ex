@@ -463,7 +463,7 @@ defmodule NimbleParsec do
       #=> {:error, "expected a digit followed by lowercase letter", "a1", %{}, {1, 0}, 0}
 
   """
-	@spec label(t, t, String.t) :: t
+  @spec label(t, t, String.t()) :: t
   def label(combinator \\ empty(), to_label, label)
       when is_combinator(combinator) and is_combinator(to_label) and is_binary(label) do
     non_empty!(to_label, "label")
@@ -1644,7 +1644,7 @@ defmodule NimbleParsec do
   def __compile_string__(_rest, acc, context, _line, _offset, _count, type) when is_list(acc) do
     acc =
       for entry <- :lists.reverse(acc) do
-        {:::, [], [entry, type]}
+        {:"::", [], [entry, type]}
       end
 
     {[{:<<>>, [], acc}], context}

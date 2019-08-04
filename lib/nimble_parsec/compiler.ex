@@ -938,7 +938,7 @@ defmodule NimbleParsec.Compiler do
 
       _ ->
         modifiers = Enum.map(modifiers, &Macro.var(&1, __MODULE__))
-        {:::, [], [expr, Enum.reduce(modifiers, &{:-, [], [&2, &1]})]}
+        {:"::", [], [expr, Enum.reduce(modifiers, &{:-, [], [&2, &1]})]}
     end
   end
 
