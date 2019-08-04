@@ -463,6 +463,7 @@ defmodule NimbleParsec do
       #=> {:error, "expected a digit followed by lowercase letter", "a1", %{}, {1, 0}, 0}
 
   """
+  @spec label(t, t, String.t()) :: t
   def label(combinator \\ empty(), to_label, label)
       when is_combinator(combinator) and is_combinator(to_label) and is_binary(label) do
     non_empty!(to_label, "label")
@@ -1020,7 +1021,7 @@ defmodule NimbleParsec do
   the parser is expected to emit multiple tokens. When you are sure that
   only a single token is emitted, you should use `unwrap_and_tag/3`.
   """
-  @spec tag(t, t) :: t
+  @spec tag(t, t, term) :: t
   def tag(combinator \\ empty(), to_tag, tag)
       when is_combinator(combinator) and is_combinator(to_tag) do
     quoted_post_traverse(combinator, to_tag, {__MODULE__, :__tag__, [Macro.escape(tag)]})
@@ -1643,7 +1644,7 @@ defmodule NimbleParsec do
   def __compile_string__(_rest, acc, context, _line, _offset, _count, type) when is_list(acc) do
     acc =
       for entry <- :lists.reverse(acc) do
-        {:::, [], [entry, type]}
+        {:"::", [], [entry, type]}
       end
 
     {[{:<<>>, [], acc}], context}
