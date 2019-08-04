@@ -11,17 +11,12 @@ defmodule NimbleParsec.MixProject do
       elixir: "~> 1.4",
       name: "NimbleParsec",
       description: "A simple and fast library for text-based parser combinators",
-      deps: deps(),
       aliases: [docs: &build_docs/1],
       package: package()
     ]
   end
 
   def application do
-    []
-  end
-
-  defp deps do
     []
   end
 
