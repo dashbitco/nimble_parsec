@@ -463,6 +463,7 @@ defmodule NimbleParsec do
       #=> {:error, "expected a digit followed by lowercase letter", "a1", %{}, {1, 0}, 0}
 
   """
+	@spec label(t, t, String.t) :: t
   def label(combinator \\ empty(), to_label, label)
       when is_combinator(combinator) and is_combinator(to_label) and is_binary(label) do
     non_empty!(to_label, "label")
