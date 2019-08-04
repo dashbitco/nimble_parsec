@@ -1020,7 +1020,7 @@ defmodule NimbleParsec do
   the parser is expected to emit multiple tokens. When you are sure that
   only a single token is emitted, you should use `unwrap_and_tag/3`.
   """
-  @spec tag(t, t) :: t
+  @spec tag(t, t, term) :: t
   def tag(combinator \\ empty(), to_tag, tag)
       when is_combinator(combinator) and is_combinator(to_tag) do
     quoted_post_traverse(combinator, to_tag, {__MODULE__, :__tag__, [Macro.escape(tag)]})
