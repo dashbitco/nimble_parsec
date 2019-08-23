@@ -367,6 +367,7 @@ defmodule NimbleParsec do
   the combinator above via `parsec/3`.
 
   """
+  @spec parsec(t(), atom()) :: t()
   def parsec(combinator \\ empty(), name) when is_combinator(combinator) and is_atom(name) do
     [{:parsec, name} | combinator]
   end
