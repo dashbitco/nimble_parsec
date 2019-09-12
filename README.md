@@ -128,6 +128,7 @@ end
 Other nimble libraries by Plataformatec:
 
   * [NimbleCSV](https://github.com/plataformatec/nimble_csv) - simple and fast CSV parsing
+  * [NimbleStrftime](https://github.com/plataformatec/nimble_strftime) - simple and fast strftime-based datetime formatter
 
 ## License
 
