@@ -1164,9 +1164,9 @@ defmodule NimbleParsec do
        repeat(optional(utf8_char([?a])))
 
   This combinator will never terminate because `repeat/2` chooses the empty
-  option of `optional/2` every time. This parser attempts to parse 0 or more
-  `?a` characters, and so can be represented by `repeat(utf8_char([?a]))`,
-  because `repeat/2` allows 0 or more matches.
+  option of `optional/2` every time. Since the goal of the parser above is
+  to parse 0 or more `?a` characters, it can be represented by
+  `repeat(utf8_char([?a]))`, because `repeat/2` allows 0 or more matches.
 
   ## Examples
 
