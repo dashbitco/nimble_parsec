@@ -1012,7 +1012,7 @@ defmodule NimbleParsec do
       defmodule MyParser do
         import NimbleParsec
 
-        defparsec integer(min: 1) |> tag(:integer)
+        defparsec :integer, integer(min: 1) |> tag(:integer)
       end
 
       MyParser.integer("1234")
@@ -1037,7 +1037,7 @@ defmodule NimbleParsec do
       defmodule MyParser do
         import NimbleParsec
 
-        defparsec integer(min: 1) |> unwrap_and_tag(:integer)
+        defparsec :integer, integer(min: 1) |> unwrap_and_tag(:integer)
       end
 
       MyParser.integer("1234")
