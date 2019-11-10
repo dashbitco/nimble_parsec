@@ -11,7 +11,7 @@ defmodule NimbleParsec.Compiler do
 
     Returns `{:ok, [token], rest, context, position, byte_offset}` or
     `{:error, reason, rest, context, line, byte_offset}` where `position`
-    describes the location of the #{name} (start position) as {line, column_on_line}.
+    describes the location of the #{name} (start position) as `{line, column_on_line}`.
 
     ## Options
 
@@ -202,7 +202,7 @@ defmodule NimbleParsec.Compiler do
   end
 
   defp compile_unbound_combinator({:times, combinators, 0, count}, current, step, config) do
-    if all_bound_combinators?(combinators) do
+    if all_no_context_combinators?(combinators) do
       compile_bound_times(combinators, count, current, step, config)
     else
       compile_unbound_times(combinators, count, current, step, config)
@@ -213,7 +213,7 @@ defmodule NimbleParsec.Compiler do
     {failure, step} = build_next(step, config)
     config = %{config | catch_all: failure, acc_depth: 0}
 
-    if all_bound_combinators?(combinators) do
+    if all_no_context_combinators?(combinators) do
       compile_bound_repeat(combinators, while, current, failure, step, config)
     else
       compile_unbound_repeat(combinators, while, current, failure, step, config)
@@ -613,6 +613,42 @@ defmodule NimbleParsec.Compiler do
     inline = [{failure, @arity}, {success, @arity} | inline]
     config = %{config | catch_all: failure, acc_depth: 0}
     compile_unbound_choice(choices, defs, inline, current, step, done, config)
+  end
+
+  ## No context combinators
+
+  # If a combinator does not need a context, i.e. it cannot abort
+  # in the middle, then we can compile to an optimized version of
+  # repeat and times.
+  #
+  # For example, a lookahead at the beginning doesn't need a context.
+  # A choice that is bound doesn't need one either.
+  defp all_no_context_combinators?([{:lookahead, look_combinators, _kind} | combinators]) do
+    all_bound_combinators?(look_combinators) and
+      all_no_context_combinators_next?(combinators)
+  end
+
+  defp all_no_context_combinators?(combinators) do
+    all_no_context_combinators_next?(combinators)
+  end
+
+  defp all_no_context_combinators_next?([{:times, times_combinators, _kind} | combinators]) do
+    all_no_context_combinators?(times_combinators) and
+      all_no_context_combinators_next?(combinators)
+  end
+
+  defp all_no_context_combinators_next?([{:repeat, repeat_combinators, _kind} | combinators]) do
+    all_no_context_combinators?(repeat_combinators) and
+      all_no_context_combinators_next?(combinators)
+  end
+
+  defp all_no_context_combinators_next?([{:choice, choice_combinators, _kind} | combinators]) do
+    all_bound_combinators?(choice_combinators) and
+      all_no_context_combinators_next?(combinators)
+  end
+
+  defp all_no_context_combinators_next?(combinators) do
+    all_bound_combinators?(combinators)
   end
 
   ## Bound combinators
