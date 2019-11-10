@@ -632,16 +632,6 @@ defmodule NimbleParsec.Compiler do
     all_no_context_combinators_next?(combinators)
   end
 
-  defp all_no_context_combinators_next?([{:times, times_combinators, _kind} | combinators]) do
-    all_no_context_combinators?(times_combinators) and
-      all_no_context_combinators_next?(combinators)
-  end
-
-  defp all_no_context_combinators_next?([{:repeat, repeat_combinators, _kind} | combinators]) do
-    all_no_context_combinators?(repeat_combinators) and
-      all_no_context_combinators_next?(combinators)
-  end
-
   defp all_no_context_combinators_next?([{:choice, choice_combinators, _kind} | combinators]) do
     all_bound_combinators?(choice_combinators) and
       all_no_context_combinators_next?(combinators)
