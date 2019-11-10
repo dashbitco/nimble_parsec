@@ -1,9 +1,10 @@
 # Changelog for NimbleParsec
 
-## v0.5.2-dev
+## v0.5.2
 
 ### Enhancements
 
+  * Optmize `repeat` with initial `lookahead`
   * Add `@spec` to `parsec/2`
 
 ## v0.5.1 (2019-08-04)
