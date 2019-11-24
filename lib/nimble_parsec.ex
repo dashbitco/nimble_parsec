@@ -200,6 +200,7 @@ defmodule NimbleParsec do
 
   An empty combinator cannot be compiled on its own.
   """
+  @spec empty() :: t()
   def empty() do
     []
   end
