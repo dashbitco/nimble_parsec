@@ -30,7 +30,7 @@ defmodule NimbleParsec.MixProject do
 
   defp build_docs(_) do
     Mix.Task.run("compile")
-    ex_doc = Path.join(Mix.Local.path_for(:escript), "ex_doc")
+    ex_doc = Path.join(Mix.path_for(:escripts), "ex_doc")
 
     unless File.exists?(ex_doc) do
       raise "cannot build docs because escript for ex_doc is not installed"
