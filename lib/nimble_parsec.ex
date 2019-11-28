@@ -190,10 +190,11 @@ defmodule NimbleParsec do
 
   @typep unbound_combinator ::
            {:choice, [t]}
+           | {:eventually, t}
+           | {:lookahead, t, :positive | :negative}
            | {:parsec, atom}
            | {:repeat, t, mfargs}
            | {:times, t, min :: non_neg_integer, pos_integer}
-           | {:lookahead, t, :positive | :negative}
 
   @doc ~S"""
   Returns an empty combinator.
@@ -1191,6 +1192,32 @@ defmodule NimbleParsec do
     quoted_repeat_while(combinator, to_repeat, {__MODULE__, :__cont_context__, []})
   end
 
+  @doc """
+  Marks the given combinator should appear eventually.
+
+  Any other data before the combinator appears is discarded.
+  If the combinator never appears, then it is an error.
+
+  ## Examples
+
+      defmodule MyParser do
+        import NimbleParsec
+
+        hour = integer(min: 1, max: 2)
+        defparsec :extract_hour, eventually(hour)
+      end
+
+      MyParser.extract_hour("let's meet at 12?")
+      #=> {:ok, [12], "?", %{}, {1, 0}, 16}
+
+  """
+  @spec eventually(t, t) :: t
+  def eventually(combinator \\ empty(), eventually)
+      when is_combinator(combinator) and is_combinator(eventually) do
+    non_empty!(eventually, "eventually")
+    [{:eventually, Enum.reverse(eventually)} | combinator]
+  end
+
   @doc ~S"""
   Repeats while the given remote or local function `while` returns
   `{:cont, context}`.
@@ -1277,7 +1304,7 @@ defmodule NimbleParsec do
 
   `while` is a `{module, function, args}` and it will receive 4
   additional arguments. The AST representations of the binary to be
-  parsed, context, line and offset will be prended to `args`. `while`
+  parsed, context, line and offset will be prepended to `args`. `while`
   is invoked at compile time and is useful in combinators that avoid
   injecting runtime dependencies.
   """

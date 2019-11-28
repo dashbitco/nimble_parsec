@@ -220,6 +220,10 @@ defmodule NimbleParsec.Compiler do
     end
   end
 
+  defp compile_unbound_combinator({:eventually, combinators}, current, step, config) do
+    compile_eventually(combinators, current, step, config)
+  end
+
   defp compile_unbound_combinator({:choice, choices} = combinator, current, step, config) do
     config =
       update_in(config.labels, fn
@@ -373,6 +377,28 @@ defmodule NimbleParsec.Compiler do
         {acc, context}
       end
     end
+  end
+
+  ## Eventually
+
+  defp compile_eventually(combinators, current, step, config) do
+    {failure, step} = build_next(step, config)
+    failure_def = build_eventually_next_def(current, failure)
+    catch_all_def = build_catch_all(:positive, failure, combinators, config)
+
+    config = %{config | catch_all: failure, acc_depth: 0}
+    {defs, inline, success, step} = compile(combinators, [], [], current, step, config)
+
+    defs = Enum.reverse(defs, [failure_def, catch_all_def])
+    {defs, [{failure, @arity} | inline], success, step, :catch_none}
+  end
+
+  defp build_eventually_next_def(current, failure) do
+    head = quote(do: [<<byte, rest::binary>>, acc, stack, context, line, offset])
+    offset = add_offset(quote(do: offset), 1)
+    line = add_line(quote(do: line), offset, quote(do: byte))
+    body = {current, [], quote(do: [rest, acc, stack, context]) ++ [line, offset]}
+    {failure, head, true, body}
   end
 
   ## Repeat
@@ -746,14 +772,7 @@ defmodule NimbleParsec.Compiler do
 
     line =
       if newline_allowed?(inclusive) and not newline_forbidden?(exclusive) do
-        quote do
-          line = unquote(line)
-
-          case unquote(var) do
-            ?\n -> {elem(line, 0) + 1, unquote(offset)}
-            _ -> line
-          end
-        end
+        add_line(line, offset, var)
       else
         line
       end
@@ -833,6 +852,17 @@ defmodule NimbleParsec.Compiler do
     end)
   end
 
+  defp add_line(line, offset, var) do
+    quote do
+      line = unquote(line)
+
+      case unquote(var) do
+        ?\n -> {elem(line, 0) + 1, unquote(offset)}
+        _ -> line
+      end
+    end
+  end
+
   ## Label
 
   defp labels([]) do
@@ -876,6 +906,10 @@ defmodule NimbleParsec.Compiler do
 
   defp label({:repeat, combinators, _}) do
     labels(combinators)
+  end
+
+  defp label({:eventually, combinators, _}) do
+    labels(combinators) <> " eventually"
   end
 
   defp label({:times, combinators, _, _}) do

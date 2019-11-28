@@ -1184,6 +1184,22 @@ defmodule NimbleParsecTest do
     end
   end
 
+  describe "eventually/2 combinator" do
+    hour = integer(min: 1, max: 2) |> label("hour")
+    defparsecp :eventually_integer, eventually(hour)
+    defparsecp :repeat_eventually, repeat(eventually(hour))
+
+    test "returns ok/error" do
+      assert eventually_integer("let's meet at 12?") == {:ok, [12], "?", %{}, {1, 0}, 16}
+      assert eventually_integer("let's not meet") == {:error, "expected hour", "", %{}, {1, 0}, 14}
+    end
+
+    test "returns ok/error with repeat" do
+      assert repeat_eventually("let's meet at 12? or at 14!") == {:ok, [12, 14], "!", %{}, {1, 0}, 26}
+      assert repeat_eventually("let's not meet") == {:ok, [], "let's not meet", %{}, {1, 0}, 0}
+    end
+  end
+
   describe "parsec/2 combinator" do
     defcombinatorp :parsec_inner,
                    choice([
