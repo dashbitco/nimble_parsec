@@ -908,7 +908,7 @@ defmodule NimbleParsec.Compiler do
     labels(combinators)
   end
 
-  defp label({:eventually, combinators, _}) do
+  defp label({:eventually, combinators}) do
     labels(combinators) <> " eventually"
   end
 
