@@ -1,5 +1,11 @@
 # Changelog for NimbleParsec
 
+## v0.5.3 (2019-12-11)
+
+### Enhancements
+
+  * Add `eventually/2` combinator
+
 ## v0.5.2 (2019-11-10)
 
 ### Enhancements
