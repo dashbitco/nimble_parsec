@@ -2,7 +2,7 @@ defmodule NimbleParsec.MixProject do
   use Mix.Project
 
   @version "0.5.3"
-  @url "https://github.com/plataformatec/nimble_parsec"
+  @url "https://github.com/dashbitco/nimble_parsec"
 
   def project do
     [
@@ -24,7 +24,7 @@ defmodule NimbleParsec.MixProject do
     %{
       licenses: ["Apache 2"],
       maintainers: ["José Valim"],
-      links: %{"GitHub" => "https://github.com/plataformatec/nimble_parsec"}
+      links: %{"GitHub" => "https://github.com/dashbitco/nimble_parsec"}
     }
   end
 

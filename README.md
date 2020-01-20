@@ -125,14 +125,15 @@ end
 
 ## Nimble*
 
-Other nimble libraries by Plataformatec:
+Other nimble libraries by Dashbit:
 
-  * [NimbleCSV](https://github.com/plataformatec/nimble_csv) - simple and fast CSV parsing
-  * [NimbleStrftime](https://github.com/plataformatec/nimble_strftime) - simple and fast strftime-based datetime formatter
+  * [NimbleCSV](https://github.com/dashbitco/nimble_csv) - simple and fast CSV parsing
+  * [NimblePool](https://github.com/dashbitco/nimble_strftime) - simple and small resource-pool
 
 ## License
 
 Copyright 2018 Plataformatec
+Copyright 2020 Dashbit
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
