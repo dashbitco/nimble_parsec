@@ -328,14 +328,20 @@ defmodule NimbleParsec.Compiler do
     {Enum.reverse([last_def | defs]), inline, next, step, :catch_none}
   end
 
-  defp traverse(_traversal, next, _, _, _, _, _, %{replace: true}) do
-    quote(do: unquote(next)(rest, acc, stack, context, line, offset))
+  defp traverse(_traversal, next, _, user_acc, _, _, _, %{replace: true}) do
+    quote do
+      _ = unquote(user_acc)
+      unquote(next)(rest, acc, stack, context, line, offset)
+    end
   end
 
   defp traverse(traversal, next, rest, user_acc, context, line, offset, _) do
     case apply_traverse(traversal, rest, user_acc, context, line, offset) do
-      {user_acc, ^context} when user_acc != :error ->
-        quote(do: unquote(next)(rest, unquote(user_acc) ++ acc, stack, context, line, offset))
+      {expanded_acc, ^context} when user_acc != :error ->
+        quote do
+          _ = unquote(user_acc)
+          unquote(next)(rest, unquote(expanded_acc) ++ acc, stack, context, line, offset)
+        end
 
       quoted ->
         quote do
