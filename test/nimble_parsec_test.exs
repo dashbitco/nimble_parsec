@@ -48,7 +48,7 @@ defmodule NimbleParsecTest do
       assert multi_ascii_with_multi_not("de") == {:error, @error, "de", %{}, {1, 0}, 0}
     end
 
-    @error "expected ASCII character in the range ?0..?9 or equal to '\\n', followed by ASCII character in the range ?a..?z or equal to '\\n'"
+    @error "expected ASCII character in the range ?0..?9 or equal to ?\\n, followed by ASCII character in the range ?a..?z or equal to ?\\n"
 
     test "returns ok/error even with newlines" do
       assert ascii_newline("1a\n") == {:ok, [?1, ?a], "\n", %{}, {1, 0}, 2}
@@ -57,14 +57,14 @@ defmodule NimbleParsecTest do
       assert ascii_newline("x") == {:error, @error, "x", %{}, {1, 0}, 0}
     end
 
-    @error "expected ASCII character equal to '\\n'"
+    @error "expected ASCII character equal to ?\\n"
 
     test "returns ok/error on only newline" do
       assert ascii_only_newline("\n") == {:ok, '\n', "", %{}, {2, 1}, 1}
       assert ascii_only_newline("x") == {:error, @error, "x", %{}, {1, 0}, 0}
     end
 
-    @error "expected ASCII character in the range '\\a'..'\\n'"
+    @error "expected ASCII character in the range ?\\a..?\\n"
 
     test "returns ok/error on none ascii range" do
       assert none_ascii("\a\t\n") == {:ok, '\a', "\t\n", %{}, {1, 0}, 1}

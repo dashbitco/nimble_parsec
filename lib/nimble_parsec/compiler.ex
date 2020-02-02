@@ -997,7 +997,9 @@ defmodule NimbleParsec.Compiler do
 
   defp ascii?(char), do: char >= 32 and char <= 126
 
-  defp none_ascii_to_string(none_ascii), do: inspect([none_ascii], binaries: :as_string)
+  defp none_ascii_to_string(none_ascii) do
+    <<??, none_ascii>> |> inspect(binaries: :as_strings) |> String.trim(~s|"|)
+  end
 
   defp apply_bin_modifiers(expr, modifiers) do
     case modifiers do
