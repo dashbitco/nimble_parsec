@@ -893,7 +893,7 @@ defmodule NimbleParsec.Compiler do
 
     prefix =
       cond do
-        :integer in modifiers -> "byte"
+        :integer in modifiers -> "ASCII character"
         :utf8 in modifiers -> "utf8 codepoint"
         :utf16 in modifiers -> "utf16 codepoint"
         :utf32 in modifiers -> "utf32 codepoint"
@@ -983,7 +983,7 @@ defmodule NimbleParsec.Compiler do
     if ascii?(min) and ascii?(max) do
       <<" in the range ", ??, min, ?., ?., ??, max>>
     else
-      " in the range #{Integer.to_string(min)}..#{Integer.to_string(max)}"
+      " in the range #{none_ascii_to_string(min)}..#{none_ascii_to_string(max)}"
     end
   end
 
@@ -991,11 +991,13 @@ defmodule NimbleParsec.Compiler do
     if ascii?(min) do
       <<" equal to ", ??, min>>
     else
-      " equal to #{Integer.to_string(min)}"
+      " equal to #{none_ascii_to_string(min)}"
     end
   end
 
   defp ascii?(char), do: char >= 32 and char <= 126
+
+  defp none_ascii_to_string(none_ascii), do: inspect([none_ascii], binaries: :as_string)
 
   defp apply_bin_modifiers(expr, modifiers) do
     case modifiers do
