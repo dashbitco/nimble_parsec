@@ -5,8 +5,6 @@ script:
   - mix test
 matrix:
   include:
-    - elixir: 1.4.5
-      otp_release: 18.3
     - elixir: 1.6.2
       otp_release: 20.1
     - elixir: 1.7.3

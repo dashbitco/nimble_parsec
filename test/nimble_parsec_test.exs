@@ -748,7 +748,8 @@ defmodule NimbleParsecTest do
 
     test "aborts times" do
       assert lookahead_not_with_times("a0") ==
-               {:error, "did not expect ASCII character in the range '0' to '9'", "0", %{}, {1, 0}, 1}
+               {:error, "did not expect ASCII character in the range '0' to '9'", "0", %{},
+                {1, 0}, 1}
 
       assert lookahead_not_with_times("aa0") == {:ok, 'a', "a0", %{}, {1, 0}, 1}
       assert lookahead_not_with_times("aaa0") == {:ok, 'aa', "a0", %{}, {1, 0}, 2}
@@ -1310,7 +1311,8 @@ defmodule NimbleParsecTest do
                {:error, "expected ASCII character in the range 'a' to 'z'", "", %{}, {1, 0}, 1}
 
       assert bad_eos("aa") ==
-               {:error, "expected ASCII character in the range 'a' to 'z', followed by end of string",
+               {:error,
+                "expected ASCII character in the range 'a' to 'z', followed by end of string",
                 "aa", %{}, {1, 0}, 0}
     end
   end
