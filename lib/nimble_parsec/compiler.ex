@@ -888,11 +888,14 @@ defmodule NimbleParsec.Compiler do
   end
 
   defp label({:bin_segment, inclusive, exclusive, modifiers}) do
-    inclusive = Enum.map(inclusive, &inspect_bin_range(&1))
-    exclusive = Enum.map(exclusive, &inspect_bin_range(elem(&1, 1)))
+    {inclusive, printable?} = Enum.map_reduce(inclusive, true, &inspect_bin_range(&1, &2))
+
+    {exclusive, printable?} =
+      Enum.map_reduce(exclusive, printable?, &inspect_bin_range(elem(&1, 1), &2))
 
     prefix =
       cond do
+        :integer in modifiers and not printable? -> "byte"
         :integer in modifiers -> "ASCII character"
         :utf8 in modifiers -> "utf8 codepoint"
         :utf16 in modifiers -> "utf16 codepoint"
@@ -979,27 +982,17 @@ defmodule NimbleParsec.Compiler do
     end
   end
 
-  defp inspect_bin_range(min..max) do
-    if ascii?(min) and ascii?(max) do
-      <<" in the range ", ??, min, ?., ?., ??, max>>
-    else
-      " in the range #{none_ascii_to_string(min)}..#{none_ascii_to_string(max)}"
-    end
+  defp inspect_bin_range(min..max, printable?) do
+    {" in the range #{inspect_char(min)} to #{inspect_char(max)}",
+     printable? and printable?(min) and printable?(max)}
   end
 
-  defp inspect_bin_range(min) do
-    if ascii?(min) do
-      <<" equal to ", ??, min>>
-    else
-      " equal to #{none_ascii_to_string(min)}"
-    end
+  defp inspect_bin_range(min, printable?) do
+    {" equal to #{inspect_char(min)}", printable? and printable?(min)}
   end
 
-  defp ascii?(char), do: char >= 32 and char <= 126
-
-  defp none_ascii_to_string(none_ascii) do
-    <<??, none_ascii>> |> inspect(binaries: :as_strings) |> String.trim(~s|"|)
-  end
+  defp printable?(codepoint), do: List.ascii_printable?([codepoint])
+  defp inspect_char(codepoint), do: inspect([codepoint], charlists: :as_charlists)
 
   defp apply_bin_modifiers(expr, modifiers) do
     case modifiers do

@@ -399,7 +399,7 @@ defmodule NimbleParsec do
       #=> {:ok, [?1, ?a], "", %{}, {1, 0}, 2}
 
       MyParser.digit_and_lowercase("a1")
-      #=> {:error, "expected a byte in the range ?0..?9, followed by a byte in the range ?a..?z", "a1", %{}, 1, 1}
+      #=> {:error, "expected a byte in the range 0 to 9, followed by a byte in the range a to z", "a1", %{}, 1, 1}
 
   """
   @spec ascii_char(t, [range]) :: t
@@ -434,7 +434,7 @@ defmodule NimbleParsec do
       #=> {:ok, [?1, ?é], "", %{}, {1, 0}, 2}
 
       MyParser.digit_and_utf8("a1")
-      #=> {:error, "expected a utf8 codepoint in the range ?0..?9, followed by a utf8 codepoint", "a1", %{}, {1, 0}, 0}
+      #=> {:error, "expected a utf8 codepoint in the range 0 to 9, followed by a utf8 codepoint", "a1", %{}, {1, 0}, 0}
 
   """
   @spec utf8_char(t, [range]) :: t
