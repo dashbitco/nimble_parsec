@@ -399,7 +399,7 @@ defmodule NimbleParsec do
       #=> {:ok, [?1, ?a], "", %{}, {1, 0}, 2}
 
       MyParser.digit_and_lowercase("a1")
-      #=> {:error, "expected a byte in the range 0 to 9, followed by a byte in the range a to z", "a1", %{}, 1, 1}
+      #=> {:error, "expected ASCII character in the range '0' to '9', followed by ASCII character in the range 'a' to 'z'", "a1", %{}, {1, 0}, 0}
 
   """
   @spec ascii_char(t, [range]) :: t
@@ -434,7 +434,7 @@ defmodule NimbleParsec do
       #=> {:ok, [?1, ?é], "", %{}, {1, 0}, 2}
 
       MyParser.digit_and_utf8("a1")
-      #=> {:error, "expected a utf8 codepoint in the range 0 to 9, followed by a utf8 codepoint", "a1", %{}, {1, 0}, 0}
+      #=> {:error, "expected utf8 codepoint in the range '0' to '9', followed by utf8 codepoint", "a1", %{}, {1, 0}, 0}
 
   """
   @spec utf8_char(t, [range]) :: t
@@ -495,7 +495,7 @@ defmodule NimbleParsec do
       #=> {:ok, [12], "3", %{}, {1, 0}, 2}
 
       MyParser.two_digits_integer("1a3")
-      #=> {:error, "expected a two digits integer", "1a3", %{}, {1, 0}, 0}
+      #=> {:error, "expected ASCII character in the range '0' to '9', followed by ASCII character in the range '0' to '9'", "1a3", %{}, {1, 0}, 0}
 
   With min and max:
 
@@ -509,7 +509,7 @@ defmodule NimbleParsec do
       #=> {:ok, [123], "", %{}, {1, 0}, 2}
 
       MyParser.two_digits_integer("1a3")
-      #=> {:error, "expected a two digits integer", "1a3", %{}, {1, 0}, 0}
+      #=> {:error, "expected ASCII character in the range '0' to '9', followed by ASCII character in the range '0' to '9'", "1a3", %{}, {1, 0}, 0}
 
   If the size of the integer has a min and max close to each other, such as
   from 2 to 4 or from 1 to 2, using choice may emit more efficient code:
