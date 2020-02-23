@@ -128,7 +128,7 @@ end
 Other nimble libraries by Dashbit:
 
   * [NimbleCSV](https://github.com/dashbitco/nimble_csv) - simple and fast CSV parsing
-  * [NimblePool](https://github.com/dashbitco/nimble_strftime) - simple and small resource-pool
+  * [NimblePool](https://github.com/dashbitco/nimble_pool) - simple and small resource-pool
 
 ## License
 
