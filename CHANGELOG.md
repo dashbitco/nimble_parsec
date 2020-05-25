@@ -1,5 +1,13 @@
 # Changelog for NimbleParsec
 
+## v0.6.0 (2020-05-25)
+
+NimbleParsec v0.6.0 requires Elixir v1.6+.
+
+### Bug fixes
+
+  * Avoid unused variable warnings
+
 ## v0.5.3 (2019-12-11)
 
 ### Enhancements
