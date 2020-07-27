@@ -131,6 +131,7 @@ All nimble libraries by Dashbit:
   * [NimbleOptions](https://github.com/dashbitco/nimble_options) - tiny library for validating and documenting high-level options
   * [NimbleParsec](https://github.com/dashbitco/nimble_parsec) - simple and fast parser combinators
   * [NimblePool](https://github.com/dashbitco/nimble_pool) - tiny resource-pool implementation
+  * [NimbleTOTP](https://github.com/dashbitco/nimble_totp) - tiny library for generating time-based one time passwords (TOTP)
 
 ## License
 
