@@ -15,7 +15,7 @@ defmodule NimbleParsec.Compiler do
 
     ## Options
 
-      * `:line` - the initial line, defaults to 1
+      * `:line` - the initial line or position `{line, offset}`, defaults to 1
       * `:byte_offset` - the initial byte offset, defaults to 0
       * `:context` - the initial context value. It will be converted
         to a map
@@ -38,11 +38,16 @@ defmodule NimbleParsec.Compiler do
 
     body =
       quote do
-        line = Keyword.get(opts, :line, 1)
-        offset = Keyword.get(opts, :byte_offset, 0)
         context = Map.new(Keyword.get(opts, :context, []))
+        byte_offset = Keyword.get(opts, :byte_offset, 0)
 
-        case unquote(:"#{name}__0")(binary, [], [], context, {line, offset}, offset) do
+        line =
+          case Keyword.get(opts, :line, 1) do
+            {_, _} = line -> line
+            line -> {line, byte_offset}
+          end
+
+        case unquote(:"#{name}__0")(binary, [], [], context, line, byte_offset) do
           {:ok, acc, rest, context, line, offset} ->
             {:ok, :lists.reverse(acc), rest, context, line, offset}
 
