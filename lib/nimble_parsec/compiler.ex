@@ -15,10 +15,9 @@ defmodule NimbleParsec.Compiler do
 
     ## Options
 
-      * `:line` - the initial line or position `{line, offset}`, defaults to 1
-      * `:byte_offset` - the initial byte offset, defaults to 0
-      * `:context` - the initial context value. It will be converted
-        to a map
+      * `:byte_offset` - the byte offset for the whole binary, defaults to 0
+      * `:line` - the line and the byte offset into that line, defaults to `{1, byte_offset}`
+      * `:context` - the initial context value. It will be converted to a map
     """
 
     spec =
