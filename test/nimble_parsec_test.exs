@@ -1317,6 +1317,25 @@ defmodule NimbleParsecTest do
     end
   end
 
+  describe "continuing parser" do
+    defparsecp :digits, [?0..?9] |> ascii_char() |> times(min: 1) |> label("digits")
+    defparsecp :chars, [?a..?z] |> ascii_char() |> times(min: 1) |> label("chars")
+
+    test "returns ok" do
+      string = "123abc"
+      assert {:ok, '123', "abc" = rest, %{}, {1, 0} = line, byte_offset} = digits(string)
+      assert chars(rest, line: line, byte_offset: byte_offset) == {:ok, 'abc', "", %{}, {1, 0}, 6}
+    end
+
+    test "returns error" do
+      string = "123:abc"
+      assert {:ok, '123', ":abc" = rest, %{}, {1, 0} = line, byte_offset} = digits(string)
+
+      assert chars(rest, line: line, byte_offset: byte_offset) ==
+               {:error, "expected chars", ":abc", %{}, {1, 0}, 3}
+    end
+  end
+
   defp location(_rest, args, %{} = context, line, offset, tag) do
     {[{tag, args, line, offset}], context}
   end
