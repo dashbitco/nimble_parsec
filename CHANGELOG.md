@@ -1,5 +1,11 @@
 # Changelog for NimbleParsec
 
+## v1.0.0 (2020-09-25)
+
+### Enhancements
+
+  * Allow `byte_offset` to be given to `:line`
+
 ## v0.6.0 (2020-05-25)
 
 NimbleParsec v0.6.0 requires Elixir v1.6+.

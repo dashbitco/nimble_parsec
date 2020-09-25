@@ -119,7 +119,7 @@ Add `nimble_parsec` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
-  [{:nimble_parsec, "~> 0.6"}]
+  [{:nimble_parsec, "~> 1.0"}]
 end
 ```
 

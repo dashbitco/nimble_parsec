@@ -770,12 +770,6 @@ defmodule NimbleParsec do
     quoted_pre_traverse(combinator, to_pre_traverse, {__MODULE__, :__pre_traverse__, [call]})
   end
 
-  @deprecated "Use post_traverse/3 instead"
-  @doc false
-  def traverse(combinator \\ empty(), to_traverse, call) do
-    post_traverse(combinator, to_traverse, call)
-  end
-
   @doc ~S"""
   Checks if a combinator is ahead.
 
@@ -916,12 +910,6 @@ defmodule NimbleParsec do
   def quoted_pre_traverse(combinator \\ empty(), to_pre_traverse, {_, _, _} = call)
       when is_combinator(combinator) and is_combinator(to_pre_traverse) do
     quoted_traverse(combinator, to_pre_traverse, :pre, call)
-  end
-
-  @deprecated "Use quoted_post_traverse/3 instead"
-  @doc false
-  def quoted_traverse(combinator \\ empty(), to_traverse, call) do
-    quoted_post_traverse(combinator, to_traverse, call)
   end
 
   @doc ~S"""
