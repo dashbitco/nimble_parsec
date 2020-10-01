@@ -20,27 +20,30 @@ defmodule NimbleParsec.Recorder do
   @doc """
   Records the given call and potentially debugs it.
   """
-  def record(module, entry_point, name, defs, inline, opts) do
+  def record(module, parser_kind, combinator_kind, name, combinators, inline, opts) do
     inline? = Keyword.get(opts, :inline, false)
 
     if Keyword.get(opts, :debug, false) do
-      IO.puts(format_defs(defs, inline, inline?))
+      IO.puts(format_defs(combinator_kind, combinators, inline, inline?))
     end
 
     if Process.whereis(@name) do
       Agent.update(@name, fn state ->
-        update_in(state[module], &[{entry_point, name, defs, inline, inline?} | &1 || []])
+        update_in(
+          state[module],
+          &[{parser_kind, combinator_kind, name, combinators, inline, inline?} | &1 || []]
+        )
       end)
     end
 
     :ok
   end
 
-  defp format_entry_point(nil, _name) do
+  defp format_parser_kind(nil, _name) do
     []
   end
 
-  defp format_entry_point(:def, name) do
+  defp format_parser_kind(:def, name) do
     {doc, spec, def} = NimbleParsec.Compiler.entry_point(name)
 
     """
@@ -52,7 +55,7 @@ defmodule NimbleParsec.Recorder do
     """
   end
 
-  defp format_entry_point(:defp, name) do
+  defp format_parser_kind(:defp, name) do
     {_doc, spec, def} = NimbleParsec.Compiler.entry_point(name)
 
     """
@@ -61,8 +64,8 @@ defmodule NimbleParsec.Recorder do
     """
   end
 
-  defp format_defs(defs, inline, inline?) do
-    functions = Enum.map(defs, &format_def(:defp, &1))
+  defp format_defs(kind, defs, inline, inline?) do
+    functions = Enum.map(defs, &format_def(kind, &1))
     inline = if inline?, do: "@compile {:inline, #{inspect(inline)}}\n\n", else: ""
     [inline | functions]
   end
@@ -114,8 +117,11 @@ defmodule NimbleParsec.Recorder do
     end)
   end
 
-  defp format_recorded({entry_point, name, defs, inline, inline?}) do
-    [format_entry_point(entry_point, name) | format_defs(defs, inline, inline?)]
+  defp format_recorded({parser_kind, combinator_kind, name, combinators, inline, inline?}) do
+    [
+      format_parser_kind(parser_kind, name)
+      | format_defs(combinator_kind, combinators, inline, inline?)
+    ]
   end
 
   defp maybe_format_code(code) do

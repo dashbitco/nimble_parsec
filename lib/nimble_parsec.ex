@@ -94,7 +94,7 @@ defmodule NimbleParsec do
 
   """
   defmacro defparsec(name, combinator, opts \\ []) do
-    compile(:def, name, combinator, opts)
+    compile(:def, :defp, name, combinator, opts)
   end
 
   @doc """
@@ -103,7 +103,7 @@ defmodule NimbleParsec do
   The same as `defparsec/3` but the parsing function is private.
   """
   defmacro defparsecp(name, combinator, opts \\ []) do
-    compile(:defp, name, combinator, opts)
+    compile(:defp, :defp, name, combinator, opts)
   end
 
   @doc """
@@ -113,26 +113,58 @@ defmodule NimbleParsec do
   an entry-point parsing function, just the combinator function
   to be used with `parsec/2`.
   """
-  defmacro defcombinatorp(name, combinator, opts \\ []) do
-    compile(nil, name, combinator, opts)
+  defmacro defcombinator(name, combinator, opts \\ []) do
+    compile(nil, :def, name, combinator, opts)
   end
 
-  defp compile(kind, name, combinator, opts) do
+  @doc """
+  Defines a combinator with the given `name` and `opts`.
+
+  It is similar to `defparsecp/3` except it does not define
+  an entry-point parsing function, just the combinator function
+  to be used with `parsec/2`.
+  """
+  defmacro defcombinatorp(name, combinator, opts \\ []) do
+    compile(nil, :defp, name, combinator, opts)
+  end
+
+  defp compile(parser_kind, combinator_kind, name, combinator, opts) do
     combinator =
-      quote bind_quoted: [kind: kind, name: name, combinator: combinator, opts: opts] do
+      quote bind_quoted: [
+              parser_kind: parser_kind,
+              combinator_kind: combinator_kind,
+              name: name,
+              combinator: combinator,
+              opts: opts
+            ] do
         {defs, inline} = NimbleParsec.Compiler.compile(name, combinator, opts)
-        NimbleParsec.Recorder.record(__MODULE__, kind, name, defs, inline, opts)
+
+        NimbleParsec.Recorder.record(
+          __MODULE__,
+          parser_kind,
+          combinator_kind,
+          name,
+          defs,
+          inline,
+          opts
+        )
 
         if inline != [] do
           @compile {:inline, inline}
         end
 
-        for {name, args, guards, body} <- defs do
-          defp unquote(name)(unquote_splicing(args)) when unquote(guards), do: unquote(body)
+        if combinator_kind == :def do
+          for {name, args, guards, body} <- defs do
+            def unquote(name)(unquote_splicing(args)) when unquote(guards), do: unquote(body)
+          end
+        else
+          for {name, args, guards, body} <- defs do
+            defp unquote(name)(unquote_splicing(args)) when unquote(guards), do: unquote(body)
+          end
         end
       end
 
-    parser = compile_parser(name, kind)
+    parser = compile_parser(name, parser_kind)
 
     quote do
       unquote(parser)
@@ -192,7 +224,7 @@ defmodule NimbleParsec do
            {:choice, [t]}
            | {:eventually, t}
            | {:lookahead, t, :positive | :negative}
-           | {:parsec, atom}
+           | {:parsec, atom | {module, atom}}
            | {:repeat, t, mfargs}
            | {:times, t, min :: non_neg_integer, pos_integer}
 
@@ -370,8 +402,15 @@ defmodule NimbleParsec do
 
   """
   @spec parsec(t(), atom()) :: t()
-  def parsec(combinator \\ empty(), name) when is_combinator(combinator) and is_atom(name) do
+  def parsec(combinator \\ empty(), name)
+
+  def parsec(combinator, name) when is_combinator(combinator) and is_atom(name) do
     [{:parsec, name} | combinator]
+  end
+
+  def parsec(combinator, {module, function})
+      when is_combinator(combinator) and is_atom(module) and is_atom(function) do
+    [{:parsec, {module, function}} | combinator]
   end
 
   @doc ~S"""

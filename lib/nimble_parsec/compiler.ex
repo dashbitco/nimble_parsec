@@ -151,9 +151,22 @@ defmodule NimbleParsec.Compiler do
           body
       end
 
+    call =
+      case parsec do
+        {mod, fun} ->
+          quote do
+            unquote(mod).unquote(:"#{fun}__0")(rest, acc, [], context, line, offset)
+          end
+
+        fun ->
+          quote do
+            unquote(:"#{fun}__0")(rest, acc, [], context, line, offset)
+          end
+      end
+
     body =
       quote do
-        case unquote(:"#{parsec}__0")(rest, acc, [], context, line, offset) do
+        case unquote(call) do
           {:ok, acc, rest, context, line, offset} ->
             unquote(next)(rest, acc, stack, context, line, offset)
 
@@ -935,6 +948,10 @@ defmodule NimbleParsec.Compiler do
 
   defp label({:traverse, combinators, _, _}) do
     labels(combinators)
+  end
+
+  defp label({:parsec, {_module, function}}) do
+    Atom.to_string(function)
   end
 
   defp label({:parsec, name}) do
