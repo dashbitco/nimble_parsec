@@ -16,6 +16,7 @@ defmodule Mix.Tasks.NimbleParsec.CompileTest do
         import NimbleParsec
         defparsec :parse, integer(2)
         defparsecp :parsep, integer(2)
+        defcombinator :combinator, integer(2)
         defcombinatorp :combinatorp, integer(2)
 
         # parsec:Mix.Tasks.NimbleParsec.CompileTest.Parser
@@ -34,6 +35,8 @@ defmodule Mix.Tasks.NimbleParsec.CompileTest do
         assert contents =~ "defp parse__0("
         assert contents =~ "defp parsep(binary, opts \\\\ [])"
         assert contents =~ "defp parsep__0("
+        refute contents =~ "def combinator(binary, opts \\\\ [])"
+        assert contents =~ "def combinator__0("
         refute contents =~ "defp combinatorp(binary, opts \\\\ [])"
         assert contents =~ "defp combinatorp__0("
         assert contents =~ "  _pos = :ok\nend"
