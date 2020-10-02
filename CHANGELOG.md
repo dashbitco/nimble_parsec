@@ -1,5 +1,11 @@
 # Changelog for NimbleParsec
 
+## v1.1.0 (2020-10-02)
+
+### Enhancements
+
+  * Add `defcombinator` and support for remote `parsec`. This allows larger parsers to be broken over multiple modules to speed up compilation by leveraging parallelism.
+
 ## v1.0.0 (2020-09-25)
 
 ### Enhancements
