@@ -253,7 +253,7 @@ defmodule NimbleParsec do
   `parsec/2` is useful to implement recursive definitions.
 
   Note while `parsec/2` can be used to compose smaller combinators,
-  the favorite mechanism for doing composition is via regular functions
+  the preferred mechanism for doing composition is via regular functions
   and not via `parsec/2`. Let's see a practical example. Imagine
   that you have this module:
 
@@ -348,12 +348,34 @@ defmodule NimbleParsec do
   compilation times are high. In this sense, you can use `parsec/2`
   to improve compilation time at the cost of runtime performance.
   By using `parsec/2`, the tree size built at compile time will be
-  reduced although runtime performance is degraded as every time
-  this function is invoked it introduces a stacktrace entry.
+  reduced although runtime performance is degraded as `parsec`
+  introduces a stacktrace entry.
+
+  ## Remote combinators
+
+  You can also reference combinators in other modules by passing
+  a tuple with the module name and a function to `parsec/2` as follows:
+
+      defmodule RemoteCombinatorModule do
+        defcombinator :upcase_unicode, utf8_char([...long, list, of, unicode, chars...])
+      end
+
+      defmodule LocalModule do
+        # Parsec that depends on `:upcase_A`
+        defparsec :parsec_name,
+                  ...
+                  |> ascii_char([?a..?Z])
+                  |> parsec({RemoteCombinatorModule, :upcase_unicode})
+      end
+
+  Remote combinators are useful when breaking the compilation of
+  large modules apart in order to use Elixir's ability to compile
+  modules in parallel.
 
   ## Examples
 
-  A very limited but recursive XML parser could be written as follows:
+  A good example of using `parsec` is with recursive parsers.
+  A limited but recursive XML parser could be written as follows:
 
       defmodule SimpleXML do
         import NimbleParsec
@@ -395,13 +417,12 @@ defmodule NimbleParsec do
                      |> concat(closing_tag)
                      |> wrap()
 
-  Note that now you can no longer invoke `SimpleXML.xml(xml)` as
-  there is no associating parsing function. Eventually you will
-  have to define a `defparsec/3` or `defparsecp/3`, that invokes
-  the combinator above via `parsec/3`.
-
+  When using `defcombinatorp`, you can no longer invoke
+  `SimpleXML.xml(xml)` as there is no associated parsing function.
+  You can only access the combinator above via `parsec/2`.
   """
-  @spec parsec(t(), atom()) :: t()
+  @spec parsec(t(), name :: atom()) :: t()
+  @spec parsec(t(), {module(), function_name :: atom()}) :: t()
   def parsec(combinator \\ empty(), name)
 
   def parsec(combinator, name) when is_combinator(combinator) and is_atom(name) do
