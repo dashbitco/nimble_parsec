@@ -351,6 +351,22 @@ defmodule NimbleParsec do
   reduced although runtime performance is degraded as every time
   this function is invoked it introduces a stacktrace entry.
 
+  In these cases, it may be useful to reference combinators in other
+  modules, with a `parsec/2` call as follows:
+
+      defmodule RemoteCombinatorModule do
+        defcombinator :upcase_A, string("A")
+      end
+
+      defmodule LocalModule do
+        # Delegate the implementation to another module
+        # so it can be compiled separately.
+        defcombinatorp :upcase_A, parsec({RemoteCombinatorModule, :upcase_A})
+
+        # Parsec that depends on `:upcase_A`
+        defparsec :parsec_name, ...
+      end
+
   ## Examples
 
   A very limited but recursive XML parser could be written as follows:
@@ -401,7 +417,8 @@ defmodule NimbleParsec do
   the combinator above via `parsec/3`.
 
   """
-  @spec parsec(t(), atom()) :: t()
+  @spec parsec(t(), name :: atom()) :: t()
+  @spec parsec(t(), {module(), function_name :: atom()}) :: t()
   def parsec(combinator \\ empty(), name)
 
   def parsec(combinator, name) when is_combinator(combinator) and is_atom(name) do
