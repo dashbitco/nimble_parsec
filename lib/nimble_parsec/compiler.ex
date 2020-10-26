@@ -218,7 +218,7 @@ defmodule NimbleParsec.Compiler do
     compile_unbound_traverse(combinators, kind, current, step, config, fun)
   end
 
-  defp compile_unbound_combinator({:times, combinators, 0, count}, current, step, config) do
+  defp compile_unbound_combinator({:times, combinators, count}, current, step, config) do
     if all_no_context_combinators?(combinators) do
       compile_bound_times(combinators, count, current, step, config)
     else
@@ -226,7 +226,7 @@ defmodule NimbleParsec.Compiler do
     end
   end
 
-  defp compile_unbound_combinator({:repeat, combinators, while}, current, step, config) do
+  defp compile_unbound_combinator({:repeat, combinators, while, _gen}, current, step, config) do
     {failure, step} = build_next(step, config)
     config = %{config | catch_all: failure, acc_depth: 0}
 
@@ -241,7 +241,7 @@ defmodule NimbleParsec.Compiler do
     compile_eventually(combinators, current, step, config)
   end
 
-  defp compile_unbound_combinator({:choice, choices} = combinator, current, step, config) do
+  defp compile_unbound_combinator({:choice, choices, _} = combinator, current, step, config) do
     config =
       update_in(config.labels, fn
         [] -> [label(combinator)]
@@ -257,7 +257,7 @@ defmodule NimbleParsec.Compiler do
 
   ## Lookahead
 
-  defp extract_choices_from_lookahead([{:choice, choices}]), do: choices
+  defp extract_choices_from_lookahead([{:choice, choices, _}]), do: choices
   defp extract_choices_from_lookahead(other), do: [other]
 
   defp compile_unbound_lookahead(combinators, kind, current, step, config) do
@@ -672,7 +672,7 @@ defmodule NimbleParsec.Compiler do
   #
   # For example, a lookahead at the beginning doesn't need a context.
   # A choice that is bound doesn't need one either.
-  defp all_no_context_combinators?([{:lookahead, look_combinators, _kind} | combinators]) do
+  defp all_no_context_combinators?([{:lookahead, look_combinators, _} | combinators]) do
     all_bound_combinators?(look_combinators) and
       all_no_context_combinators_next?(combinators)
   end
@@ -681,7 +681,7 @@ defmodule NimbleParsec.Compiler do
     all_no_context_combinators_next?(combinators)
   end
 
-  defp all_no_context_combinators_next?([{:choice, choice_combinators, _kind} | combinators]) do
+  defp all_no_context_combinators_next?([{:choice, choice_combinators, _} | combinators]) do
     all_bound_combinators?(choice_combinators) and
       all_no_context_combinators_next?(combinators)
   end
@@ -779,15 +779,15 @@ defmodule NimbleParsec.Compiler do
     {:ok, [string], [], [string], %{metadata | line: line, offset: offset}}
   end
 
-  defp bound_combinator({:bin_segment, inclusive, exclusive, modifiers}, metadata) do
+  defp bound_combinator({:bin_segment, inclusive, exclusive, modifier}, metadata) do
     %{line: line, offset: offset, counter: counter} = metadata
 
     {var, counter} = build_var(counter)
-    input = apply_bin_modifiers(var, modifiers)
+    input = apply_bin_modifier(var, modifier)
     guards = compile_bin_ranges(var, inclusive, exclusive)
 
     offset =
-      if :integer in modifiers do
+      if modifier == :integer do
         add_offset(offset, 1)
       else
         add_offset(offset, quote(do: byte_size(<<unquote(input)>>)))
@@ -904,7 +904,7 @@ defmodule NimbleParsec.Compiler do
     label
   end
 
-  defp label({:bin_segment, inclusive, exclusive, modifiers}) do
+  defp label({:bin_segment, inclusive, exclusive, modifier}) do
     {inclusive, printable?} = Enum.map_reduce(inclusive, true, &inspect_bin_range(&1, &2))
 
     {exclusive, printable?} =
@@ -912,11 +912,11 @@ defmodule NimbleParsec.Compiler do
 
     prefix =
       cond do
-        :integer in modifiers and not printable? -> "byte"
-        :integer in modifiers -> "ASCII character"
-        :utf8 in modifiers -> "utf8 codepoint"
-        :utf16 in modifiers -> "utf16 codepoint"
-        :utf32 in modifiers -> "utf32 codepoint"
+        modifier == :integer and not printable? -> "byte"
+        modifier == :integer -> "ASCII character"
+        modifier == :utf8 -> "utf8 codepoint"
+        modifier == :utf16 -> "utf16 codepoint"
+        modifier == :utf32 -> "utf32 codepoint"
       end
 
     prefix <> Enum.join([Enum.join(inclusive, " or") | exclusive], ", and not")
@@ -930,7 +930,7 @@ defmodule NimbleParsec.Compiler do
     labels(combinators)
   end
 
-  defp label({:repeat, combinators, _}) do
+  defp label({:repeat, combinators, _, _}) do
     labels(combinators)
   end
 
@@ -938,11 +938,11 @@ defmodule NimbleParsec.Compiler do
     labels(combinators) <> " eventually"
   end
 
-  defp label({:times, combinators, _, _}) do
+  defp label({:times, combinators, _}) do
     labels(combinators)
   end
 
-  defp label({:choice, choices}) do
+  defp label({:choice, choices, _}) do
     Enum.map_join(choices, " or ", &labels/1)
   end
 
@@ -1015,15 +1015,10 @@ defmodule NimbleParsec.Compiler do
   defp printable?(codepoint), do: List.ascii_printable?([codepoint])
   defp inspect_char(codepoint), do: inspect([codepoint], charlists: :as_charlists)
 
-  defp apply_bin_modifiers(expr, modifiers) do
-    case modifiers do
-      [] ->
-        expr
+  defp apply_bin_modifier(expr, :integer), do: expr
 
-      _ ->
-        modifiers = Enum.map(modifiers, &Macro.var(&1, __MODULE__))
-        {:"::", [], [expr, Enum.reduce(modifiers, &{:-, [], [&2, &1]})]}
-    end
+  defp apply_bin_modifier(expr, modifier) do
+    {:"::", [], [expr, Macro.var(modifier, __MODULE__)]}
   end
 
   ## Helpers

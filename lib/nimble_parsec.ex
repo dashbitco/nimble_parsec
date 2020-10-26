@@ -149,6 +149,11 @@ defmodule NimbleParsec do
           opts
         )
 
+        if opts[:export_metadata] do
+          def __nimble_parsec__(unquote(name)),
+            do: unquote(combinator |> Enum.reverse() |> Macro.escape())
+        end
+
         if inline != [] do
           @compile {:inline, inline}
         end
@@ -194,7 +199,7 @@ defmodule NimbleParsec do
   end
 
   @opaque t :: [combinator]
-  @type bin_modifiers :: :integer | :utf8 | :utf16 | :utf32
+  @type bin_modifier :: :integer | :utf8 | :utf16 | :utf32
   @type range :: inclusive_range | exclusive_range
   @type inclusive_range :: Range.t() | char()
   @type exclusive_range :: {:not, Range.t()} | {:not, char()}
@@ -202,6 +207,8 @@ defmodule NimbleParsec do
   @type call :: mfargs | fargs | atom
   @type mfargs :: {module, atom, args :: [term]}
   @type fargs :: {atom, args :: [term]}
+  @type gen_times :: Range.t() | non_neg_integer() | nil
+  @type gen_weights :: [pos_integer()] | nil
 
   # Steps to add a new combinator:
   #
@@ -212,7 +219,7 @@ defmodule NimbleParsec do
   @typep combinator :: bound_combinator | maybe_bound_combinator | unbound_combinator
 
   @typep bound_combinator ::
-           {:bin_segment, [inclusive_range], [exclusive_range], [bin_modifiers]}
+           {:bin_segment, [inclusive_range], [exclusive_range], bin_modifier}
            | {:string, binary}
            | :eos
 
@@ -221,12 +228,201 @@ defmodule NimbleParsec do
            | {:traverse, t, :pre | :post | :constant, [mfargs]}
 
   @typep unbound_combinator ::
-           {:choice, [t]}
+           {:choice, [t], gen_weights}
            | {:eventually, t}
            | {:lookahead, t, :positive | :negative}
            | {:parsec, atom | {module, atom}}
-           | {:repeat, t, mfargs}
-           | {:times, t, min :: non_neg_integer, pos_integer}
+           | {:repeat, t, mfargs, gen_times}
+           | {:times, t, pos_integer}
+
+  @doc ~S"""
+  Generate a random binary from the given parsec.
+
+  Let's see an example:
+
+      import NimbleParsec
+      generate(choice([string("foo"), string("bar")]))
+
+  The command above will reteurn either "foo" or "bar". `generate/1`
+  is often used with pre-defined parsecs. In this case, the
+  `:export_metadata` flag must be set:
+
+      defmodule SomeModule do
+        import NimbleParsec
+        defparsec :parse,
+                  choice([string("foo"), string("bar")]),
+                  export_metadata: true
+      end
+
+      # Reference the parsec and generate from it
+      NimbleParsec.parsec({SomeModule, :parse})
+      |> NimbleParsec.generate()
+      |> IO.puts()
+
+  `generate/1` can often run forever for recursive algorithms.
+  Read the notes below and make use of the `gen_weight` and `gen_times`
+  option to certain parsecs to control the recursion depth.
+
+  ## Notes
+
+  This feature is currenty experimental and may change in many ways.
+  Overall, there is no guarantee over the generated output, except
+  that it will generate a binary that is parseable by the parsec
+  itself, but even this guarantee may be broken by some validations.
+
+    * `generate/1` is not compatible with NimbleParsec's dumped via
+      `mix nimble_parsec.compile`;
+
+    * `parsec/2` requires the referenced parsec to set `export_metadata: true`
+      on its definition;
+
+    * `choice/2` will be generated evenly. You can pass `:gen_weights`
+      as a list of positive integer weights to balance your choices.
+      This is particularly important for recursive algorithms;
+
+    * `repeat/2` and `repeat_while/3` will repeat between 0 and 3 times unless
+      a `:gen_times` option is given to these operations. `times/3` without a `:max`
+      will also additionally repeat between 0 and 3 times unless `:gen_times` is given.
+      The `:gen_times` option can either be an integer as the number of times to
+      repeat or a range where a random value in the range will be picked;
+
+    * `eventually/2` always generates the eventually parsec immediately;
+
+    * `lookahead/2` and `lookahead_not/2` are simply discarded;
+
+    * Validations done in any of the traverse definitions are not taken into account
+      by the generator. Therefore, if a parsec does validations, the generator may
+      generate binaries invalid to said parsec;
+
+  """
+  def generate(parsecs) do
+    parsecs
+    |> Enum.reverse()
+    |> generate(nil, [])
+    |> elem(0)
+    |> IO.iodata_to_binary()
+  end
+
+  defp generate([{:parsec, fun} | _parsecs], nil, _acc) when is_atom(fun) do
+    raise "cannot generate parsec(#{inspect(fun)}), use a remote parsec instead"
+  end
+
+  defp generate([{:parsec, fun} | parsecs], mod, acc) when is_atom(fun) do
+    generate([{:parsec, {mod, fun}} | parsecs], mod, acc)
+  end
+
+  defp generate([{:parsec, {mod, fun}} | outer_parsecs], outer_mod, acc) do
+    {gen, _} = generate(gen_export(mod, fun), mod, [])
+    generate(outer_parsecs, outer_mod, [gen | acc])
+  end
+
+  defp generate([{:string, string} | parsecs], mod, acc) do
+    generate(parsecs, mod, [string | acc])
+  end
+
+  defp generate([{:bin_segment, inclusive, exclusive, modifier} | parsecs], mod, acc) do
+    gen = gen_bin_segment(inclusive, exclusive)
+
+    gen =
+      if modifier == :integer,
+        do: gen,
+        else: :unicode.characters_to_binary([gen], :unicode, modifier)
+
+    generate(parsecs, mod, [gen | acc])
+  end
+
+  defp generate([:eos | parsecs], mod, acc) do
+    if parsecs == [] do
+      generate([], mod, acc)
+    else
+      raise ArgumentError, "found :eos not at the end of parsecs"
+    end
+  end
+
+  defp generate([{:traverse, t, _, _} | parsecs], mod, acc) do
+    generate(t ++ parsecs, mod, acc)
+  end
+
+  defp generate([{:label, t, _} | parsecs], mod, acc) do
+    generate(t ++ parsecs, mod, acc)
+  end
+
+  defp generate([{:choice, choices, weights} | parsecs], mod, acc) do
+    pick = if weights, do: weighted_random(choices, weights), else: list_random(choices)
+    {gen, _aborted?} = generate(pick, mod, [])
+    generate(parsecs, mod, [gen | acc])
+  end
+
+  defp generate([{:lookahead, _, _} | parsecs], mod, acc) do
+    generate(parsecs, mod, acc)
+  end
+
+  defp generate([{:repeat, t, _, gen} | parsecs], mod, acc) do
+    generate(parsecs, mod, gen_times(t, int_random(gen), mod, acc))
+  end
+
+  defp generate([{:times, t, max} | parsecs], mod, acc) do
+    generate(parsecs, mod, gen_times(t, Enum.random(0..max), mod, acc))
+  end
+
+  defp generate([], _mod, acc), do: {Enum.reverse(acc), false}
+
+  defp gen_export(mod, fun) do
+    unless Code.ensure_loaded?(mod) do
+      raise "cannot handle parsec(#{inspect({mod, fun})}) because #{inspect(mod)} is not available"
+    end
+
+    try do
+      mod.__nimble_parsec__(fun)
+    rescue
+      _ ->
+        raise "cannot handle parsec(#{inspect({mod, fun})}) because #{inspect(mod)} " <>
+                "did not set :export_metadata when defining #{fun}"
+    end
+  end
+
+  defp gen_times(_t, 0, _mod, acc), do: acc
+
+  defp gen_times(t, n, mod, acc) do
+    case generate(t, mod, []) do
+      {gen, true} -> [gen | acc]
+      {gen, false} -> gen_times(t, n - 1, mod, [gen | acc])
+    end
+  end
+
+  defp gen_bin_segment(inclusive, exclusive) do
+    gen =
+      if(inclusive == [], do: [0..255], else: inclusive)
+      |> list_random()
+      |> int_random()
+
+    if Enum.any?(exclusive, &exclude_bin_segment?(&1, gen)) do
+      gen_bin_segment(inclusive, exclusive)
+    else
+      gen
+    end
+  end
+
+  defp exclude_bin_segment?({:not, min..max}, gen), do: gen >= min and gen <= max
+  defp exclude_bin_segment?({:not, char}, gen) when is_integer(char), do: char == gen
+
+  defp int_random(nil), do: Enum.random(0..3)
+  defp int_random(_.._ = range), do: Enum.random(range)
+  defp int_random(int) when is_integer(int), do: int
+
+  # Enum.random uses reservoir sampling but our lists are short, so we use length + fetch!
+  defp list_random(list) when is_list(list),
+    do: Enum.fetch!(list, :rand.uniform(length(list)) - 1)
+
+  defp weighted_random(list, weights) do
+    weighted_random(list, weights, :rand.uniform(Enum.sum(weights)))
+  end
+
+  defp weighted_random([elem | _], [weight | _], chosen) when chosen <= weight,
+    do: elem
+
+  defp weighted_random([_ | list], [weight | weights], chosen),
+    do: weighted_random(list, weights, chosen - weight)
 
   @doc ~S"""
   Returns an empty combinator.
@@ -466,7 +662,7 @@ defmodule NimbleParsec do
   def ascii_char(combinator \\ empty(), ranges)
       when is_combinator(combinator) and is_list(ranges) do
     {inclusive, exclusive} = split_ranges!(ranges, "ascii_char")
-    bin_segment(combinator, inclusive, exclusive, [:integer])
+    bin_segment(combinator, inclusive, exclusive, :integer)
   end
 
   @doc ~S"""
@@ -501,7 +697,7 @@ defmodule NimbleParsec do
   def utf8_char(combinator \\ empty(), ranges)
       when is_combinator(combinator) and is_list(ranges) do
     {inclusive, exclusive} = split_ranges!(ranges, "utf8_char")
-    bin_segment(combinator, inclusive, exclusive, [:utf8])
+    bin_segment(combinator, inclusive, exclusive, :utf8)
   end
 
   @doc ~S"""
@@ -1234,10 +1430,10 @@ defmodule NimbleParsec do
 
   """
   @spec repeat(t, t) :: t
-  def repeat(combinator \\ empty(), to_repeat)
-      when is_combinator(combinator) and is_combinator(to_repeat) do
+  def repeat(combinator \\ empty(), to_repeat, opts \\ [])
+      when is_combinator(combinator) and is_combinator(to_repeat) and is_list(opts) do
     non_empty!(to_repeat, "repeat")
-    quoted_repeat_while(combinator, to_repeat, {__MODULE__, :__cont_context__, []})
+    quoted_repeat_while(combinator, to_repeat, {__MODULE__, :__cont_context__, []}, opts)
   end
 
   @doc """
@@ -1337,11 +1533,11 @@ defmodule NimbleParsec do
   repeat comes from the context passed around.
   """
   @spec repeat_while(t, t, call) :: t
-  def repeat_while(combinator \\ empty(), to_repeat, while)
-      when is_combinator(combinator) and is_combinator(to_repeat) do
+  def repeat_while(combinator \\ empty(), to_repeat, while, opts \\ [])
+      when is_combinator(combinator) and is_combinator(to_repeat) and is_list(opts) do
     non_empty!(to_repeat, "repeat_while")
     compile_call!([], while, "repeat_while")
-    quoted_repeat_while(combinator, to_repeat, {__MODULE__, :__repeat_while__, [while]})
+    quoted_repeat_while(combinator, to_repeat, {__MODULE__, :__repeat_while__, [while]}, opts)
   end
 
   @doc """
@@ -1357,10 +1553,10 @@ defmodule NimbleParsec do
   injecting runtime dependencies.
   """
   @spec quoted_repeat_while(t, t, mfargs) :: t
-  def quoted_repeat_while(combinator \\ empty(), to_repeat, {_, _, _} = while)
-      when is_combinator(combinator) and is_combinator(to_repeat) do
+  def quoted_repeat_while(combinator \\ empty(), to_repeat, {_, _, _} = while, opts \\ [])
+      when is_combinator(combinator) and is_combinator(to_repeat) and is_list(opts) do
     non_empty!(to_repeat, "quoted_repeat_while")
-    [{:repeat, Enum.reverse(to_repeat), while} | combinator]
+    [{:repeat, Enum.reverse(to_repeat), while, opts[:gen_times]} | combinator]
   end
 
   @doc """
@@ -1410,9 +1606,9 @@ defmodule NimbleParsec do
 
     combinator =
       if max do
-        [{:times, to_repeat, 0, max - min} | combinator]
+        [{:times, to_repeat, max - min} | combinator]
       else
-        [{:repeat, to_repeat, {__MODULE__, :__cont_context__, []}} | combinator]
+        [{:repeat, to_repeat, {__MODULE__, :__cont_context__, []}, opts[:gen_times]} | combinator]
       end
 
     combinator
@@ -1455,9 +1651,16 @@ defmodule NimbleParsec do
   and `:max`.
   """
   @spec choice(t, nonempty_list(t)) :: t
-  def choice(combinator \\ empty(), [_, _ | _] = choices) when is_combinator(combinator) do
+  def choice(combinator \\ empty(), [_, _ | _] = choices, opts \\ [])
+      when is_combinator(combinator) do
     choices = Enum.map(choices, &Enum.reverse/1)
-    [{:choice, choices} | combinator]
+    weights = opts[:gen_weights]
+
+    if weights && length(weights) != length(choices) do
+      raise ArgumentError, ":gen_weights must be a list of the same size as choices"
+    end
+
+    [{:choice, choices, weights} | combinator]
   end
 
   @doc """
@@ -1573,8 +1776,8 @@ defmodule NimbleParsec do
     [{:traverse, Enum.reverse(to_traverse), pre_or_pos, [call]} | combinator]
   end
 
-  defp bin_segment(combinator, inclusive, exclusive, [_ | _] = modifiers) do
-    [{:bin_segment, inclusive, exclusive, modifiers} | combinator]
+  defp bin_segment(combinator, inclusive, exclusive, modifier) do
+    [{:bin_segment, inclusive, exclusive, modifier} | combinator]
   end
 
   ## Traverse callbacks
