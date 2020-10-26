@@ -107,6 +107,18 @@ defmodule NimbleGeneratorTest do
     assert times(string("foo"), min: 2, gen_times: 3) |> generate() == "foofoofoofoofoo"
   end
 
+  defparsec :string_foo, string("foo"), export_metadata: true
+  defparsec :string_choice, choice([parsec(:string_foo), string("bar")]), export_metadata: true
+
+  test "parsec" do
+    assert_raise RuntimeError, ~r"use a remote parsec instead", fn ->
+      parsec(:foo) |> generate()
+    end
+
+    assert eventually?(fn -> generate(parsec({__MODULE__, :string_choice})) == "foo" end)
+    assert eventually?(fn -> generate(parsec({__MODULE__, :string_choice})) == "bar" end)
+  end
+
   defp eventually?(fun) do
     Enum.any?(1..100, fn _ -> fun.() end)
   end
