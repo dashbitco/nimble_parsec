@@ -24,7 +24,7 @@ defmodule NimbleParsec.MixProject do
     %{
       licenses: ["Apache 2"],
       maintainers: ["José Valim"],
-      links: %{"GitHub" => "https://github.com/dashbitco/nimble_parsec"}
+      links: %{"GitHub" => @url}
     }
   end
 
