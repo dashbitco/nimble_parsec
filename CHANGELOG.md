@@ -30,7 +30,7 @@ NimbleParsec v0.6.0 requires Elixir v1.6+.
 
 ### Enhancements
 
-  * Optmize `repeat` with initial `lookahead`
+  * Optimize `repeat` with initial `lookahead`
   * Add `@spec` to `parsec/2`
 
 ## v0.5.1 (2019-08-04)

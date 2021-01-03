@@ -243,7 +243,7 @@ defmodule NimbleParsec do
       import NimbleParsec
       generate(choice([string("foo"), string("bar")]))
 
-  The command above will reteurn either "foo" or "bar". `generate/1`
+  The command above will return either "foo" or "bar". `generate/1`
   is often used with pre-defined parsecs. In this case, the
   `:export_metadata` flag must be set:
 
@@ -265,7 +265,7 @@ defmodule NimbleParsec do
 
   ## Notes
 
-  This feature is currenty experimental and may change in many ways.
+  This feature is currently experimental and may change in many ways.
   Overall, there is no guarantee over the generated output, except
   that it will generate a binary that is parseable by the parsec
   itself, but even this guarantee may be broken by some validations.
@@ -1033,7 +1033,7 @@ defmodule NimbleParsec do
   closest `choice/2`, `repeat/2`, etc. If there is no closest
   operation to abort, then it errors.
 
-  Note a lookahead nevers changes the accumulated output nor the
+  Note a lookahead never changes the accumulated output nor the
   context.
 
   ## Examples
@@ -1112,7 +1112,7 @@ defmodule NimbleParsec do
   Otherwise it continues as usual. If there is no closest operation
   to abort, then it errors.
 
-  Note a lookahead nevers changes the accumulated output nor the
+  Note a lookahead never changes the accumulated output nor the
   context.
 
   For an example, see `lookahead/2`.
@@ -1561,7 +1561,7 @@ defmodule NimbleParsec do
 
   @doc """
   Allow the combinator given on `to_repeat` to appear at least, at most
-  or exactly a given amout of times.
+  or exactly a given amount of times.
 
   ## Examples
 
@@ -1617,7 +1617,7 @@ defmodule NimbleParsec do
   @doc """
   Chooses one of the given combinators.
 
-  Expects at leasts two choices.
+  Expects at least two choices.
 
   ## Beware! Char combinators
 
