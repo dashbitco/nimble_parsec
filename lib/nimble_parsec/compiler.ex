@@ -12,7 +12,7 @@ defmodule NimbleParsec.Compiler do
     Returns `{:ok, [token], rest, context, position, byte_offset}` or
     `{:error, reason, rest, context, line, byte_offset}` where `position`
     describes the location of the #{name} (start position) as `{line, offset_to_start_of_line}`.
-    
+
     To column where the error occurred can be inferred from `byte_offset - offset_to_start_of_line`.
 
     ## Options
