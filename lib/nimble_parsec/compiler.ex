@@ -407,22 +407,40 @@ defmodule NimbleParsec.Compiler do
   ## Eventually
 
   defp compile_eventually(combinators, current, step, config) do
+    # First add the initial accumulator to the stack
+    {entrypoint, step} = build_next(step, config)
+    head = quote(do: [rest, acc, stack, context, line, offset])
+    args = quote(do: [rest, acc, [acc | stack], context, line, offset])
+    body = {entrypoint, [], args}
+    current_def = {current, head, true, body}
+
+    # Now define the failure point which will recur
     {failure, step} = build_next(step, config)
-    failure_def = build_eventually_next_def(current, failure)
+    failure_def = build_eventually_next_def(entrypoint, failure)
+    config = update_in(config.acc_depth, &(&1 + 1))
     catch_all_def = build_catch_all(:positive, failure, combinators, config)
 
+    # And compile down the inner combinators
     config = %{config | catch_all: failure, acc_depth: 0}
-    {defs, inline, success, step} = compile(combinators, [], [], current, step, config)
+    {defs, inline, success, step} = compile(combinators, [], [], entrypoint, step, config)
 
-    defs = Enum.reverse(defs, [failure_def, catch_all_def])
-    {defs, [{failure, @arity} | inline], success, step, :catch_none}
+    # In the exit remove the accumulator from the stack
+    {exitpoint, step} = build_next(step, config)
+    head = quote(do: [rest, acc, [_ | stack], context, line, offset])
+    args = quote(do: [rest, acc, stack, context, line, offset])
+    body = {exitpoint, [], args}
+    success_def = {success, head, true, body}
+
+    defs = Enum.reverse(defs, [success_def, current_def, failure_def, catch_all_def])
+    inline = [{success, @arity}, {current, @arity}, {failure, @arity} | inline]
+    {defs, inline, exitpoint, step, :catch_none}
   end
 
-  defp build_eventually_next_def(current, failure) do
-    head = quote(do: [<<byte, rest::binary>>, acc, stack, context, line, offset])
+  defp build_eventually_next_def(entrypoint, failure) do
+    head = quote(do: [<<byte, rest::binary>>, _acc, [acc | _] = stack, context, line, offset])
     offset = add_offset(quote(do: offset), 1)
     line = add_line(quote(do: line), offset, quote(do: byte))
-    body = {current, [], quote(do: [rest, acc, stack, context]) ++ [line, offset]}
+    body = {entrypoint, [], quote(do: [rest, acc, stack, context]) ++ [line, offset]}
     {failure, head, true, body}
   end
 

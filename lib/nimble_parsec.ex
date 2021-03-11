@@ -268,7 +268,8 @@ defmodule NimbleParsec do
   This feature is currently experimental and may change in many ways.
   Overall, there is no guarantee over the generated output, except
   that it will generate a binary that is parseable by the parsec
-  itself, but even this guarantee may be broken by some validations.
+  itself, but even this guarantee may be broken by parsers that have
+  custom validations. Keep in mind the following:
 
     * `generate/1` is not compatible with NimbleParsec's dumped via
       `mix nimble_parsec.compile`;
@@ -1441,6 +1442,18 @@ defmodule NimbleParsec do
 
   Any other data before the combinator appears is discarded.
   If the combinator never appears, then it is an error.
+
+  **Note:** this can be potentially a very expensive operation
+  as it executes the given combinator byte by byte until finding
+  an eventual match or ultimately failing. For example, if you
+  are looking for an integer, it is preferrable to discard
+  everything that is not an integer
+
+      ignore(ascii_string([not: ?0..?9]))
+
+  rather than eventually look for an integer
+
+      eventually(ascii_string([?0..?9]))
 
   ## Examples
 

@@ -1220,6 +1220,11 @@ defmodule NimbleParsecTest do
     defparsecp :eventually_integer, eventually(hour)
     defparsecp :repeat_eventually, repeat(eventually(hour))
 
+    defparsecp :eventually_complex,
+               ascii_string([?a..?z], min: 1)
+               |> integer(min: 1)
+               |> eventually()
+
     test "returns ok/error" do
       assert eventually_integer("let's meet at 12?") == {:ok, [12], "?", %{}, {1, 0}, 16}
 
@@ -1232,6 +1237,10 @@ defmodule NimbleParsecTest do
                {:ok, [12, 14], "!", %{}, {1, 0}, 26}
 
       assert repeat_eventually("let's not meet") == {:ok, [], "let's not meet", %{}, {1, 0}, 0}
+    end
+
+    test "returns ok/error with complex" do
+      assert eventually_complex("ohno\nmatch13\n") == {:ok, ["match", 13], "\n", %{}, {2, 5}, 12}
     end
   end
 
