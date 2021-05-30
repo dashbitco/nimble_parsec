@@ -825,14 +825,18 @@ defmodule NimbleParsec do
   end
 
   @doc ~S"""
-  Defines an ASCII string combinator with of exact length or `min` and `max`
+  Defines an UTF8 string combinator with of exact length or `min` and `max`
   codepoint length.
 
-  The `ranges` specify the allowed characters in the ASCII string.
-  See `ascii_char/2` for more information.
+  The `ranges` specify the allowed characters in the UTF8 string.
+  See `utf8_char/2` for more information.
 
   If you want a string of unknown size, use `utf8_string(ranges, min: 1)`.
   If you want a literal string, use `string/2`.
+
+  Note that the combinator matches on codepoints, not graphemes. Therefore
+  results may vary depending on whether the input is in `nfc` or `nfd`
+  normalized form.
 
   ## Examples
 
