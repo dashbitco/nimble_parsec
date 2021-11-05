@@ -1378,7 +1378,7 @@ defmodule NimbleParsecTest do
   defp not_bound?(document) do
     {defs, _} = NimbleParsec.Compiler.compile(:not_used, document, [])
 
-    assert length(defs) != 3, "Expected #{inspect(document)} to contain more than 3 clauses"
+    assert length(defs) != 3, "Expected #{inspect(document)} to contain greater than 3 clauses"
   end
 
   def error_when_last_is_z(rest, acc, %{} = context, {line, line_offset}, byte_offset)

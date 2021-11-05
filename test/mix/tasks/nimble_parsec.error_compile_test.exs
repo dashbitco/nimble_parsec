@@ -18,7 +18,7 @@ defmodule Mix.Tasks.NimbleParsec.ErrorCompileTest do
       """)
 
       assert_raise ArgumentError,
-                   "expected :max to be strictly more than :min, got: 2 and 1",
+                   "expected :max to be strictly greater than :min, got: 2 and 1",
                    fn ->
                      Mix.Task.run("nimble_parsec.compile", [filename])
                    end

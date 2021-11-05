@@ -1295,7 +1295,7 @@ defmodule NimbleParsec do
       #=> {:ok, [integer: 1234], "", %{}, {1, 0}, 4}
 
 
-  In case the combinator emits more than one token, an error will be raised.
+  In case the combinator emits greater than one token, an error will be raised.
   See `tag/3` for more information.
   """
   @spec unwrap_and_tag(t, t, term) :: t
@@ -1703,7 +1703,7 @@ defmodule NimbleParsec do
 
         max <= min and
           raise ArgumentError,
-                "expected :max to be strictly more than :min, got: #{min} and #{max}"
+                "expected :max to be strictly greater than :min, got: #{min} and #{max}"
 
       min ->
         validate_min_or_max!(:min, min, 0)
@@ -1721,7 +1721,7 @@ defmodule NimbleParsec do
   defp validate_min_or_max!(kind, value, min) do
     unless is_integer(value) and value >= min do
       raise ArgumentError,
-            "expected #{kind} to be an integer more than or equal to #{min}, " <>
+            "expected #{kind} to be an integer greater than or equal to #{min}, " <>
               "got: #{inspect(value)}"
     end
   end
