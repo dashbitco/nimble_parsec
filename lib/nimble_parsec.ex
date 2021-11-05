@@ -778,6 +778,8 @@ defmodule NimbleParsec do
   @spec integer(t, pos_integer | [min_and_max]) :: t
   def integer(combinator \\ empty(), count_or_opts)
       when is_combinator(combinator) and (is_integer(count_or_opts) or is_list(count_or_opts)) do
+    validate_min_and_max!(count_or_opts, 1)
+
     min_max_compile_runtime_chars(
       combinator,
       ascii_char([?0..?9]),
@@ -1295,7 +1297,7 @@ defmodule NimbleParsec do
       #=> {:ok, [integer: 1234], "", %{}, {1, 0}, 4}
 
 
-  In case the combinator emits more than one token, an error will be raised.
+  In case the combinator emits greater than one token, an error will be raised.
   See `tag/3` for more information.
   """
   @spec unwrap_and_tag(t, t, term) :: t
@@ -1692,21 +1694,28 @@ defmodule NimbleParsec do
 
   ## Helpers
 
-  defp validate_min_and_max!(opts) do
+  defp validate_min_and_max!(count_or_opts, required_min \\ 0)
+
+  defp validate_min_and_max!(count, required_min)
+       when is_integer(count) do
+    validate_min_and_max!([min: count], required_min)
+  end
+
+  defp validate_min_and_max!(opts, required_min) do
     min = opts[:min]
     max = opts[:max]
 
     cond do
       min && max ->
-        validate_min_or_max!(:min, min, 0)
+        validate_min_or_max!(:min, min, required_min)
         validate_min_or_max!(:max, max, 1)
 
         max <= min and
           raise ArgumentError,
-                "expected :max to be strictly more than :min, got: #{min} and #{max}"
+                "expected :max to be strictly greater than :min, got: #{min} and #{max}"
 
       min ->
-        validate_min_or_max!(:min, min, 0)
+        validate_min_or_max!(:min, min, required_min)
 
       max ->
         validate_min_or_max!(:max, max, 1)
@@ -1721,7 +1730,7 @@ defmodule NimbleParsec do
   defp validate_min_or_max!(kind, value, min) do
     unless is_integer(value) and value >= min do
       raise ArgumentError,
-            "expected #{kind} to be an integer more than or equal to #{min}, " <>
+            "expected #{kind} to be an integer greater than or equal to #{min}, " <>
               "got: #{inspect(value)}"
     end
   end
