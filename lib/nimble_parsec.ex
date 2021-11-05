@@ -778,6 +778,8 @@ defmodule NimbleParsec do
   @spec integer(t, pos_integer | [min_and_max]) :: t
   def integer(combinator \\ empty(), count_or_opts)
       when is_combinator(combinator) and (is_integer(count_or_opts) or is_list(count_or_opts)) do
+    validate_min_and_max!(count_or_opts, 1)
+
     min_max_compile_runtime_chars(
       combinator,
       ascii_char([?0..?9]),
@@ -1692,13 +1694,20 @@ defmodule NimbleParsec do
 
   ## Helpers
 
-  defp validate_min_and_max!(opts) do
+  defp validate_min_and_max!(count_or_opts, required_min \\ 0)
+
+  defp validate_min_and_max!(count, required_min)
+       when is_integer(count) do
+    validate_min_and_max!([min: count], required_min)
+  end
+
+  defp validate_min_and_max!(opts, required_min) do
     min = opts[:min]
     max = opts[:max]
 
     cond do
       min && max ->
-        validate_min_or_max!(:min, min, 0)
+        validate_min_or_max!(:min, min, required_min)
         validate_min_or_max!(:max, max, 1)
 
         max <= min and
@@ -1706,7 +1715,7 @@ defmodule NimbleParsec do
                 "expected :max to be strictly greater than :min, got: #{min} and #{max}"
 
       min ->
-        validate_min_or_max!(:min, min, 0)
+        validate_min_or_max!(:min, min, required_min)
 
       max ->
         validate_min_or_max!(:max, max, 1)

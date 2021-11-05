@@ -40,7 +40,7 @@ defmodule Mix.Tasks.NimbleParsec.ErrorCompileTest do
       """)
 
       assert_raise ArgumentError,
-                   "expected :min to be a positive integer, was 0",
+                   "expected min to be an integer greater than or equal to 1, got: 0",
                    fn ->
                      Mix.Task.run("nimble_parsec.compile", [filename])
                    end
@@ -62,7 +62,7 @@ defmodule Mix.Tasks.NimbleParsec.ErrorCompileTest do
       """)
 
       assert_raise ArgumentError,
-                   "expected :min to be a positive integer, was -1",
+                   "expected min to be an integer greater than or equal to 1, got: -1",
                    fn ->
                      Mix.Task.run("nimble_parsec.compile", [filename])
                    end
