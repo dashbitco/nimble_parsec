@@ -1109,7 +1109,7 @@ defmodule NimbleParsec do
   @spec lookahead(t, t) :: t
   def lookahead(combinator \\ empty(), to_lookahead)
       when is_combinator(combinator) and is_combinator(to_lookahead) do
-    [{:lookahead, to_lookahead, :positive} | combinator]
+    [{:lookahead, Enum.reverse(to_lookahead), :positive} | combinator]
   end
 
   @doc ~S"""
@@ -1127,7 +1127,7 @@ defmodule NimbleParsec do
   @spec lookahead_not(t, t) :: t
   def lookahead_not(combinator \\ empty(), to_lookahead)
       when is_combinator(combinator) and is_combinator(to_lookahead) do
-    [{:lookahead, to_lookahead, :negative} | combinator]
+    [{:lookahead, Enum.reverse(to_lookahead), :negative} | combinator]
   end
 
   @doc """
