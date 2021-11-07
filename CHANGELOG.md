@@ -1,5 +1,17 @@
 # Changelog for NimbleParsec
 
+## v1.2.0 (2021-11-07)
+
+### Enhancements
+
+  * Add generator support to `NimbleParsec`: it now generates code that matches a combinator
+
+### Bug fixes
+
+  * Fix using `eventually` with constructs that can accumulate
+  * Fix lookahead combinators running in reverse order
+  * Raise on invalid `min` for integer
+
 ## v1.1.0 (2020-10-02)
 
 ### Enhancements
