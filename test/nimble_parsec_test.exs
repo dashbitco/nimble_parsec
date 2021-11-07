@@ -667,6 +667,23 @@ defmodule NimbleParsecTest do
     defparsecp :lookahead_with_times,
                times(ascii_char([]) |> lookahead(ascii_char([?0..?9])), min: 1)
 
+    defparsecp :lookahead_with_inner_compound_combinator,
+               lookahead(utf8_char([?a]) |> utf8_char([?b]) |> utf8_char([?c]))
+
+    defparsecp :nested_lookahead_with_inner_compound_combinator,
+               lookahead(
+                 utf8_char([?a])
+                 |> lookahead(utf8_char([?b]) |> utf8_char([?c]))
+               )
+
+    test "matches inner combinators in order" do
+      assert lookahead_with_inner_compound_combinator("abc") ==
+               {:ok, [], "abc", %{}, {1, 0}, 0}
+
+      assert nested_lookahead_with_inner_compound_combinator("abc") ==
+               {:ok, [], "abc", %{}, {1, 0}, 0}
+    end
+
     test "aborts choice on no match" do
       assert lookahead_with_choice_digits_first("a0") == {:ok, [first: 'a'], "0", %{}, {1, 0}, 1}
       assert lookahead_with_choice_digits_first("aa") == {:ok, [second: 'a'], "a", %{}, {1, 0}, 1}
@@ -717,6 +734,27 @@ defmodule NimbleParsecTest do
 
     defparsecp :lookahead_not_repeat_until,
                repeat(lookahead_not(string("3")) |> ascii_char([?0..?9]) |> ascii_char([?0..?9]))
+
+    defparsecp :lookahead_not_with_inner_compound_combinator,
+               lookahead_not(utf8_char([?a]) |> utf8_char([?b]))
+
+    defparsecp :nested_lookahead_not_with_inner_compound_combinator,
+               lookahead_not(
+                 utf8_char([?a])
+                 |> lookahead(utf8_char([?b]) |> utf8_char([?c]))
+               )
+
+    test "matches inner combinators in order" do
+      assert lookahead_not_with_inner_compound_combinator("ab") ==
+               {:error,
+                "did not expect utf8 codepoint equal to 'a', followed by utf8 codepoint equal to 'b'",
+                "ab", %{}, {1, 0}, 0}
+
+      assert nested_lookahead_not_with_inner_compound_combinator("abc") ==
+               {:error,
+                "did not expect utf8 codepoint equal to 'a', followed by utf8 codepoint equal to 'b', followed by utf8 codepoint equal to 'c'",
+                "abc", %{}, {1, 0}, 0}
+    end
 
     test "aborts choice on match" do
       assert lookahead_not_with_choice_digits_first("a0") ==
