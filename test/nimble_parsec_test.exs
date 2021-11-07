@@ -670,11 +670,11 @@ defmodule NimbleParsecTest do
     defparsecp :lookahead_with_inner_compound_combinator,
                lookahead(utf8_char([?a]) |> utf8_char([?b]) |> utf8_char([?c]))
 
-    defparsec :nested_lookahead_with_inner_compound_combinator,
-              lookahead(
-                utf8_char([?a])
-                |> lookahead(utf8_char([?b]) |> utf8_char([?c]))
-              )
+    defparsecp :nested_lookahead_with_inner_compound_combinator,
+               lookahead(
+                 utf8_char([?a])
+                 |> lookahead(utf8_char([?b]) |> utf8_char([?c]))
+               )
 
     test "matches inner combinators in order" do
       assert lookahead_with_inner_compound_combinator("abc") ==
@@ -738,11 +738,11 @@ defmodule NimbleParsecTest do
     defparsecp :lookahead_not_with_inner_compound_combinator,
                lookahead_not(utf8_char([?a]) |> utf8_char([?b]))
 
-    defparsec :nested_lookahead_not_with_inner_compound_combinator,
-              lookahead_not(
-                utf8_char([?a])
-                |> lookahead(utf8_char([?b]) |> utf8_char([?c]))
-              )
+    defparsecp :nested_lookahead_not_with_inner_compound_combinator,
+               lookahead_not(
+                 utf8_char([?a])
+                 |> lookahead(utf8_char([?b]) |> utf8_char([?c]))
+               )
 
     test "matches inner combinators in order" do
       assert lookahead_not_with_inner_compound_combinator("ab") ==
