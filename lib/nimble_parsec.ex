@@ -209,7 +209,7 @@ defmodule NimbleParsec do
   @type fargs :: {atom, args :: [term]}
   @type gen_times :: Range.t() | non_neg_integer() | nil
   @type gen_weights :: [pos_integer()] | nil
-	@type opts :: Keyword.t()
+  @type opts :: Keyword.t()
 
   # Steps to add a new combinator:
   #
