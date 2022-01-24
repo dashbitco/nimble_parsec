@@ -31,7 +31,7 @@ defmodule NimbleParsec.Compiler do
              byte_offset: pos_integer,
              rest: binary,
              reason: String.t(),
-             context: map()
+             context: map
       end
 
     args = quote(do: [binary, opts \\ []])

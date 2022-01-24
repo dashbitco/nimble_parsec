@@ -201,14 +201,14 @@ defmodule NimbleParsec do
   @opaque t :: [combinator]
   @type bin_modifier :: :integer | :utf8 | :utf16 | :utf32
   @type range :: inclusive_range | exclusive_range
-  @type inclusive_range :: Range.t() | char()
-  @type exclusive_range :: {:not, Range.t()} | {:not, char()}
-  @type min_and_max :: {:min, non_neg_integer()} | {:max, pos_integer()}
+  @type inclusive_range :: Range.t() | char
+  @type exclusive_range :: {:not, Range.t()} | {:not, char}
+  @type min_and_max :: {:min, non_neg_integer} | {:max, pos_integer}
   @type call :: mfargs | fargs | atom
   @type mfargs :: {module, atom, args :: [term]}
   @type fargs :: {atom, args :: [term]}
-  @type gen_times :: Range.t() | non_neg_integer() | nil
-  @type gen_weights :: [pos_integer()] | nil
+  @type gen_times :: Range.t() | non_neg_integer | nil
+  @type gen_weights :: [pos_integer] | nil
   @type opts :: Keyword.t()
 
   # Steps to add a new combinator:
@@ -431,7 +431,7 @@ defmodule NimbleParsec do
 
   An empty combinator cannot be compiled on its own.
   """
-  @spec empty() :: t()
+  @spec empty() :: t
   def empty() do
     []
   end
@@ -619,10 +619,10 @@ defmodule NimbleParsec do
   `SimpleXML.xml(xml)` as there is no associated parsing function.
   You can only access the combinator above via `parsec/2`.
   """
-  @spec parsec(name :: atom()) :: t()
-  @spec parsec(t(), name :: atom()) :: t()
-  @spec parsec({module(), function_name :: atom()}) :: t()
-  @spec parsec(t(), {module(), function_name :: atom()}) :: t()
+  @spec parsec(name :: atom) :: t
+  @spec parsec(t, name :: atom) :: t
+  @spec parsec({module, function_name :: atom}) :: t
+  @spec parsec(t, {module, function_name :: atom}) :: t
   def parsec(combinator \\ empty(), name)
 
   def parsec(combinator, name) when is_combinator(combinator) and is_atom(name) do
