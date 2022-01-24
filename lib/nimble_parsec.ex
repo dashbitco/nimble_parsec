@@ -201,14 +201,14 @@ defmodule NimbleParsec do
   @opaque t :: [combinator]
   @type bin_modifier :: :integer | :utf8 | :utf16 | :utf32
   @type range :: inclusive_range | exclusive_range
-  @type inclusive_range :: Range.t() | char()
-  @type exclusive_range :: {:not, Range.t()} | {:not, char()}
-  @type min_and_max :: {:min, non_neg_integer()} | {:max, pos_integer()}
+  @type inclusive_range :: Range.t() | char
+  @type exclusive_range :: {:not, Range.t()} | {:not, char}
+  @type min_and_max :: {:min, non_neg_integer} | {:max, pos_integer}
   @type call :: mfargs | fargs | atom
   @type mfargs :: {module, atom, args :: [term]}
   @type fargs :: {atom, args :: [term]}
-  @type gen_times :: Range.t() | non_neg_integer() | nil
-  @type gen_weights :: [pos_integer()] | nil
+  @type gen_times :: Range.t() | non_neg_integer | nil
+  @type gen_weights :: [pos_integer] | nil
   @type opts :: Keyword.t()
 
   # Steps to add a new combinator:
@@ -431,7 +431,7 @@ defmodule NimbleParsec do
 
   An empty combinator cannot be compiled on its own.
   """
-  @spec empty() :: t()
+  @spec empty() :: t
   def empty() do
     []
   end
@@ -619,8 +619,10 @@ defmodule NimbleParsec do
   `SimpleXML.xml(xml)` as there is no associated parsing function.
   You can only access the combinator above via `parsec/2`.
   """
-  @spec parsec(t(), name :: atom()) :: t()
-  @spec parsec(t(), {module(), function_name :: atom()}) :: t()
+  @spec parsec(name :: atom) :: t
+  @spec parsec(t, name :: atom) :: t
+  @spec parsec({module, function_name :: atom}) :: t
+  @spec parsec(t, {module, function_name :: atom}) :: t
   def parsec(combinator \\ empty(), name)
 
   def parsec(combinator, name) when is_combinator(combinator) and is_atom(name) do
@@ -660,6 +662,7 @@ defmodule NimbleParsec do
       #=> {:error, "expected ASCII character in the range '0' to '9', followed by ASCII character in the range 'a' to 'z'", "a1", %{}, {1, 0}, 0}
 
   """
+  @spec ascii_char([range]) :: t
   @spec ascii_char(t, [range]) :: t
   def ascii_char(combinator \\ empty(), ranges)
       when is_combinator(combinator) and is_list(ranges) do
@@ -695,6 +698,7 @@ defmodule NimbleParsec do
       #=> {:error, "expected utf8 codepoint in the range '0' to '9', followed by utf8 codepoint", "a1", %{}, {1, 0}, 0}
 
   """
+  @spec utf8_char([range]) :: t
   @spec utf8_char(t, [range]) :: t
   def utf8_char(combinator \\ empty(), ranges)
       when is_combinator(combinator) and is_list(ranges) do
@@ -724,6 +728,7 @@ defmodule NimbleParsec do
       #=> {:error, "expected a digit followed by lowercase letter", "a1", %{}, {1, 0}, 0}
 
   """
+  @spec label(t, String.t()) :: t
   @spec label(t, t, String.t()) :: t
   def label(combinator \\ empty(), to_label, label)
       when is_combinator(combinator) and is_combinator(to_label) and is_binary(label) do
@@ -776,6 +781,7 @@ defmodule NimbleParsec do
 
   Note you should start from bigger to smaller.
   """
+  @spec integer(pos_integer | [min_and_max]) :: t
   @spec integer(t, pos_integer | [min_and_max]) :: t
   def integer(combinator \\ empty(), count_or_opts)
       when is_combinator(combinator) and (is_integer(count_or_opts) or is_list(count_or_opts)) do
@@ -813,6 +819,7 @@ defmodule NimbleParsec do
       #=> {:ok, ["ab"], "c", %{}, {1, 0}, 2}
 
   """
+  @spec ascii_string([range], pos_integer | [min_and_max]) :: t
   @spec ascii_string(t, [range], pos_integer | [min_and_max]) :: t
   def ascii_string(combinator \\ empty(), range, count_or_opts)
       when is_combinator(combinator) and is_list(range) and
@@ -853,6 +860,7 @@ defmodule NimbleParsec do
       #=> {:ok, ["áé"], "", %{}, {1, 0}, 3}
 
   """
+  @spec utf8_string([range], pos_integer | [min_and_max]) :: t
   @spec utf8_string(t, [range], pos_integer | [min_and_max]) :: t
   def utf8_string(combinator \\ empty(), range, count_or_opts)
       when is_combinator(combinator) and is_list(range) and
@@ -888,6 +896,7 @@ defmodule NimbleParsec do
       MyParser.letter_pairs("hello")
       #=> {:error, "expected end of string", "o", %{}, {1, 0}, 4}
   """
+  @spec eos :: t
   @spec eos(t) :: t
   def eos(combinator \\ empty()) do
     [:eos | combinator]
@@ -920,6 +929,7 @@ defmodule NimbleParsec do
   @doc """
   Duplicates the combinator `to_duplicate` `n` times.
   """
+  @spec duplicate(t, non_neg_integer) :: t
   @spec duplicate(t, t, non_neg_integer) :: t
   def duplicate(combinator \\ empty(), to_duplicate, n)
 
@@ -939,6 +949,7 @@ defmodule NimbleParsec do
 
   `byte_offset` is a non-negative integer.
   """
+  @spec byte_offset(t) :: t
   @spec byte_offset(t, t) :: t
   def byte_offset(combinator \\ empty(), to_wrap)
       when is_combinator(combinator) and is_combinator(to_wrap) do
@@ -953,6 +964,7 @@ defmodule NimbleParsec do
   and the second element is the byte offset immediately after
   the newline.
   """
+  @spec line(t) :: t
   @spec line(t, t) :: t
   def line(combinator \\ empty(), to_wrap)
       when is_combinator(combinator) and is_combinator(to_wrap) do
@@ -1012,6 +1024,7 @@ defmodule NimbleParsec do
       #=> {:ok, ["99-98-97"], "", %{}, {1, 0}, 3}
 
   """
+  @spec post_traverse(t, call) :: t
   @spec post_traverse(t, t, call) :: t
   def post_traverse(combinator \\ empty(), to_post_traverse, call)
       when is_combinator(combinator) and is_combinator(to_post_traverse) do
@@ -1027,6 +1040,7 @@ defmodule NimbleParsec do
   information. Use `pre_traverse/3` only if you have to access
   the line and offset from before the given combinators.
   """
+  @spec pre_traverse(t, call) :: t
   @spec pre_traverse(t, t, call) :: t
   def pre_traverse(combinator \\ empty(), to_pre_traverse, call)
       when is_combinator(combinator) and is_combinator(to_pre_traverse) do
@@ -1107,6 +1121,7 @@ defmodule NimbleParsec do
       #=> {:ok, [:if, " ", "fy"], "", %{}, {1, 0}, 5}
 
   """
+  @spec lookahead(t) :: t
   @spec lookahead(t, t) :: t
   def lookahead(combinator \\ empty(), to_lookahead)
       when is_combinator(combinator) and is_combinator(to_lookahead) do
@@ -1125,6 +1140,7 @@ defmodule NimbleParsec do
 
   For an example, see `lookahead/2`.
   """
+  @spec lookahead_not(t) :: t
   @spec lookahead_not(t, t) :: t
   def lookahead_not(combinator \\ empty(), to_lookahead)
       when is_combinator(combinator) and is_combinator(to_lookahead) do
@@ -1156,6 +1172,7 @@ defmodule NimbleParsec do
   using `post_traverse/3` is better, since it doesn't work on ASTs
   and instead works at runtime.
   """
+  @spec quoted_post_traverse(t, mfargs) :: t
   @spec quoted_post_traverse(t, t, mfargs) :: t
   def quoted_post_traverse(combinator \\ empty(), to_post_traverse, {_, _, _} = call)
       when is_combinator(combinator) and is_combinator(to_post_traverse) do
@@ -1170,6 +1187,7 @@ defmodule NimbleParsec do
   information. Use `quoted_pre_traverse/3` only if you have to access
   the line and offset from before the given combinators.
   """
+  @spec quoted_pre_traverse(t, mfargs) :: t
   @spec quoted_pre_traverse(t, t, mfargs) :: t
   def quoted_pre_traverse(combinator \\ empty(), to_pre_traverse, {_, _, _} = call)
       when is_combinator(combinator) and is_combinator(to_pre_traverse) do
@@ -1205,6 +1223,7 @@ defmodule NimbleParsec do
       MyParser.letters_to_string_chars("abc")
       #=> {:ok, ["97", "98", "99"], "", %{}, {1, 0}, 3}
   """
+  @spec map(t, call) :: t
   @spec map(t, t, call) :: t
   def map(combinator \\ empty(), to_map, call)
       when is_combinator(combinator) and is_combinator(to_map) do
@@ -1241,6 +1260,7 @@ defmodule NimbleParsec do
       MyParser.letters_to_reduced_chars("abc")
       #=> {:ok, ["97-98-99"], "", %{}, {1, 0}, 3}
   """
+  @spec reduce(t, call) :: t
   @spec reduce(t, t, call) :: t
   def reduce(combinator \\ empty(), to_reduce, call)
       when is_combinator(combinator) and is_combinator(to_reduce) do
@@ -1251,6 +1271,7 @@ defmodule NimbleParsec do
   @doc """
   Wraps the results of the given combinator in `to_wrap` in a list.
   """
+  @spec wrap(t) :: t
   @spec wrap(t, t) :: t
   def wrap(combinator \\ empty(), to_wrap)
       when is_combinator(combinator) and is_combinator(to_wrap) do
@@ -1276,6 +1297,7 @@ defmodule NimbleParsec do
   the parser is expected to emit multiple tokens. When you are sure that
   only a single token is emitted, you should use `unwrap_and_tag/3`.
   """
+  @spec tag(t, term) :: t
   @spec tag(t, t, term) :: t
   def tag(combinator \\ empty(), to_tag, tag)
       when is_combinator(combinator) and is_combinator(to_tag) do
@@ -1301,6 +1323,7 @@ defmodule NimbleParsec do
   In case the combinator emits greater than one token, an error will be raised.
   See `tag/3` for more information.
   """
+  @spec unwrap_and_tag(t, term) :: t
   @spec unwrap_and_tag(t, t, term) :: t
   def unwrap_and_tag(combinator \\ empty(), to_tag, tag)
       when is_combinator(combinator) and is_combinator(to_tag) do
@@ -1314,6 +1337,7 @@ defmodule NimbleParsec do
   @doc """
   Inspects the combinator state given to `to_debug` with the given `opts`.
   """
+  @spec debug(t) :: t
   @spec debug(t, t) :: t
   def debug(combinator \\ empty(), to_debug)
       when is_combinator(combinator) and is_combinator(to_debug) do
@@ -1338,6 +1362,7 @@ defmodule NimbleParsec do
       #=> {:error, "expected a string \"T\"", "not T", %{}, {1, 0}, 0}
 
   """
+  @spec string(binary) :: t
   @spec string(t, binary) :: t
   def string(combinator \\ empty(), binary)
       when is_combinator(combinator) and is_binary(binary) do
@@ -1359,6 +1384,7 @@ defmodule NimbleParsec do
       #=> {:ok, [12], "", %{}, {1, 0}, 2}
 
   """
+  @spec ignore(t) :: t
   @spec ignore(t, t) :: t
   def ignore(combinator \\ empty(), to_ignore)
       when is_combinator(combinator) and is_combinator(to_ignore) do
@@ -1387,6 +1413,7 @@ defmodule NimbleParsec do
       #=> {:ok, ["OTHER", 12], "", %{}, {1, 0}, 2}
 
   """
+  @spec replace(t, term) :: t
   @spec replace(t, t, term) :: t
   def replace(combinator \\ empty(), to_replace, value)
       when is_combinator(combinator) and is_combinator(to_replace) do
@@ -1437,6 +1464,8 @@ defmodule NimbleParsec do
       #=> {:ok, [], "1234", %{}, {1, 0}, 0}
 
   """
+  @spec repeat(t) :: t
+  @spec repeat(t, opts) :: t
   @spec repeat(t, t, opts) :: t
   def repeat(combinator \\ empty(), to_repeat, opts \\ [])
       when is_combinator(combinator) and is_combinator(to_repeat) and is_list(opts) do
@@ -1475,6 +1504,7 @@ defmodule NimbleParsec do
       #=> {:ok, [12], "?", %{}, {1, 0}, 16}
 
   """
+  @spec eventually(t) :: t
   @spec eventually(t, t) :: t
   def eventually(combinator \\ empty(), eventually)
       when is_combinator(combinator) and is_combinator(eventually) do
@@ -1552,7 +1582,9 @@ defmodule NimbleParsec do
   However, `repeat_while` is still useful when the condition to
   repeat comes from the context passed around.
   """
+  @spec repeat_while(t, call) :: t
   @spec repeat_while(t, t, call) :: t
+  @spec repeat_while(t, t, call, opts) :: t
   def repeat_while(combinator \\ empty(), to_repeat, while, opts \\ [])
       when is_combinator(combinator) and is_combinator(to_repeat) and is_list(opts) do
     non_empty!(to_repeat, "repeat_while")
@@ -1572,7 +1604,9 @@ defmodule NimbleParsec do
   is invoked at compile time and is useful in combinators that avoid
   injecting runtime dependencies.
   """
+  @spec quoted_repeat_while(t, mfargs) :: t
   @spec quoted_repeat_while(t, t, mfargs) :: t
+  @spec quoted_repeat_while(t, t, mfargs, opts) :: t
   def quoted_repeat_while(combinator \\ empty(), to_repeat, {_, _, _} = while, opts \\ [])
       when is_combinator(combinator) and is_combinator(to_repeat) and is_list(opts) do
     non_empty!(to_repeat, "quoted_repeat_while")
@@ -1601,6 +1635,7 @@ defmodule NimbleParsec do
       #=> {:ok, [], "a123", %{}, {1, 0}, 0}
 
   """
+  @spec times(t, pos_integer | [min_and_max]) :: t
   @spec times(t, t, pos_integer | [min_and_max]) :: t
   def times(combinator \\ empty(), to_repeat, count_or_min_max)
 
@@ -1670,6 +1705,8 @@ defmodule NimbleParsec do
   Instead of `repeat/2`, you may want to use `times/3` with the flags `:min`
   and `:max`.
   """
+  @spec choice(nonempty_list(t)) :: t
+  @spec choice(t, nonempty_list(t)) :: t
   @spec choice(t, nonempty_list(t), opts) :: t
   def choice(combinator \\ empty(), [_, _ | _] = choices, opts \\ [])
       when is_combinator(combinator) do
@@ -1688,6 +1725,7 @@ defmodule NimbleParsec do
 
   It is equivalent to `choice([optional, empty()])`.
   """
+  @spec optional(t) :: t
   @spec optional(t, t) :: t
   def optional(combinator \\ empty(), optional) do
     choice(combinator, [optional, empty()])
