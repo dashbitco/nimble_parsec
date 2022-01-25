@@ -1465,6 +1465,7 @@ defmodule NimbleParsec do
 
   """
   @spec repeat(t) :: t
+  @spec repeat(t, t) :: t
   @spec repeat(t, opts) :: t
   @spec repeat(t, t, opts) :: t
   def repeat(combinator \\ empty(), to_repeat, opts \\ [])
