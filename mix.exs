@@ -1,7 +1,7 @@
 defmodule NimbleParsec.MixProject do
   use Mix.Project
 
-  @version "1.2.0"
+  @version "1.2.1"
   @url "https://github.com/dashbitco/nimble_parsec"
 
   def project do

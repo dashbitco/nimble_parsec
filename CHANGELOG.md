@@ -1,5 +1,11 @@
 # Changelog for NimbleParsec
 
+## v1.2.1 (2021-01-26)
+
+### Bug fixes
+
+  * Improve typespecs
+
 ## v1.2.0 (2021-11-07)
 
 ### Enhancements
