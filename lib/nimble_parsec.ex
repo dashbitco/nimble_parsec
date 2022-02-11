@@ -158,14 +158,8 @@ defmodule NimbleParsec do
           @compile {:inline, inline}
         end
 
-        if combinator_kind == :def do
-          for {name, args, guards, body} <- defs do
-            def unquote(name)(unquote_splicing(args)) when unquote(guards), do: unquote(body)
-          end
-        else
-          for {name, args, guards, body} <- defs do
-            defp unquote(name)(unquote_splicing(args)) when unquote(guards), do: unquote(body)
-          end
+        for {name, args, guards, body} <- defs do
+          def unquote(name)(unquote_splicing(args)) when unquote(guards), do: unquote(body)
         end
       end
 
