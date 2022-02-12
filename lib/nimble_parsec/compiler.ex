@@ -417,19 +417,24 @@ defmodule NimbleParsec.Compiler do
     end
   end
 
-  # TODO: Deprecate two element tuple return that is not error
   defp apply_traverse_mfa(mfargs, args, rest) do
     case apply_mfa(mfargs, args) do
       {:{}, _, [_, _, _]} = res ->
         res
 
       {acc, context} when acc != :error ->
+        # IO.warn(
+        #   "Returning a two-element tuple {acc, context} in pre_traverse/post_traverse is deprecated, " <>
+        #     "please return {rest, acc, context} instead"
+        # )
+
         {:{}, [], [rest, acc, context]}
 
       {:error, context} ->
         {:error, context}
 
       quoted ->
+        # TODO: Deprecate two element tuple return that is not error
         quote generated: true do
           case unquote(quoted) do
             {_, _, _} = res -> res

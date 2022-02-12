@@ -1979,28 +1979,28 @@ defmodule NimbleParsec do
   end
 
   @doc false
-  def __runtime_string__(_rest, acc, context, _line, _offset, _min, _max, _type) do
+  def __runtime_string__(rest, acc, context, _line, _offset, _min, _max, _type) do
     ast = quote(do: List.to_string(unquote(reverse_now_or_later(acc))))
-    {[ast], context}
+    {:{}, [], [rest, [ast], context]}
   end
 
   @doc false
-  def __compile_string__(_rest, acc, context, _line, _offset, _count, type) when is_list(acc) do
+  def __compile_string__(rest, acc, context, _line, _offset, _count, type) when is_list(acc) do
     acc =
       for entry <- :lists.reverse(acc) do
         {:"::", [], [entry, type]}
       end
 
-    {[{:<<>>, [], acc}], context}
+    {:{}, [], [rest, [{:<<>>, [], acc}], context]}
   end
 
-  def __compile_string__(_rest, acc, context, _line, _offset, _count, _type) do
+  def __compile_string__(rest, acc, context, _line, _offset, _count, _type) do
     ast = quote(do: List.to_string(unquote(reverse_now_or_later(acc))))
-    {[ast], context}
+    {:{}, [], [rest, [ast], context]}
   end
 
   @doc false
-  def __runtime_integer__(_rest, acc, context, _line, _offset, min, _max)
+  def __runtime_integer__(rest, acc, context, _line, _offset, min, _max)
       when is_integer(min) and min > 0 do
     ast =
       quote do
@@ -2008,27 +2008,27 @@ defmodule NimbleParsec do
         [:lists.foldl(fn x, acc -> x - ?0 + acc * 10 end, head, tail)]
       end
 
-    {ast, context}
+    {:{}, [], [rest, ast, context]}
   end
 
-  def __runtime_integer__(_rest, acc, context, _line, _offset, _min, _max) do
+  def __runtime_integer__(rest, acc, context, _line, _offset, _min, _max) do
     ast =
       quote do
         [head | tail] = unquote(reverse_now_or_later(acc))
         [:lists.foldl(fn x, acc -> x - ?0 + acc * 10 end, head - ?0, tail)]
       end
 
-    {ast, context}
+    {:{}, [], [rest, ast, context]}
   end
 
   @doc false
-  def __compile_integer__(_rest, acc, context, _line, _offset, _count) when is_list(acc) do
+  def __compile_integer__(rest, acc, context, _line, _offset, _count) when is_list(acc) do
     ast =
       acc
       |> quoted_ascii_to_integer(1)
       |> Enum.reduce(&{:+, [], [&2, &1]})
 
-    {[ast], context}
+    {:{}, [], [rest, [ast], context]}
   end
 
   defp reverse_now_or_later(list) when is_list(list), do: :lists.reverse(list)
