@@ -1,6 +1,12 @@
 # Changelog for NimbleParsec
 
-## v1.2.1 (2021-01-26)
+## v1.2.2 (2022-01-26)
+
+### Enhancements
+
+  * Allow `rest` to be returned from post_traverse/pre_traverse
+
+## v1.2.1 (2022-01-26)
 
 ### Bug fixes
 
