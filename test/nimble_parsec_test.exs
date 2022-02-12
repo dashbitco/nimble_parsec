@@ -337,10 +337,21 @@ defmodule NimbleParsecTest do
                |> times(min: 1)
                |> ignore()
 
+    defparsecp :ignore_one,
+               ascii_char([])
+               |> times(1)
+               |> ignore
+
     test "returns ok/error" do
       assert runtime_ignore("abc") == {:ok, [], "", %{}, {1, 0}, 3}
       error = "expected ASCII character in the range 'a' to 'z'"
       assert runtime_ignore("1bc") == {:error, error, "1bc", %{}, {1, 0}, 0}
+    end
+
+    test "ignore one" do
+      assert ignore_one("abc") == {:ok, [], "bc", %{}, {1, 0}, 1}
+      error = "expected ASCII character"
+      assert ignore_one("") == {:error, error, "", %{}, {1, 0}, 0}
     end
 
     test "is not bound" do
