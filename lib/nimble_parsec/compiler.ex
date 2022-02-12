@@ -423,10 +423,10 @@ defmodule NimbleParsec.Compiler do
         res
 
       {acc, context} when acc != :error ->
-        # IO.warn(
-        #   "Returning a two-element tuple {acc, context} in pre_traverse/post_traverse is deprecated, " <>
-        #     "please return {rest, acc, context} instead"
-        # )
+        IO.warn(
+          "Returning a two-element tuple {acc, context} in pre_traverse/post_traverse is deprecated, " <>
+            "please return {rest, acc, context} instead"
+        )
 
         {:{}, [], [rest, acc, context]}
 
