@@ -356,16 +356,29 @@ defmodule NimbleParsec.Compiler do
 
   defp traverse(traversal, next, rest, user_acc, context, line, offset, _) do
     case apply_traverse(traversal, rest, user_acc, context, line, offset) do
-      {expanded_acc, ^context} when user_acc != :error ->
+      {:{}, _, [rest, expanded_acc, context]} ->
         quote do
           _ = unquote(user_acc)
-          unquote(next)(rest, unquote(expanded_acc) ++ acc, stack, context, line, offset)
+
+          unquote(next)(
+            unquote(rest),
+            unquote(expanded_acc) ++ acc,
+            stack,
+            unquote(context),
+            line,
+            offset
+          )
+        end
+
+      {:error, reason} ->
+        quote do
+          {:error, unquote(reason), rest, context, line, offset}
         end
 
       quoted ->
-        quote do
+        quote generated: true do
           case unquote(quoted) do
-            {user_acc, context} when is_list(user_acc) ->
+            {rest, user_acc, context} when is_list(user_acc) ->
               unquote(next)(rest, user_acc ++ acc, stack, context, line, offset)
 
             {:error, reason} ->
@@ -376,31 +389,54 @@ defmodule NimbleParsec.Compiler do
   end
 
   defp apply_traverse(mfargs, rest, acc, context, line, offset) do
-    apply_traverse(Enum.reverse(mfargs), rest, {acc, context}, line, offset)
+    apply_traverse(Enum.reverse(mfargs), {:{}, [], [rest, acc, context]}, line, offset)
   end
 
-  defp apply_traverse([mfargs | tail], rest, {acc, context}, line, offset) when acc != :error do
-    acc_context = apply_mfa(mfargs, [rest, acc, context, line, offset])
-    apply_traverse(tail, rest, acc_context, line, offset)
+  defp apply_traverse([mfargs | tail], {:{}, _, [rest, acc, context]}, line, offset) do
+    rest_acc_context = apply_traverse_mfa(mfargs, [rest, acc, context, line, offset], rest)
+    apply_traverse(tail, rest_acc_context, line, offset)
   end
 
-  defp apply_traverse([], _rest, acc_context, _line, _offset) do
-    acc_context
+  defp apply_traverse([], rest_acc_context, _line, _offset) do
+    rest_acc_context
   end
 
-  defp apply_traverse(tail, rest, acc_context, line, offset) do
-    pattern = quote(do: {acc, context} when is_list(acc))
-    args = [rest, quote(do: acc), quote(do: context), line, offset]
+  defp apply_traverse(tail, rest_acc_context, line, offset) do
+    pattern = quote(do: {rest, acc, context})
+    args = [quote(do: rest), quote(do: acc), quote(do: context), line, offset]
 
     entries =
       Enum.map(tail, fn mfargs ->
-        quote(do: unquote(pattern) <- unquote(apply_mfa(mfargs, args)))
+        quote(do: unquote(pattern) <- unquote(apply_traverse_mfa(mfargs, args, quote(do: rest))))
       end)
 
     quote do
-      with unquote(pattern) <- unquote(acc_context), unquote_splicing(entries) do
-        {acc, context}
+      with unquote(pattern) <- unquote(rest_acc_context), unquote_splicing(entries) do
+        {rest, acc, context}
       end
+    end
+  end
+
+  # TODO: Deprecate two element tuple return that is not error
+  defp apply_traverse_mfa(mfargs, args, rest) do
+    case apply_mfa(mfargs, args) do
+      {:{}, _, [_, _, _]} = res ->
+        res
+
+      {acc, context} when acc != :error ->
+        {:{}, [], [rest, acc, context]}
+
+      {:error, context} ->
+        {:error, context}
+
+      quoted ->
+        quote generated: true do
+          case unquote(quoted) do
+            {_, _, _} = res -> res
+            {:error, reason} -> {:error, reason}
+            {acc, context} -> {unquote(rest), acc, context}
+          end
+        end
     end
   end
 
@@ -841,7 +877,7 @@ defmodule NimbleParsec.Compiler do
         {traverse_line, traverse_offset} = pre_post_traverse(kind, pre_metadata, post_metadata)
 
         case apply_traverse(mfargs, rest, outputs, context, traverse_line, traverse_offset) do
-          {outputs, ^context} when outputs != :error ->
+          {:{}, _, [^rest, outputs, ^context]} when outputs != :error ->
             {:ok, inputs, guards, outputs, post_metadata}
 
           _ ->

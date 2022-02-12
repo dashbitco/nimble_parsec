@@ -454,6 +454,12 @@ defmodule NimbleParsecTest do
     defparsecp :remote_post_traverse_error_when_last_is_z,
                post_traverse(@three_ascii_letters, {__MODULE__, :error_when_last_is_z, []})
 
+    defparsecp :remote_post_traverse_lookahead,
+               @three_ascii_letters
+               |> wrap()
+               |> post_traverse(string("#"), {__MODULE__, :from_code_to_code, []})
+               |> integer(2)
+
     test "returns ok/error" do
       assert remote_post_traverse("T12abc34") ==
                {:ok, ["T", 12, "99-98-97", 34], "", %{}, {1, 0}, 8}
@@ -480,6 +486,17 @@ defmodule NimbleParsecTest do
 
       assert remote_post_traverse_error_when_last_is_z("abcdez") ==
                {:error, "last is z", "", %{}, {1, 0}, 6}
+    end
+
+    test "post traverrse with rest lookahead" do
+      assert remote_post_traverse_lookahead("abcdef#XcanbeanythingX12") ==
+               {:ok, ['abcdef', {"X", "canbeanything"}, 12], "", %{}, {1, 0}, 9}
+
+      assert remote_post_traverse_lookahead("abcdef#ZcanbeanythingZ12") ==
+               {:ok, ['abcdef', {"Z", "canbeanything"}, 12], "", %{}, {1, 0}, 9}
+
+      assert remote_post_traverse_lookahead("abcdef#Zcanbeanything") ==
+               {:error, "missing closing Z", "Zcanbeanything", %{}, {1, 0}, 7}
     end
 
     test "is not bound" do
@@ -1424,7 +1441,7 @@ defmodule NimbleParsecTest do
              is_integer(byte_offset) do
     case acc do
       [?z | _] -> {:error, "last is z"}
-      acc -> {acc, context}
+      acc -> {rest, acc, context}
     end
   end
 
@@ -1432,14 +1449,25 @@ defmodule NimbleParsecTest do
       when is_integer(line) and is_integer(line_offset) and is_integer(byte_offset) do
     case rest do
       <<?0, _::binary>> -> {:error, "next is 0"}
-      _ -> {[], context}
+      _ -> {rest, [], context}
+    end
+  end
+
+  def from_code_to_code(rest, _tokens, %{} = context, {line, line_offset}, byte_offset)
+      when is_binary(rest) and is_integer(line) and is_integer(line_offset) and
+             is_integer(byte_offset) do
+    <<code, rest::binary>> = rest
+
+    case :binary.split(rest, <<code>>) do
+      [prefix, rest] -> {rest, [{<<code>>, prefix}], context}
+      [_] -> {:error, "missing closing #{<<code>>}"}
     end
   end
 
   def public_join_and_wrap(rest, args, %{} = context, {line, line_offset}, byte_offset, joiner)
       when is_binary(rest) and is_integer(line) and is_integer(line_offset) and
              is_integer(byte_offset) do
-    {args |> Enum.join(joiner) |> List.wrap(), context}
+    {rest, args |> Enum.join(joiner) |> List.wrap(), context}
   end
 
   defp private_join_and_wrap(rest, args, %{} = context, {line, line_offset}, byte_offset, joiner)

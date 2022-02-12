@@ -987,9 +987,9 @@ defmodule NimbleParsec do
   The line and offset will represent the location after the combinators.
   To retrieve the position before the combinators, use `pre_traverse/3`.
 
-  The `call` must return a tuple `{acc, context}` with list of results
-  to be added to the accumulator as first argument and a context as
-  second argument. It may also return `{:error, reason}` to stop
+  The `call` must return a tuple `{rest, acc, context}` with list of
+  results to be added to the accumulator as first argument and a context
+  as second argument. It may also return `{:error, reason}` to stop
   processing. Notice the received results are in reverse order and
   must be returned in reverse order too.
 
@@ -1001,7 +1001,7 @@ defmodule NimbleParsec do
   `map/3` if you want to map over each individual element and
   not worry about ordering, `reduce/3` to reduce all elements
   into a single one, `replace/3` if you want to replace the
-  parsed result by a single value and `ignore/3` if you want to
+  parsed result by a single value and `ignore/2` if you want to
   ignore the parsed result.
 
   ## Examples
@@ -1015,8 +1015,8 @@ defmodule NimbleParsec do
                   |> ascii_char([?a..?z])
                   |> post_traverse({:join_and_wrap, ["-"]})
 
-        defp join_and_wrap(_rest, args, context, _line, _offset, joiner) do
-          {args |> Enum.join(joiner) |> List.wrap(), context}
+        defp join_and_wrap(rest, args, context, _line, _offset, joiner) do
+          {rest, args |> Enum.join(joiner) |> List.wrap(), context}
         end
       end
 
@@ -1148,8 +1148,13 @@ defmodule NimbleParsec do
   end
 
   @doc """
-  Invokes `call` to emit the AST that post_traverses the `to_post_traverse`
+  Invokes `call` to emit the AST that post traverses the `to_post_traverse`
   combinator results.
+
+  This is similar to `post_traverse/3`. In `post_traverse/3`, `call` is
+  invoked to process the combinator results. In here, it is invoked to
+  emit AST that in its turn will process the combinator results.
+  The invoked function must return the same types as `post_traverse/3`.
 
   `call` is a `{module, function, args}` and it will receive 5
   additional arguments. The AST representation of the rest of the
@@ -1159,13 +1164,6 @@ defmodule NimbleParsec do
 
   The line and offset will represent the location after the combinators.
   To retrieve the position before the combinators, use `quoted_pre_traverse/3`.
-
-  The `call` must return a list of results to be added to
-  the accumulator. Notice the received results are in reverse
-  order and must be returned in reverse order too.
-
-  The number of elements returned does not need to be
-  the same as the number of elements given.
 
   This function must be used only when you want to emit code that
   has no runtime dependencies in other modules. In most cases,
@@ -1864,24 +1862,24 @@ defmodule NimbleParsec do
   end
 
   @doc false
-  def __wrap__(_rest, acc, context, _line, _offset) do
-    {[reverse_now_or_later(acc)], context}
+  def __wrap__(rest, acc, context, _line, _offset) do
+    {:{}, [], [rest, [reverse_now_or_later(acc)], context]}
   end
 
   @doc false
-  def __tag__(_rest, acc, context, _line, _offset, tag) do
-    {[{tag, reverse_now_or_later(acc)}], context}
+  def __tag__(rest, acc, context, _line, _offset, tag) do
+    {:{}, [], [rest, [{tag, reverse_now_or_later(acc)}], context]}
   end
 
   @doc false
-  def __unwrap_and_tag__(_rest, acc, context, _line, _offset, tag) when is_list(acc) do
+  def __unwrap_and_tag__(rest, acc, context, _line, _offset, tag) when is_list(acc) do
     case acc do
-      [one] -> {[{tag, one}], context}
+      [one] -> {:{}, [], [rest, [{tag, one}], context]}
       many -> raise "unwrap_and_tag/3 expected a single token, got: #{inspect(many)}"
     end
   end
 
-  def __unwrap_and_tag__(_rest, acc, context, _line, _offset, tag) do
+  def __unwrap_and_tag__(rest, acc, context, _line, _offset, tag) do
     quoted =
       quote do
         case :lists.reverse(unquote(acc)) do
@@ -1890,7 +1888,7 @@ defmodule NimbleParsec do
         end
       end
 
-    {[{tag, quoted}], context}
+    {:{}, [], [rest, [{tag, quoted}], context]}
   end
 
   @doc false
@@ -1905,38 +1903,38 @@ defmodule NimbleParsec do
       Off: #{inspect(offset)}
       """)
 
-      {acc, context}
+      {rest, acc, context}
     end
   end
 
   @doc false
-  def __constant__(_rest, _acc, context, _line, _offset, constant) do
-    {constant, context}
+  def __constant__(rest, _acc, context, _line, _offset, constant) do
+    {:{}, [], [rest, constant, context]}
   end
 
   @doc false
-  def __line__(_rest, acc, context, line, _offset) do
-    {[{reverse_now_or_later(acc), line}], context}
+  def __line__(rest, acc, context, line, _offset) do
+    {:{}, [], [rest, [{reverse_now_or_later(acc), line}], context]}
   end
 
   @doc false
-  def __byte_offset__(_rest, acc, context, _line, offset) do
-    {[{reverse_now_or_later(acc), offset}], context}
+  def __byte_offset__(rest, acc, context, _line, offset) do
+    {:{}, [], [rest, [{reverse_now_or_later(acc), offset}], context]}
   end
 
   @doc false
-  def __map__(_rest, acc, context, _line, _offset, var, call) do
+  def __map__(rest, acc, context, _line, _offset, var, call) do
     ast =
       quote do
         Enum.map(unquote(acc), fn unquote(var) -> unquote(call) end)
       end
 
-    {ast, context}
+    {:{}, [], [rest, ast, context]}
   end
 
   @doc false
-  def __reduce__(_rest, acc, context, _line, _offset, call) do
-    {[compile_call!([reverse_now_or_later(acc)], call, "reduce")], context}
+  def __reduce__(rest, acc, context, _line, _offset, call) do
+    {:{}, [], [rest, [compile_call!([reverse_now_or_later(acc)], call, "reduce")], context]}
   end
 
   ## Repeat callbacks
