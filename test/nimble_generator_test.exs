@@ -110,13 +110,38 @@ defmodule NimbleGeneratorTest do
   defparsec :string_foo, string("foo"), export_metadata: true
   defparsec :string_choice, choice([parsec(:string_foo), string("bar")]), export_metadata: true
 
-  test "parsec" do
-    assert_raise RuntimeError, ~r"use a remote parsec instead", fn ->
-      parsec(:foo) |> generate()
+  describe "error conditions" do
+    test "parsec" do
+      assert_raise RuntimeError, ~r"use a remote parsec instead", fn ->
+        parsec(:foo) |> generate()
+      end
+
+      assert eventually?(fn -> generate(parsec({__MODULE__, :string_choice})) == "foo" end)
+      assert eventually?(fn -> generate(parsec({__MODULE__, :string_choice})) == "bar" end)
     end
 
-    assert eventually?(fn -> generate(parsec({__MODULE__, :string_choice})) == "foo" end)
-    assert eventually?(fn -> generate(parsec({__MODULE__, :string_choice})) == "bar" end)
+    test "eos too early" do
+      assert_raise ArgumentError, ~r"found :eos not at the end of parsecs", fn ->
+        eos() |> string("foo") |> generate()
+      end
+    end
+
+    test "unavailable module" do
+      assert_raise RuntimeError,
+                   "cannot handle parsec({NoSuchModuleSurely, :parse}) because NoSuchModuleSurely is not available",
+                   fn ->
+                     parsec({NoSuchModuleSurely, :parse}) |> generate()
+                   end
+    end
+
+    @error "cannot handle parsec({NimbleGeneratorTest, :no_metadata}) because NimbleGeneratorTest did not set :export_metadata when defining no_metadata"
+    test "module did not set :export_metadata" do
+      assert_raise RuntimeError, @error, fn ->
+        parsec({__MODULE__, :no_metadata}) |> generate()
+      end
+    end
+
+    def no_metadata, do: nil
   end
 
   defp eventually?(fun) do
