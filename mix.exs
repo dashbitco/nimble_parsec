@@ -10,15 +10,7 @@ defmodule NimbleParsec.MixProject do
       version: @version,
       elixir: "~> 1.6",
       name: "NimbleParsec",
-      deps: deps(),
       description: "A simple and fast library for text-based parser combinators",
-      preferred_cli_env: [
-        coveralls: :test,
-        "coveralls.detail": :test,
-        "coveralls.post": :test,
-        "coveralls.html": :test
-      ],
-      test_coverage: [tool: ExCoveralls],
       aliases: [docs: &build_docs/1],
       package: package()
     ]
@@ -26,12 +18,6 @@ defmodule NimbleParsec.MixProject do
 
   def application do
     []
-  end
-
-  defp deps do
-    [
-      {:excoveralls, "~> 0.14.4", only: [:test]}
-    ]
   end
 
   defp package do
