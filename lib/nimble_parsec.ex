@@ -86,9 +86,8 @@ defmodule NimbleParsec do
   ## Options
 
     * `:inline` - when true, inlines clauses that work as redirection for
-      other clauses. It is disabled by default because of a bug in Elixir
-      v1.5 and v1.6 where unused functions that are inlined cause a
-      compilation error
+      other clauses. Settings this may improve runtime performance at the
+      cost of increased compilation time and bytecode size
 
     * `:debug` - when true, writes generated clauses to `:stderr` for debugging
 
@@ -266,7 +265,6 @@ defmodule NimbleParsec do
 
   ## Notes
 
-  This feature is currently experimental and may change in many ways.
   Overall, there is no guarantee over the generated output, except
   that it will generate a binary that is parseable by the parsec
   itself, but even this guarantee may be broken by parsers that have
