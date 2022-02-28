@@ -99,9 +99,10 @@ defmodule NimbleParsec do
 
   """
   defmacro defparsec(name, combinator, opts \\ []) do
-    visibility = quote do
-      if opts[:export_combinator], do: :def, else: :defp
-    end
+    visibility =
+      quote do
+        if opts[:export_combinator], do: :def, else: :defp
+      end
 
     compile(:def, visibility, name, combinator, opts)
   end
@@ -148,7 +149,7 @@ defmodule NimbleParsec do
       quote bind_quoted: [
               parser_kind: parser_kind,
               name: name,
-              combinator: combinator,
+              combinator: combinator
             ] do
         {defs, inline} = NimbleParsec.Compiler.compile(name, combinator, opts)
 

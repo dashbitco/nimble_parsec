@@ -1371,11 +1371,11 @@ defmodule NimbleParsecTest do
   describe "parsec/1 with remote combinator" do
     defmodule Remote do
       defparsec :parsec_export,
-                    choice([
-                      map(ascii_char([?a..?z]), {:to_string, []}),
-                      map(ascii_char([?A..?Z]), {:to_string, []})
-                    ]),
-                    export_combinator: true
+                choice([
+                  map(ascii_char([?a..?z]), {:to_string, []}),
+                  map(ascii_char([?A..?Z]), {:to_string, []})
+                ]),
+                export_combinator: true
 
       defcombinator :parsec_remote,
                     choice([
