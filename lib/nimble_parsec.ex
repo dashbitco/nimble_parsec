@@ -92,9 +92,19 @@ defmodule NimbleParsec do
 
     * `:debug` - when true, writes generated clauses to `:stderr` for debugging
 
+    * `:export_combinator` - make the underlying combinator function public
+      so it can be used as part of `parsec/1` from other modules
+
+    * `:export_metadata` - export metadata necessary to use this parser
+      combinator to generate inputs
+
   """
   defmacro defparsec(name, combinator, opts \\ []) do
-    compile(:def, :defp, name, combinator, opts)
+    visibility = quote do
+      if opts[:export_combinator], do: :def, else: :defp
+    end
+
+    compile(:def, visibility, name, combinator, opts)
   end
 
   @doc """
@@ -129,13 +139,17 @@ defmodule NimbleParsec do
   end
 
   defp compile(parser_kind, combinator_kind, name, combinator, opts) do
+    prelude =
+      quote do
+        opts = unquote(opts)
+        combinator_kind = unquote(combinator_kind)
+      end
+
     combinator =
       quote bind_quoted: [
               parser_kind: parser_kind,
-              combinator_kind: combinator_kind,
               name: name,
               combinator: combinator,
-              opts: opts
             ] do
         {defs, inline} = NimbleParsec.Compiler.compile(name, combinator, opts)
 
@@ -172,6 +186,7 @@ defmodule NimbleParsec do
     parser = compile_parser(name, parser_kind)
 
     quote do
+      unquote(prelude)
       unquote(parser)
       unquote(combinator)
     end
