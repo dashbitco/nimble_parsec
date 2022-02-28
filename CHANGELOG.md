@@ -1,6 +1,12 @@
 # Changelog for NimbleParsec
 
-## v1.2.2 (2022-01-26)
+## v1.2.3 (2022-02-28)
+
+### Enhancements
+
+  * Allow `:export_combinator` in `defparsec`
+
+## v1.2.2 (2022-02-12)
 
 ### Enhancements
 
