@@ -1176,8 +1176,8 @@ defmodule NimbleParsecTest do
   end
 
   describe "duplicate/3 combinator" do
-    defparsec :duplicate_twice, ascii_char([?0..?9]) |> duplicate(ascii_char([?a..?z]), 2)
-    defparsec :duplicate_zero, ascii_char([?0..?9]) |> duplicate(ascii_char([?a..?z]), 0)
+    defparsecp :duplicate_twice, ascii_char([?0..?9]) |> duplicate(ascii_char([?a..?z]), 2)
+    defparsecp :duplicate_zero, ascii_char([?0..?9]) |> duplicate(ascii_char([?a..?z]), 0)
 
     test "returns ok/error when bound" do
       assert duplicate_twice("0ab") == {:ok, [?0, ?a, ?b], "", %{}, {1, 0}, 3}
@@ -1370,6 +1370,13 @@ defmodule NimbleParsecTest do
 
   describe "parsec/1 with remote combinator" do
     defmodule Remote do
+      defparsec :parsec_export,
+                    choice([
+                      map(ascii_char([?a..?z]), {:to_string, []}),
+                      map(ascii_char([?A..?Z]), {:to_string, []})
+                    ]),
+                    export_combinator: true
+
       defcombinator :parsec_remote,
                     choice([
                       map(ascii_char([?a..?z]), {:to_string, []}),
@@ -1378,12 +1385,18 @@ defmodule NimbleParsecTest do
     end
 
     defparsecp :parsec_remote_repeat, repeat(parsec({Remote, :parsec_remote}))
+    defparsecp :parsec_export_repeat, repeat(parsec({Remote, :parsec_export}))
 
     test "returns ok/error with repeat" do
       assert parsec_remote_repeat("az") == {:ok, ["97", "122"], "", %{}, {1, 0}, 2}
       assert parsec_remote_repeat("AZ") == {:ok, ["65", "90"], "", %{}, {1, 0}, 2}
       assert parsec_remote_repeat("aAzZ") == {:ok, ["97", "65", "122", "90"], "", %{}, {1, 0}, 4}
       assert parsec_remote_repeat("1aAzZ") == {:ok, [], "1aAzZ", %{}, {1, 0}, 0}
+
+      assert parsec_export_repeat("az") == {:ok, ["97", "122"], "", %{}, {1, 0}, 2}
+      assert parsec_export_repeat("AZ") == {:ok, ["65", "90"], "", %{}, {1, 0}, 2}
+      assert parsec_export_repeat("aAzZ") == {:ok, ["97", "65", "122", "90"], "", %{}, {1, 0}, 4}
+      assert parsec_export_repeat("1aAzZ") == {:ok, [], "1aAzZ", %{}, {1, 0}, 0}
     end
   end
 
