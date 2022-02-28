@@ -94,9 +94,8 @@ defmodule NimbleParsec.Recorder do
   Replays recorded parsers on the given content.
   """
   def replay(contents, id) when is_binary(contents) do
-    contents
-    |> inject_recorded(id, Agent.get(@name, & &1))
-    |> maybe_format_code()
+    code = inject_recorded(contents, id, Agent.get(@name, & &1))
+    [Code.format_string!(code) | "\n"]
   end
 
   defp inject_recorded(contents, id, recorded) do
@@ -122,13 +121,5 @@ defmodule NimbleParsec.Recorder do
       format_parser_kind(parser_kind, name)
       | format_defs(combinator_kind, combinators, inline, inline?)
     ]
-  end
-
-  defp maybe_format_code(code) do
-    if Code.ensure_loaded?(Code) and function_exported?(Code, :format_string!, 1) do
-      [Code.format_string!(code) | "\n"]
-    else
-      code
-    end
   end
 end
