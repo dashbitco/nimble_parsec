@@ -6,6 +6,12 @@
 
   * Deprecate returning a `{acc, context}` from `quoted_post_traverse` and `quoted_pre_traverse`. Return `{rest, acc, context}` instead.
 
+## v1.2.3 (2022-02-28)
+
+### Enhancements
+
+  * Allow `:export_combinator` in `defparsec`
+
 ## v1.2.2 (2022-02-12)
 
 ### Enhancements
