@@ -4,7 +4,7 @@ defmodule Mix.Tasks.NimbleParsec.Compile do
   @moduledoc ~S"""
   Compiles a parser from a template.
 
-      mix nimble_parsec.compile template.ex.exs
+      $ mix nimble_parsec.compile template.ex.exs
 
   This task is useful to generate parsers that have no runtime dependency
   on NimbleParsec.
@@ -42,7 +42,7 @@ defmodule Mix.Tasks.NimbleParsec.Compile do
 
   After running:
 
-      mix nimble_parsec.compile lib/my_parser.ex.exs
+      $ mix nimble_parsec.compile lib/my_parser.ex.exs
 
   The following file will be generated:
 
