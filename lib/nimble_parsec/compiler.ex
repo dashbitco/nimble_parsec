@@ -188,7 +188,9 @@ defmodule NimbleParsec.Compiler do
       {next, step} = build_next(step, config)
       args = quote(do: [rest, acc, stack, context, line, offset])
       success_body = {next, [], args}
-      {_, [_bin | negative_head], _, failure_body} = build_catch_all(kind, current, combinators, config)
+
+      {_, [_bin | negative_head], _, failure_body} =
+        build_catch_all(kind, current, combinators, config)
 
       {success_body, failure_body, head} =
         if kind == :positive do
