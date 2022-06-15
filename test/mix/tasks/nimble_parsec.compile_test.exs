@@ -14,6 +14,15 @@ defmodule Mix.Tasks.NimbleParsec.CompileTest do
         # parsec:Mix.Tasks.NimbleParsec.CompileTest.Parser
 
         import NimbleParsec
+
+        nested =
+          [string("am"), string("pm")]
+          |> choice()
+          |> lookahead_not(ascii_char([?s, ?p]))
+          |> unwrap_and_tag(:nested)
+
+        defparsec :lookahead_not_warning, string("foo") |> concat(optional(nested))
+
         defparsec :parse, integer(2)
         defparsecp :parsep, integer(2)
         defcombinator :combinator, integer(2)
@@ -34,6 +43,7 @@ defmodule Mix.Tasks.NimbleParsec.CompileTest do
         assert contents =~ "def parse(binary, opts \\\\ [])"
         assert contents =~ "defp parse__0("
         assert contents =~ "defp parsep(binary, opts \\\\ [])"
+        assert contents =~ "def lookahead_not_warning(binary, opts \\\\ [])"
         assert contents =~ "defp parsep__0("
         refute contents =~ "def combinator(binary, opts \\\\ [])"
         assert contents =~ "def combinator__0("
@@ -87,7 +97,7 @@ defmodule Mix.Tasks.NimbleParsec.CompileTest do
 
     test "assure max is old enough" do
       """
-          defparsec :max_zero, integer(max: 0) 
+          defparsec :max_zero, integer(max: 0)
       """
       |> assert_compilation_error(
         4,

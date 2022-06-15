@@ -188,16 +188,20 @@ defmodule NimbleParsec.Compiler do
       {next, step} = build_next(step, config)
       args = quote(do: [rest, acc, stack, context, line, offset])
       success_body = {next, [], args}
-      {_, _, _, failure_body} = build_catch_all(kind, current, combinators, config)
+      {_, [_bin | negative_head], _, failure_body} = build_catch_all(kind, current, combinators, config)
 
-      {success_body, failure_body} =
-        if kind == :positive, do: {success_body, failure_body}, else: {failure_body, success_body}
+      {success_body, failure_body, head} =
+        if kind == :positive do
+          {success_body, failure_body, quote(do: [acc, stack, context, line, offset])}
+        else
+          {failure_body, success_body, negative_head}
+        end
 
       defs =
         for choice <- choices do
           {[], inputs, guards, _, _, metadata} = take_bound_combinators(choice)
           {bin, _} = compile_bound_bin_pattern(inputs, metadata, quote(do: _))
-          head = quote(do: [unquote(bin) = rest, acc, stack, context, line, offset])
+          head = quote(do: [unquote(bin) = rest]) ++ quote(do: unquote(head))
           guards = guards_list_to_quoted(guards)
           {current, head, guards, success_body}
         end
