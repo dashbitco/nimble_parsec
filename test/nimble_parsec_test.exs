@@ -1087,6 +1087,12 @@ defmodule NimbleParsecTest do
                  {:not_3, []}
                )
 
+    defparsecp :repeat_while_repeat_digit,
+               repeat_while(
+                 concat(ascii_char([?a..?z]), repeat(ascii_char([?0..?9]))),
+                 {:n_times, []}
+               )
+
     test "returns ok/error" do
       assert repeat_while_digits("1245") == {:ok, [?1, ?2, ?4, ?5], "", %{}, {1, 0}, 4}
       assert repeat_while_digits("12345") == {:ok, [?1, ?2], "345", %{}, {1, 0}, 2}
@@ -1119,6 +1125,11 @@ defmodule NimbleParsecTest do
       assert repeat_while_double_digits_to_string("a123") == {:ok, [], "a123", %{}, {1, 0}, 0}
     end
 
+    test "returns ok/error with repeat" do
+      assert repeat_while_repeat_digit("a1b2c3d4e5f6g7h8", context: %{count: 3}) ==
+               {:ok, 'a1b2', "c3d4e5f6g7h8", %{count: 0}, {1, 0}, 4}
+    end
+
     def not_3(<<?3, _::binary>>, %{} = context, {line, line_offset}, byte_offset)
         when is_integer(line) and is_integer(line_offset) and is_integer(byte_offset) do
       {:halt, context}
@@ -1127,6 +1138,14 @@ defmodule NimbleParsecTest do
     def not_3(<<_::binary>>, %{} = context, {line, line_offset}, byte_offset)
         when is_integer(line) and is_integer(line_offset) and is_integer(byte_offset) do
       {:cont, context}
+    end
+
+    def n_times(_, context, _, _) do
+      if context.count > 0 do
+        {:cont, %{context | count: context.count - 1}}
+      else
+        {:halt, context}
+      end
     end
   end
 
