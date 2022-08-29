@@ -821,7 +821,7 @@ defmodule NimbleParsecTest do
       assert lookahead_not_with_times("aaa0") == {:ok, 'aa', "a0", %{}, {1, 0}, 2}
     end
 
-    test "repeaet_until" do
+    test "repeat_until" do
       assert lookahead_not_repeat_until("1245") == {:ok, [?1, ?2, ?4, ?5], "", %{}, {1, 0}, 4}
       assert lookahead_not_repeat_until("12345") == {:ok, [?1, ?2], "345", %{}, {1, 0}, 2}
       assert lookahead_not_repeat_until("135") == {:ok, [?1, ?3], "5", %{}, {1, 0}, 2}

@@ -1,6 +1,7 @@
 defmodule Mix.Tasks.NimbleParsec.CompileTest do
   use ExUnit.Case
 
+  import ExUnit.CaptureIO
   import Support.FileHelpers
 
   test "run" do
@@ -10,6 +11,8 @@ defmodule Mix.Tasks.NimbleParsec.CompileTest do
       File.write!("lib/my_parser.ex.exs", """
       defmodule Mix.Tasks.NimbleParsec.CompileTest.Parser do
         _pre = :ok
+
+        def run, do: parsep("42")
 
         # parsec:Mix.Tasks.NimbleParsec.CompileTest.Parser
 
@@ -23,9 +26,9 @@ defmodule Mix.Tasks.NimbleParsec.CompileTest do
 
         defparsec :lookahead_not_warning, string("foo") |> concat(optional(nested))
 
-        defparsec :parse, integer(2)
-        defparsecp :parsep, integer(2)
-        defcombinator :combinator, integer(2)
+        defparsec :parse, parsec(:parsep)
+        defparsecp :parsep, parsec(:combinator)
+        defcombinator :combinator, parsec(:combinatorp)
         defcombinatorp :combinatorp, integer(2)
 
         # parsec:Mix.Tasks.NimbleParsec.CompileTest.Parser
@@ -50,10 +53,16 @@ defmodule Mix.Tasks.NimbleParsec.CompileTest do
         refute contents =~ "defp combinatorp(binary, opts \\\\ [])"
         assert contents =~ "defp combinatorp__0("
         assert contents =~ "  _pos = :ok\nend"
-      end)
 
-      # Ensure the output is also compilable.
-      Mix.Task.run("compile")
+        # Compiles without warnings
+        assert capture_io(:stderr, fn ->
+                 pre = Code.get_compiler_option(:warnings_as_errors)
+                 Code.put_compiler_option(:warnings_as_errors, true)
+                 :code.delete(Mix.Tasks.NimbleParsec.CompileTest.Parser)
+                 Code.compile_string(contents)
+                 Code.put_compiler_option(:warnings_as_errors, pre)
+               end) == ""
+      end)
     end)
   end
 
