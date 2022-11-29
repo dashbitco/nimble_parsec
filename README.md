@@ -7,12 +7,12 @@
 `NimbleParsec` is a simple and fast library for text-based parser
 combinators.
 
-Combinators are built during runtime and compiled into multiple
+Combinators are composed programatically and compiled into multiple
 clauses with binary matching. This provides the following benefits:
 
   * Performance: since it compiles to binary matching, it leverages
-    many Erlang VM optimizations to generate extremely fast parser
-    code with low memory usage
+    many Erlang VM optimizations to generate a fast parser code with
+    low memory usage
 
   * Composable: this library does not rely on macros for building and
     composing parsers, therefore they are fully composable. The only
