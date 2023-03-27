@@ -574,8 +574,8 @@ defmodule NimbleParsec.Compiler do
     {defs, inline, next, step, :catch_none}
   end
 
-  defp compile_time_repeat_while({:cont, quote(do: context)}), do: :cont
-  defp compile_time_repeat_while({:halt, quote(do: context)}), do: :halt
+  defp compile_time_repeat_while({:cont, {:context, _, __MODULE__}}), do: :cont
+  defp compile_time_repeat_while({:halt, {:context, _, __MODULE__}}), do: :halt
   defp compile_time_repeat_while(_), do: :none
 
   defp repeat_while(quoted, true_name, true_args, false_name, false_args) do
