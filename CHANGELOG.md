@@ -1,10 +1,15 @@
 # Changelog for NimbleParsec
 
-## v1.3.0-dev
+## v1.3.0 (2023-03-27)
 
 ### Deprecations
 
   * Deprecate returning a `{acc, context}` from `quoted_post_traverse` and `quoted_pre_traverse`. Return `{rest, acc, context}` instead.
+
+### Bug fixes
+
+  * Avoid compile warnings with negative lookahead
+  * Fix clause warning for integer combinator
 
 ## v1.2.3 (2022-02-28)
 
