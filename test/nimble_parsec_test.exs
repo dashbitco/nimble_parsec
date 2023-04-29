@@ -138,15 +138,19 @@ defmodule NimbleParsecTest do
 
     @error "expected ASCII character in the range '0' to '9', followed by ASCII character in the range '0' to '9'"
 
+    @error_min_length "expected ASCII character in the range '0' to '9'"
+
     test "returns ok/error with min" do
       assert min_integer("12") == {:ok, [12], "", %{}, {1, 0}, 2}
       assert min_integer("123") == {:ok, [123], "", %{}, {1, 0}, 3}
       assert min_integer("123o") == {:ok, [123], "o", %{}, {1, 0}, 3}
       assert min_integer("1234") == {:ok, [1234], "", %{}, {1, 0}, 4}
       assert min_integer("1") == {:error, @error, "1", %{}, {1, 0}, 0}
+      assert min_integer("") == {:error, @error, "", %{}, {1, 0}, 0}
     end
 
     test "returns ok/error with max" do
+      assert max_integer("") == {:error, @error_min_length, "", %{}, {1, 0}, 0}
       assert max_integer("1") == {:ok, [1], "", %{}, {1, 0}, 1}
       assert max_integer("12") == {:ok, [12], "", %{}, {1, 0}, 2}
       assert max_integer("123") == {:ok, [123], "", %{}, {1, 0}, 3}
@@ -1223,6 +1227,12 @@ defmodule NimbleParsecTest do
                  empty()
                ])
 
+    defparsec :choice_between_integer_or_test,
+              choice([
+                integer(max: 2),
+                string("test")
+              ])
+
     @error "expected ASCII character in the range 'a' to 'z' or ASCII character in the range 'A' to 'Z' or ASCII character in the range '0' to '9'"
 
     test "returns ok/error" do
@@ -1269,6 +1279,11 @@ defmodule NimbleParsecTest do
     test "returns ok/error on empty" do
       assert choice_with_empty("az") == {:ok, [?a], "z", %{}, {1, 0}, 1}
       assert choice_with_empty("AZ") == {:ok, [], "AZ", %{}, {1, 0}, 0}
+    end
+
+    test "returns ok/error with integer string choice" do
+      assert choice_between_integer_or_test("12") == {:ok, [12], "", %{}, {1, 0}, 2}
+      assert choice_between_integer_or_test("test") == {:ok, ["test"], "", %{}, {1, 0}, 4}
     end
   end
 
