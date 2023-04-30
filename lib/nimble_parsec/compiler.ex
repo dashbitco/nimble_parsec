@@ -1080,7 +1080,7 @@ defmodule NimbleParsec.Compiler do
   end
 
   defp printable?(codepoint), do: List.ascii_printable?([codepoint])
-  defp inspect_char(codepoint), do: inspect([codepoint], charlists: :as_charlists)
+  defp inspect_char(codepoint), do: inspect(<<codepoint::utf8>>)
 
   defp apply_bin_modifier(expr, :integer), do: expr
 

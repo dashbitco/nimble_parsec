@@ -13,7 +13,7 @@ defmodule NimbleParsecTest do
     defparsecp :ascii_only_newline, ascii_char([?\n])
     defparsecp :none_ascii, ascii_char([?\a..?\n])
 
-    @error "expected ASCII character in the range '0' to '9', followed by ASCII character"
+    @error "expected ASCII character in the range \"0\" to \"9\", followed by ASCII character"
 
     test "returns ok/error on composition" do
       assert only_ascii("1a") == {:ok, [?1, ?a], "", %{}, {1, 0}, 2}
@@ -21,7 +21,7 @@ defmodule NimbleParsecTest do
       assert only_ascii("a1") == {:error, @error, "a1", %{}, {1, 0}, 0}
     end
 
-    @error "expected ASCII character in the range '0' to '9' or in the range 'z' to 'a'"
+    @error "expected ASCII character in the range \"0\" to \"9\" or in the range \"z\" to \"a\""
 
     test "returns ok/error on multiple ranges" do
       assert multi_ascii("1a") == {:ok, [?1], "a", %{}, {1, 0}, 1}
@@ -29,7 +29,7 @@ defmodule NimbleParsecTest do
       assert multi_ascii("++") == {:error, @error, "++", %{}, {1, 0}, 0}
     end
 
-    @error "expected ASCII character in the range '0' to '9' or in the range 'z' to 'a', and not equal to 'c'"
+    @error "expected ASCII character in the range \"0\" to \"9\" or in the range \"z\" to \"a\", and not equal to \"c\""
 
     test "returns ok/error on multiple ranges with not" do
       assert multi_ascii_with_not("1a") == {:ok, [?1], "a", %{}, {1, 0}, 1}
@@ -38,7 +38,7 @@ defmodule NimbleParsecTest do
       assert multi_ascii_with_not("cc") == {:error, @error, "cc", %{}, {1, 0}, 0}
     end
 
-    @error "expected ASCII character in the range '0' to '9' or in the range 'z' to 'a', and not equal to 'c', and not in the range 'd' to 'e'"
+    @error "expected ASCII character in the range \"0\" to \"9\" or in the range \"z\" to \"a\", and not equal to \"c\", and not in the range \"d\" to \"e\""
 
     test "returns ok/error on multiple ranges with multiple not" do
       assert multi_ascii_with_multi_not("1a") == {:ok, [?1], "a", %{}, {1, 0}, 1}
@@ -48,7 +48,7 @@ defmodule NimbleParsecTest do
       assert multi_ascii_with_multi_not("de") == {:error, @error, "de", %{}, {1, 0}, 0}
     end
 
-    @error "expected ASCII character in the range '0' to '9' or equal to '\\n', followed by ASCII character in the range 'a' to 'z' or equal to '\\n'"
+    @error "expected ASCII character in the range \"0\" to \"9\" or equal to \"\\n\", followed by ASCII character in the range \"a\" to \"z\" or equal to \"\\n\""
 
     test "returns ok/error even with newlines" do
       assert ascii_newline("1a\n") == {:ok, [?1, ?a], "\n", %{}, {1, 0}, 2}
@@ -57,14 +57,14 @@ defmodule NimbleParsecTest do
       assert ascii_newline("x") == {:error, @error, "x", %{}, {1, 0}, 0}
     end
 
-    @error "expected ASCII character equal to '\\n'"
+    @error "expected ASCII character equal to \"\\n\""
 
     test "returns ok/error on only newline" do
       assert ascii_only_newline("\n") == {:ok, '\n', "", %{}, {2, 1}, 1}
       assert ascii_only_newline("x") == {:error, @error, "x", %{}, {1, 0}, 0}
     end
 
-    @error "expected ASCII character in the range '\\a' to '\\n'"
+    @error "expected ASCII character in the range \"\\a\" to \"\\n\""
 
     test "returns ok/error on none ascii range" do
       assert none_ascii("\a\t\n") == {:ok, '\a', "\t\n", %{}, {1, 0}, 1}
@@ -81,7 +81,7 @@ defmodule NimbleParsecTest do
     defparsecp :only_utf8, utf8_char([?0..?9]) |> utf8_char([])
     defparsecp :utf8_newline, utf8_char([]) |> utf8_char([?a..?z, ?\n])
 
-    @error "expected utf8 codepoint in the range '0' to '9', followed by utf8 codepoint"
+    @error "expected utf8 codepoint in the range \"0\" to \"9\", followed by utf8 codepoint"
 
     test "returns ok/error on composition" do
       assert only_utf8("1a") == {:ok, [?1, ?a], "", %{}, {1, 0}, 2}
@@ -108,7 +108,7 @@ defmodule NimbleParsecTest do
     defparsecp :exact_integer, integer(2)
     defparsecp :prefixed_integer, string("T") |> integer(2)
 
-    @error "expected ASCII character in the range '0' to '9', followed by ASCII character in the range '0' to '9'"
+    @error "expected ASCII character in the range \"0\" to \"9\", followed by ASCII character in the range \"0\" to \"9\""
 
     test "returns ok/error" do
       assert exact_integer("12") == {:ok, [12], "", %{}, {1, 0}, 2}
@@ -116,7 +116,7 @@ defmodule NimbleParsecTest do
       assert exact_integer("1a3") == {:error, @error, "1a3", %{}, {1, 0}, 0}
     end
 
-    @error "expected string \"T\", followed by ASCII character in the range '0' to '9', followed by ASCII character in the range '0' to '9'"
+    @error "expected string \"T\", followed by ASCII character in the range \"0\" to \"9\", followed by ASCII character in the range \"0\" to \"9\""
 
     test "returns ok/error with previous document" do
       assert prefixed_integer("T12") == {:ok, ["T", 12], "", %{}, {1, 0}, 3}
@@ -136,9 +136,9 @@ defmodule NimbleParsecTest do
     defparsecp :max_integer, integer(max: 3)
     defparsecp :min_max_integer, integer(min: 2, max: 3)
 
-    @error "expected ASCII character in the range '0' to '9', followed by ASCII character in the range '0' to '9'"
+    @error "expected ASCII character in the range \"0\" to \"9\", followed by ASCII character in the range \"0\" to \"9\""
 
-    @error_min_length "expected ASCII character in the range '0' to '9'"
+    @error_min_length "expected ASCII character in the range \"0\" to \"9\""
 
     test "returns ok/error with min" do
       assert min_integer("12") == {:ok, [12], "", %{}, {1, 0}, 2}
@@ -199,7 +199,7 @@ defmodule NimbleParsecTest do
   describe "ascii_string/2 combinator with exact length" do
     defparsecp :exact_ascii_string, ascii_string([?a..?z], 2)
 
-    @error "expected ASCII character in the range 'a' to 'z', followed by ASCII character in the range 'a' to 'z'"
+    @error "expected ASCII character in the range \"a\" to \"z\", followed by ASCII character in the range \"a\" to \"z\""
 
     test "returns ok/error" do
       assert exact_ascii_string("ab") == {:ok, ["ab"], "", %{}, {1, 0}, 2}
@@ -217,7 +217,7 @@ defmodule NimbleParsecTest do
     defparsecp :max_ascii_string, ascii_string([?0..?9], max: 3)
     defparsecp :min_max_ascii_string, ascii_string([?0..?9], min: 2, max: 3)
 
-    @error "expected ASCII character in the range '0' to '9', followed by ASCII character in the range '0' to '9'"
+    @error "expected ASCII character in the range \"0\" to \"9\", followed by ASCII character in the range \"0\" to \"9\""
 
     test "returns ok/error with min" do
       assert min_ascii_string("12") == {:ok, ["12"], "", %{}, {1, 0}, 2}
@@ -348,7 +348,7 @@ defmodule NimbleParsecTest do
 
     test "returns ok/error" do
       assert runtime_ignore("abc") == {:ok, [], "", %{}, {1, 0}, 3}
-      error = "expected ASCII character in the range 'a' to 'z'"
+      error = "expected ASCII character in the range \"a\" to \"z\""
       assert runtime_ignore("1bc") == {:error, error, "1bc", %{}, {1, 0}, 0}
     end
 
@@ -400,7 +400,7 @@ defmodule NimbleParsecTest do
 
     test "returns ok/error" do
       assert runtime_replace("abc") == {:ok, ["OTHER"], "", %{}, {1, 0}, 3}
-      error = "expected ASCII character in the range 'a' to 'z'"
+      error = "expected ASCII character in the range \"a\" to \"z\""
       assert runtime_replace("1bc") == {:error, error, "1bc", %{}, {1, 0}, 0}
     end
 
@@ -480,17 +480,17 @@ defmodule NimbleParsecTest do
                {:ok, ["T", 12, "99-98-97", 34], "", %{}, {1, 0}, 8}
 
       error =
-        "expected string \"T\", followed by ASCII character in the range '0' to '9', followed by ASCII character in the range '0' to '9'"
+        "expected string \"T\", followed by ASCII character in the range \"0\" to \"9\", followed by ASCII character in the range \"0\" to \"9\""
 
       assert remote_post_traverse("Tabc34") == {:error, error, "Tabc34", %{}, {1, 0}, 0}
 
       error =
-        "expected ASCII character in the range '0' to '9', followed by ASCII character in the range '0' to '9'"
+        "expected ASCII character in the range \"0\" to \"9\", followed by ASCII character in the range \"0\" to \"9\""
 
       assert remote_post_traverse("T12abcdf") == {:error, error, "", %{}, {1, 0}, 8}
 
       error =
-        "expected ASCII character in the range 'a' to 'z', followed by ASCII character in the range 'a' to 'z', followed by ASCII character in the range 'a' to 'z'"
+        "expected ASCII character in the range \"a\" to \"z\", followed by ASCII character in the range \"a\" to \"z\", followed by ASCII character in the range \"a\" to \"z\""
 
       assert remote_post_traverse("T12ab34") == {:error, error, "ab34", %{}, {1, 0}, 3}
     end
@@ -537,17 +537,17 @@ defmodule NimbleParsecTest do
                {:ok, ["T", 12, "99-98-97", 34], "", %{}, {1, 0}, 8}
 
       error =
-        "expected string \"T\", followed by ASCII character in the range '0' to '9', followed by ASCII character in the range '0' to '9'"
+        "expected string \"T\", followed by ASCII character in the range \"0\" to \"9\", followed by ASCII character in the range \"0\" to \"9\""
 
       assert local_post_traverse("Tabc34") == {:error, error, "Tabc34", %{}, {1, 0}, 0}
 
       error =
-        "expected ASCII character in the range '0' to '9', followed by ASCII character in the range '0' to '9'"
+        "expected ASCII character in the range \"0\" to \"9\", followed by ASCII character in the range \"0\" to \"9\""
 
       assert local_post_traverse("T12abcdf") == {:error, error, "", %{}, {1, 0}, 8}
 
       error =
-        "expected ASCII character in the range 'a' to 'z', followed by ASCII character in the range 'a' to 'z', followed by ASCII character in the range 'a' to 'z'"
+        "expected ASCII character in the range \"a\" to \"z\", followed by ASCII character in the range \"a\" to \"z\", followed by ASCII character in the range \"a\" to \"z\""
 
       assert local_post_traverse("T12ab34") == {:error, error, "ab34", %{}, {1, 0}, 3}
     end
@@ -582,17 +582,17 @@ defmodule NimbleParsecTest do
                {:ok, ["T", 12, "99-98-97", 34], "", %{}, {1, 0}, 8}
 
       error =
-        "expected string \"T\", followed by ASCII character in the range '0' to '9', followed by ASCII character in the range '0' to '9'"
+        "expected string \"T\", followed by ASCII character in the range \"0\" to \"9\", followed by ASCII character in the range \"0\" to \"9\""
 
       assert remote_pre_traverse("Tabc34") == {:error, error, "Tabc34", %{}, {1, 0}, 0}
 
       error =
-        "expected ASCII character in the range '0' to '9', followed by ASCII character in the range '0' to '9'"
+        "expected ASCII character in the range \"0\" to \"9\", followed by ASCII character in the range \"0\" to \"9\""
 
       assert remote_pre_traverse("T12abcdf") == {:error, error, "", %{}, {1, 0}, 8}
 
       error =
-        "expected ASCII character in the range 'a' to 'z', followed by ASCII character in the range 'a' to 'z', followed by ASCII character in the range 'a' to 'z'"
+        "expected ASCII character in the range \"a\" to \"z\", followed by ASCII character in the range \"a\" to \"z\", followed by ASCII character in the range \"a\" to \"z\""
 
       assert remote_pre_traverse("T12ab34") == {:error, error, "ab34", %{}, {1, 0}, 3}
     end
@@ -628,17 +628,17 @@ defmodule NimbleParsecTest do
                {:ok, ["T", 12, "99-98-97", 34], "", %{}, {1, 0}, 8}
 
       error =
-        "expected string \"T\", followed by ASCII character in the range '0' to '9', followed by ASCII character in the range '0' to '9'"
+        "expected string \"T\", followed by ASCII character in the range \"0\" to \"9\", followed by ASCII character in the range \"0\" to \"9\""
 
       assert local_pre_traverse("Tabc34") == {:error, error, "Tabc34", %{}, {1, 0}, 0}
 
       error =
-        "expected ASCII character in the range '0' to '9', followed by ASCII character in the range '0' to '9'"
+        "expected ASCII character in the range \"0\" to \"9\", followed by ASCII character in the range \"0\" to \"9\""
 
       assert local_pre_traverse("T12abcdf") == {:error, error, "", %{}, {1, 0}, 8}
 
       error =
-        "expected ASCII character in the range 'a' to 'z', followed by ASCII character in the range 'a' to 'z', followed by ASCII character in the range 'a' to 'z'"
+        "expected ASCII character in the range \"a\" to \"z\", followed by ASCII character in the range \"a\" to \"z\", followed by ASCII character in the range \"a\" to \"z\""
 
       assert local_pre_traverse("T12ab34") == {:error, error, "ab34", %{}, {1, 0}, 3}
     end
@@ -729,18 +729,18 @@ defmodule NimbleParsecTest do
 
       assert lookahead_with_inner_choice("az") ==
                {:error,
-                "expected ASCII character in the range 'a' to 'c' or ASCII character in the range 'd' to 'f'",
+                "expected ASCII character in the range \"a\" to \"c\" or ASCII character in the range \"d\" to \"f\"",
                 "z", %{}, {1, 0}, 1}
     end
 
     test "aborts times" do
       assert lookahead_with_times("a") ==
-               {:error, "expected ASCII character in the range '0' to '9'", "", %{}, {1, 0}, 1}
+               {:error, "expected ASCII character in the range \"0\" to \"9\"", "", %{}, {1, 0}, 1}
 
       assert lookahead_with_times("a0") == {:ok, 'a', "0", %{}, {1, 0}, 1}
 
       assert lookahead_with_times("aa0") ==
-               {:error, "expected ASCII character in the range '0' to '9'", "a0", %{}, {1, 0}, 1}
+               {:error, "expected ASCII character in the range \"0\" to \"9\"", "a0", %{}, {1, 0}, 1}
     end
   end
 
@@ -779,12 +779,12 @@ defmodule NimbleParsecTest do
     test "matches inner combinators in order" do
       assert lookahead_not_with_inner_compound_combinator("ab") ==
                {:error,
-                "did not expect utf8 codepoint equal to 'a', followed by utf8 codepoint equal to 'b'",
+                "did not expect utf8 codepoint equal to \"a\", followed by utf8 codepoint equal to \"b\"",
                 "ab", %{}, {1, 0}, 0}
 
       assert nested_lookahead_not_with_inner_compound_combinator("abc") ==
                {:error,
-                "did not expect utf8 codepoint equal to 'a', followed by utf8 codepoint equal to 'b', followed by utf8 codepoint equal to 'c'",
+                "did not expect utf8 codepoint equal to \"a\", followed by utf8 codepoint equal to \"b\", followed by utf8 codepoint equal to \"c\"",
                 "abc", %{}, {1, 0}, 0}
     end
 
@@ -807,18 +807,18 @@ defmodule NimbleParsecTest do
 
       assert lookahead_not_with_inner_choice("aa") ==
                {:error,
-                "did not expect ASCII character in the range 'a' to 'c' or ASCII character in the range 'd' to 'f'",
+                "did not expect ASCII character in the range \"a\" to \"c\" or ASCII character in the range \"d\" to \"f\"",
                 "a", %{}, {1, 0}, 1}
 
       assert lookahead_not_with_inner_choice("af") ==
                {:error,
-                "did not expect ASCII character in the range 'a' to 'c' or ASCII character in the range 'd' to 'f'",
+                "did not expect ASCII character in the range \"a\" to \"c\" or ASCII character in the range \"d\" to \"f\"",
                 "f", %{}, {1, 0}, 1}
     end
 
     test "aborts times" do
       assert lookahead_not_with_times("a0") ==
-               {:error, "did not expect ASCII character in the range '0' to '9'", "0", %{},
+               {:error, "did not expect ASCII character in the range \"0\" to \"9\"", "0", %{},
                 {1, 0}, 1}
 
       assert lookahead_not_with_times("aa0") == {:ok, 'a', "a0", %{}, {1, 0}, 1}
@@ -866,7 +866,7 @@ defmodule NimbleParsecTest do
                |> integer(1)
                |> wrap()
 
-    @error "expected ASCII character in the range '0' to '9', followed by ASCII character in the range '0' to '9'"
+    @error "expected ASCII character in the range \"0\" to \"9\", followed by ASCII character in the range \"0\" to \"9\""
 
     test "returns ok/error" do
       assert two_integers_wrapped("12") == {:ok, [[1, 2]], "", %{}, {1, 0}, 2}
@@ -881,7 +881,7 @@ defmodule NimbleParsecTest do
                |> integer(1)
                |> tag(:ints)
 
-    @error "expected ASCII character in the range '0' to '9', followed by ASCII character in the range '0' to '9'"
+    @error "expected ASCII character in the range \"0\" to \"9\", followed by ASCII character in the range \"0\" to \"9\""
 
     test "returns ok/error" do
       assert two_integers_tagged("12") == {:ok, [{:ints, [1, 2]}], "", %{}, {1, 0}, 2}
@@ -896,7 +896,7 @@ defmodule NimbleParsecTest do
                |> optional(integer(1))
                |> unwrap_and_tag(:ints)
 
-    @error "expected ASCII character in the range '0' to '9'"
+    @error "expected ASCII character in the range \"0\" to \"9\""
 
     test "returns ok/error" do
       assert maybe_two_integers_unwrapped_and_tagged("1") ==
@@ -916,7 +916,7 @@ defmodule NimbleParsecTest do
                |> integer(1)
                |> debug()
 
-    @error "expected ASCII character in the range '0' to '9', followed by ASCII character in the range '0' to '9'"
+    @error "expected ASCII character in the range \"0\" to \"9\", followed by ASCII character in the range \"0\" to \"9\""
 
     test "returns ok/error" do
       debug =
@@ -1185,7 +1185,7 @@ defmodule NimbleParsecTest do
       assert times_choice("o") == {:ok, [], "o", %{}, {1, 0}, 0}
     end
 
-    @error "expected ASCII character in the range '0' to '9', followed by ASCII character in the range '0' to '9' or ASCII character in the range 'a' to 'z', followed by ASCII character in the range 'a' to 'z'"
+    @error "expected ASCII character in the range \"0\" to \"9\", followed by ASCII character in the range \"0\" to \"9\" or ASCII character in the range \"a\" to \"z\", followed by ASCII character in the range \"a\" to \"z\""
 
     test "returns ok/error with outer choice" do
       assert choice_times("12") == {:ok, [?1, ?2], "", %{}, {1, 0}, 2}
@@ -1252,7 +1252,7 @@ defmodule NimbleParsecTest do
                 string("test")
               ])
 
-    @error "expected ASCII character in the range 'a' to 'z' or ASCII character in the range 'A' to 'Z' or ASCII character in the range '0' to '9'"
+    @error "expected ASCII character in the range \"a\" to \"z\" or ASCII character in the range \"A\" to \"Z\" or ASCII character in the range \"0\" to \"9\""
 
     test "returns ok/error" do
       assert simple_choice("a=") == {:ok, [?a], "=", %{}, {1, 0}, 1}
@@ -1364,7 +1364,7 @@ defmodule NimbleParsecTest do
       assert parsec_string("ZaO") == {:error, error, "ZaO", %{}, {1, 0}, 0}
 
       error =
-        "expected ASCII character in the range 'a' to 'z' or ASCII character in the range 'A' to 'Z'"
+        "expected ASCII character in the range \"a\" to \"z\" or ASCII character in the range \"A\" to \"Z\""
 
       assert parsec_string("T1O") == {:error, error, "1O", %{}, {1, 0}, 1}
 
@@ -1387,7 +1387,7 @@ defmodule NimbleParsecTest do
       assert parsec_repeat("1aAzZ") == {:ok, [], "1aAzZ", %{}, {1, 0}, 0}
     end
 
-    @error "expected ASCII character in the range 'a' to 'z' or ASCII character in the range 'A' to 'Z'"
+    @error "expected ASCII character in the range \"a\" to \"z\" or ASCII character in the range \"A\" to \"Z\""
 
     test "returns ok/error with map" do
       assert parsec_map("az") == {:ok, [?a], "z", %{}, {1, 0}, 1}
@@ -1449,11 +1449,11 @@ defmodule NimbleParsecTest do
 
     test "never succeeds on bad eos" do
       assert bad_eos("a") ==
-               {:error, "expected ASCII character in the range 'a' to 'z'", "", %{}, {1, 0}, 1}
+               {:error, "expected ASCII character in the range \"a\" to \"z\"", "", %{}, {1, 0}, 1}
 
       assert bad_eos("aa") ==
                {:error,
-                "expected ASCII character in the range 'a' to 'z', followed by end of string",
+                "expected ASCII character in the range \"a\" to \"z\", followed by end of string",
                 "aa", %{}, {1, 0}, 0}
     end
   end
