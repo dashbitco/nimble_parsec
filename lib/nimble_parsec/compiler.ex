@@ -589,8 +589,8 @@ defmodule NimbleParsec.Compiler do
       :none ->
         quote do
           case unquote(quoted) do
-            {:cont, context} -> unquote({true_name, [], true_args})
-            {:halt, context} -> unquote({false_name, [], false_args})
+            {:cont, unquote(Enum.at(true_args, 3))} -> unquote({true_name, [], true_args})
+            {:halt, unquote(Enum.at(false_args, 3))} -> unquote({false_name, [], false_args})
           end
         end
     end
