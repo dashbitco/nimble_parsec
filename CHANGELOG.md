@@ -1,5 +1,13 @@
 # Changelog for NimbleParsec
 
+## v1.3.1 (2023-04-30)
+
+### Bug fixes
+
+  * Make error messages consistent across Elixir versions
+  * Ensure `integer(max: ...)` also sets a minimum of 1
+  * Do not lose context on `repeat_while`
+
 ## v1.3.0 (2023-03-27)
 
 ### Deprecations
