@@ -1407,7 +1407,7 @@ defmodule NimbleParsec do
       defmodule MyParser do
         import NimbleParsec
 
-        defparsec :ignorable, string("T") |> ignore() |> integer(2, 2)
+        defparsec :ignorable, string("T") |> ignore() |> integer(2)
       end
 
       MyParser.ignorable("T12")
