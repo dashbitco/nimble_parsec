@@ -1604,6 +1604,7 @@ defmodule NimbleParsec do
                       utf8_char([])
                     ])
                   )
+                  |> ascii_char([?"])
                   |> reduce({List, :to_string, []})
       end
 
