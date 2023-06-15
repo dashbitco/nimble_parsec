@@ -24,3 +24,6 @@ nimble_parsec-*.tar
 
 # Ignore generated tmp files for test
 /tmp
+
+# Ignore local PLTs
+priv/plts

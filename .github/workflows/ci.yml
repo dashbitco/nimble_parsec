@@ -56,3 +56,14 @@ jobs:
         if: ${{ matrix.lint }}
 
       - run: mix test
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            priv/plts
+          key: "${{ runner.os }}-\
+                erlang-${{ matrix.pair.otp }}-\
+                elixir-${{ matrix.pair.elixir }}-\
+                ${{ hashFiles('mix.lock') }}"
+
+      - run: mix dialyzer
