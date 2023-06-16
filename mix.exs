@@ -12,12 +12,7 @@ defmodule NimbleParsec.MixProject do
       name: "NimbleParsec",
       description: "A simple and fast library for text-based parser combinators",
       aliases: [docs: &build_docs/1],
-      package: package(),
-      deps: deps(),
-      dialyzer: [
-        plt_add_apps: [:mix],
-        plt_add_deps: :apps_direct
-      ]
+      package: package()
     ]
   end
 
@@ -45,11 +40,5 @@ defmodule NimbleParsec.MixProject do
     opts = ~w[--main NimbleParsec --source-ref v#{@version} --source-url #{@url}]
     System.cmd(ex_doc, args ++ opts)
     Mix.shell().info("Docs built successfully")
-  end
-
-  defp deps() do
-    [
-      {:dialyxir, "~> 1.3", only: [:dev, :test], runtime: false}
-    ]
   end
 end

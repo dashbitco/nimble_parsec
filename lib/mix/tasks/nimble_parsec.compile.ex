@@ -104,7 +104,6 @@ defmodule Mix.Tasks.NimbleParsec.Compile do
     end
   end
 
-  @dialyzer {:no_improper_lists, write_to_disk: 3}
   defp write_to_disk(contents, input, output) do
     now = DateTime.utc_now() |> Map.put(:microsecond, {0, 0}) |> to_string
 
