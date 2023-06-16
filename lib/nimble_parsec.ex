@@ -1492,8 +1492,7 @@ defmodule NimbleParsec do
 
   """
   @spec repeat(t) :: t
-  @spec repeat(t, t) :: t
-  @spec repeat(t, opts) :: t
+  @spec repeat(t, t | opts) :: t
   @spec repeat(t, t, opts) :: t
   def repeat(combinator \\ empty(), to_repeat, opts \\ [])
       when is_combinator(combinator) and is_combinator(to_repeat) and is_list(opts) do
