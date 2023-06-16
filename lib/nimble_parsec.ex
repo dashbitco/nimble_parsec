@@ -315,7 +315,6 @@ defmodule NimbleParsec do
     parsecs
     |> Enum.reverse()
     |> generate(nil, [])
-    |> elem(0)
     |> IO.iodata_to_binary()
   end
 
@@ -328,7 +327,7 @@ defmodule NimbleParsec do
   end
 
   defp generate([{:parsec, {mod, fun}} | outer_parsecs], outer_mod, acc) do
-    {gen, _} = generate(gen_export(mod, fun), mod, [])
+    gen = generate(gen_export(mod, fun), mod, [])
     generate(outer_parsecs, outer_mod, [gen | acc])
   end
 
@@ -365,7 +364,7 @@ defmodule NimbleParsec do
 
   defp generate([{:choice, choices, weights} | parsecs], mod, acc) do
     pick = if weights, do: weighted_random(choices, weights), else: list_random(choices)
-    {gen, _aborted?} = generate(pick, mod, [])
+    gen = generate(pick, mod, [])
     generate(parsecs, mod, [gen | acc])
   end
 
@@ -381,7 +380,7 @@ defmodule NimbleParsec do
     generate(parsecs, mod, gen_times(t, Enum.random(0..max), mod, acc))
   end
 
-  defp generate([], _mod, acc), do: {Enum.reverse(acc), false}
+  defp generate([], _mod, acc), do: Enum.reverse(acc)
 
   defp gen_export(mod, fun) do
     unless Code.ensure_loaded?(mod) do
@@ -400,10 +399,8 @@ defmodule NimbleParsec do
   defp gen_times(_t, 0, _mod, acc), do: acc
 
   defp gen_times(t, n, mod, acc) do
-    case generate(t, mod, []) do
-      {gen, true} -> [gen | acc]
-      {gen, false} -> gen_times(t, n - 1, mod, [gen | acc])
-    end
+    gen = generate(t, mod, [])
+    gen_times(t, n - 1, mod, [gen | acc])
   end
 
   defp gen_bin_segment(inclusive, exclusive) do
