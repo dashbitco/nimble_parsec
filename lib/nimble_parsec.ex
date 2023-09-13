@@ -1733,6 +1733,20 @@ defmodule NimbleParsec do
 
   Instead of `repeat/2`, you may want to use `times/3` with the flags `:min`
   and `:max`.
+
+  ## Beware! Overlapping choices
+
+  In case choices overlap, there is no guarantee which error will be the one
+  effectively returned. For example, imagine this choice:
+
+      choice([
+        string("<abc>foo</abc>"),
+        string("<abc>")
+      ]
+  ß
+  Since both choices can be activated for an input starting with "abc",
+  NimbleParsec guarantees it will return the error from one of them, but
+  not which.
   """
   @spec choice(nonempty_list(t)) :: t
   @spec choice(t, nonempty_list(t)) :: t
