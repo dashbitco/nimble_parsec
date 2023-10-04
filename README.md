@@ -60,7 +60,7 @@ defmodule MyParser do
 end
 
 MyParser.datetime("2010-04-17T14:12:34Z")
-#=> {:ok, [2010, 4, 17, 14, 12, 34, "Z"], "", %{}, 1, 21}
+#=> {:ok, [2010, 4, 17, 14, 12, 34, "Z"], "", %{}, {1, 0}, 20}
 ```
 
 If you add `debug: true` to `defparsec/3`, it will print the generated
