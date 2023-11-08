@@ -416,11 +416,11 @@ defmodule NimbleParsec do
     end
   end
 
-  defp exclude_bin_segment?({:not, min..max}, gen), do: gen >= min and gen <= max
+  defp exclude_bin_segment?({:not, _.._//_ = range}, gen), do: gen in range
   defp exclude_bin_segment?({:not, char}, gen) when is_integer(char), do: char == gen
 
   defp int_random(nil), do: Enum.random(0..3)
-  defp int_random(_.._ = range), do: Enum.random(range)
+  defp int_random(_.._//_ = range), do: Enum.random(range)
   defp int_random(int) when is_integer(int), do: int
 
   # Enum.random uses reservoir sampling but our lists are short, so we use length + fetch!
@@ -1822,9 +1822,9 @@ defmodule NimbleParsec do
   end
 
   defp split_range!(x, _context) when is_integer(x), do: true
-  defp split_range!(_.._, _context), do: true
+  defp split_range!(_.._//step, _context) when abs(step) == 1, do: true
   defp split_range!({:not, x}, _context) when is_integer(x), do: false
-  defp split_range!({:not, _.._}, _context), do: false
+  defp split_range!({:not, _.._//step}, _context) when abs(step) == 1, do: false
 
   defp split_range!(range, context) do
     raise ArgumentError, "unknown range #{inspect(range)} given to #{context}"

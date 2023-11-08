@@ -6,9 +6,9 @@ defmodule NimbleParsecTest do
 
   describe "ascii_char/2 combinator without newlines" do
     defparsecp :only_ascii, ascii_char([?0..?9]) |> ascii_char([])
-    defparsecp :multi_ascii, ascii_char([?0..?9, ?z..?a])
-    defparsecp :multi_ascii_with_not, ascii_char([?0..?9, ?z..?a, not: ?c])
-    defparsecp :multi_ascii_with_multi_not, ascii_char([?0..?9, ?z..?a, not: ?c, not: ?d..?e])
+    defparsecp :multi_ascii, ascii_char([?0..?9, ?z..?a//-1])
+    defparsecp :multi_ascii_with_not, ascii_char([?0..?9, ?z..?a//-1, not: ?c])
+    defparsecp :multi_ascii_with_multi_not, ascii_char([?0..?9, ?z..?a//-1, not: ?c, not: ?d..?e])
     defparsecp :ascii_newline, ascii_char([?0..?9, ?\n]) |> ascii_char([?a..?z, ?\n])
     defparsecp :ascii_only_newline, ascii_char([?\n])
     defparsecp :none_ascii, ascii_char([?\a..?\n])
@@ -60,14 +60,14 @@ defmodule NimbleParsecTest do
     @error "expected ASCII character equal to \"\\n\""
 
     test "returns ok/error on only newline" do
-      assert ascii_only_newline("\n") == {:ok, '\n', "", %{}, {2, 1}, 1}
+      assert ascii_only_newline("\n") == {:ok, ~c"\n", "", %{}, {2, 1}, 1}
       assert ascii_only_newline("x") == {:error, @error, "x", %{}, {1, 0}, 0}
     end
 
     @error "expected ASCII character in the range \"\\a\" to \"\\n\""
 
     test "returns ok/error on none ascii range" do
-      assert none_ascii("\a\t\n") == {:ok, '\a', "\t\n", %{}, {1, 0}, 1}
+      assert none_ascii("\a\t\n") == {:ok, ~c"\a", "\t\n", %{}, {1, 0}, 1}
       assert none_ascii("x") == {:error, @error, "x", %{}, {1, 0}, 0}
     end
 
@@ -497,7 +497,7 @@ defmodule NimbleParsecTest do
 
     test "returns error from traversal" do
       assert remote_post_traverse_error_when_last_is_z("abcdef") ==
-               {:ok, 'abcdef', "", %{}, {1, 0}, 6}
+               {:ok, ~c"abcdef", "", %{}, {1, 0}, 6}
 
       assert remote_post_traverse_error_when_last_is_z("abcdez") ==
                {:error, "last is z", "", %{}, {1, 0}, 6}
@@ -505,10 +505,10 @@ defmodule NimbleParsecTest do
 
     test "post traverrse with rest lookahead" do
       assert remote_post_traverse_lookahead("abcdef#XcanbeanythingX12") ==
-               {:ok, ['abcdef', {"X", "canbeanything"}, 12], "", %{}, {1, 0}, 9}
+               {:ok, [~c"abcdef", {"X", "canbeanything"}, 12], "", %{}, {1, 0}, 9}
 
       assert remote_post_traverse_lookahead("abcdef#ZcanbeanythingZ12") ==
-               {:ok, ['abcdef', {"Z", "canbeanything"}, 12], "", %{}, {1, 0}, 9}
+               {:ok, [~c"abcdef", {"Z", "canbeanything"}, 12], "", %{}, {1, 0}, 9}
 
       assert remote_post_traverse_lookahead("abcdef#Zcanbeanything") ==
                {:error, "missing closing Z", "Zcanbeanything", %{}, {1, 0}, 7}
@@ -554,7 +554,7 @@ defmodule NimbleParsecTest do
 
     test "returns error from traversal" do
       assert local_post_traverse_error_when_last_is_z("abcdef") ==
-               {:ok, 'abcdef', "", %{}, {1, 0}, 6}
+               {:ok, ~c"abcdef", "", %{}, {1, 0}, 6}
 
       assert local_post_traverse_error_when_last_is_z("abcdez") ==
                {:error, "last is z", "", %{}, {1, 0}, 6}
@@ -599,7 +599,7 @@ defmodule NimbleParsecTest do
 
     test "returns error from traversal" do
       assert remote_pre_traverse_error_when_last_is_z("abcdef") ==
-               {:ok, 'abcdef', "", %{}, {1, 0}, 6}
+               {:ok, ~c"abcdef", "", %{}, {1, 0}, 6}
 
       assert remote_pre_traverse_error_when_last_is_z("abcdez") ==
                {:error, "last is z", "", %{}, {1, 0}, 6}
@@ -645,7 +645,7 @@ defmodule NimbleParsecTest do
 
     test "returns error from traversal" do
       assert local_pre_traverse_error_when_last_is_z("abcdef") ==
-               {:ok, 'abcdef', "", %{}, {1, 0}, 6}
+               {:ok, ~c"abcdef", "", %{}, {1, 0}, 6}
 
       assert local_pre_traverse_error_when_last_is_z("abcdez") ==
                {:error, "last is z", "", %{}, {1, 0}, 6}
@@ -717,15 +717,21 @@ defmodule NimbleParsecTest do
     end
 
     test "aborts choice on no match" do
-      assert lookahead_with_choice_digits_first("a0") == {:ok, [first: 'a'], "0", %{}, {1, 0}, 1}
-      assert lookahead_with_choice_digits_first("aa") == {:ok, [second: 'a'], "a", %{}, {1, 0}, 1}
-      assert lookahead_with_choice_digits_last("a0") == {:ok, [second: 'a'], "0", %{}, {1, 0}, 1}
-      assert lookahead_with_choice_digits_last("aa") == {:ok, [first: 'a'], "a", %{}, {1, 0}, 1}
+      assert lookahead_with_choice_digits_first("a0") ==
+               {:ok, [first: ~c"a"], "0", %{}, {1, 0}, 1}
+
+      assert lookahead_with_choice_digits_first("aa") ==
+               {:ok, [second: ~c"a"], "a", %{}, {1, 0}, 1}
+
+      assert lookahead_with_choice_digits_last("a0") ==
+               {:ok, [second: ~c"a"], "0", %{}, {1, 0}, 1}
+
+      assert lookahead_with_choice_digits_last("aa") == {:ok, [first: ~c"a"], "a", %{}, {1, 0}, 1}
     end
 
     test "with inner choice" do
-      assert lookahead_with_inner_choice("aa") == {:ok, 'a', "a", %{}, {1, 0}, 1}
-      assert lookahead_with_inner_choice("af") == {:ok, 'a', "f", %{}, {1, 0}, 1}
+      assert lookahead_with_inner_choice("aa") == {:ok, ~c"a", "a", %{}, {1, 0}, 1}
+      assert lookahead_with_inner_choice("af") == {:ok, ~c"a", "f", %{}, {1, 0}, 1}
 
       assert lookahead_with_inner_choice("az") ==
                {:error,
@@ -738,7 +744,7 @@ defmodule NimbleParsecTest do
                {:error, "expected ASCII character in the range \"0\" to \"9\"", "", %{}, {1, 0},
                 1}
 
-      assert lookahead_with_times("a0") == {:ok, 'a', "0", %{}, {1, 0}, 1}
+      assert lookahead_with_times("a0") == {:ok, ~c"a", "0", %{}, {1, 0}, 1}
 
       assert lookahead_with_times("aa0") ==
                {:error, "expected ASCII character in the range \"0\" to \"9\"", "a0", %{}, {1, 0},
@@ -792,20 +798,20 @@ defmodule NimbleParsecTest do
 
     test "aborts choice on match" do
       assert lookahead_not_with_choice_digits_first("a0") ==
-               {:ok, [second: 'a'], "0", %{}, {1, 0}, 1}
+               {:ok, [second: ~c"a"], "0", %{}, {1, 0}, 1}
 
       assert lookahead_not_with_choice_digits_first("aa") ==
-               {:ok, [first: 'a'], "a", %{}, {1, 0}, 1}
+               {:ok, [first: ~c"a"], "a", %{}, {1, 0}, 1}
 
       assert lookahead_not_with_choice_digits_last("a0") ==
-               {:ok, [first: 'a'], "0", %{}, {1, 0}, 1}
+               {:ok, [first: ~c"a"], "0", %{}, {1, 0}, 1}
 
       assert lookahead_not_with_choice_digits_last("aa") ==
-               {:ok, [second: 'a'], "a", %{}, {1, 0}, 1}
+               {:ok, [second: ~c"a"], "a", %{}, {1, 0}, 1}
     end
 
     test "with inner choice" do
-      assert lookahead_not_with_inner_choice("az") == {:ok, 'a', "z", %{}, {1, 0}, 1}
+      assert lookahead_not_with_inner_choice("az") == {:ok, ~c"a", "z", %{}, {1, 0}, 1}
 
       assert lookahead_not_with_inner_choice("aa") ==
                {:error,
@@ -823,8 +829,8 @@ defmodule NimbleParsecTest do
                {:error, "did not expect ASCII character in the range \"0\" to \"9\"", "0", %{},
                 {1, 0}, 1}
 
-      assert lookahead_not_with_times("aa0") == {:ok, 'a', "a0", %{}, {1, 0}, 1}
-      assert lookahead_not_with_times("aaa0") == {:ok, 'aa', "a0", %{}, {1, 0}, 2}
+      assert lookahead_not_with_times("aa0") == {:ok, ~c"a", "a0", %{}, {1, 0}, 1}
+      assert lookahead_not_with_times("aaa0") == {:ok, ~c"aa", "a0", %{}, {1, 0}, 2}
     end
 
     test "repeaet_until" do
@@ -1133,7 +1139,7 @@ defmodule NimbleParsecTest do
 
     test "returns ok/error with repeat" do
       assert repeat_while_repeat_digit("a1b2c3d4e5f6g7h8", context: %{count: 3}) ==
-               {:ok, 'a1b2', "c3d4e5f6g7h8", %{count: 0}, {1, 0}, 4}
+               {:ok, ~c"a1b2", "c3d4e5f6g7h8", %{count: 0}, {1, 0}, 4}
     end
 
     def not_3(<<?3, _::binary>>, %{} = context, {line, line_offset}, byte_offset)
@@ -1467,13 +1473,15 @@ defmodule NimbleParsecTest do
 
     test "returns ok" do
       string = "123abc"
-      assert {:ok, '123', "abc" = rest, %{}, {1, 0} = line, byte_offset} = digits(string)
-      assert chars(rest, line: line, byte_offset: byte_offset) == {:ok, 'abc', "", %{}, {1, 0}, 6}
+      assert {:ok, ~c"123", "abc" = rest, %{}, {1, 0} = line, byte_offset} = digits(string)
+
+      assert chars(rest, line: line, byte_offset: byte_offset) ==
+               {:ok, ~c"abc", "", %{}, {1, 0}, 6}
     end
 
     test "returns error" do
       string = "123:abc"
-      assert {:ok, '123', ":abc" = rest, %{}, {1, 0} = line, byte_offset} = digits(string)
+      assert {:ok, ~c"123", ":abc" = rest, %{}, {1, 0} = line, byte_offset} = digits(string)
 
       assert chars(rest, line: line, byte_offset: byte_offset) ==
                {:error, "expected chars", ":abc", %{}, {1, 0}, 3}

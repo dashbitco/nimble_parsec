@@ -928,7 +928,7 @@ defmodule NimbleParsec.Compiler do
 
   defp newline_allowed?(ors) do
     Enum.any?(ors, fn
-      _.._ = range -> ?\n in range
+      _.._//_ = range -> ?\n in range
       codepoint -> ?\n === codepoint
     end)
   end
@@ -937,7 +937,7 @@ defmodule NimbleParsec.Compiler do
 
   defp newline_forbidden?(ands) do
     Enum.any?(ands, fn
-      {:not, _.._ = range} -> ?\n in range
+      {:not, _.._//_ = range} -> ?\n in range
       {:not, codepoint} -> ?\n === codepoint
     end)
   end
@@ -1044,33 +1044,33 @@ defmodule NimbleParsec.Compiler do
 
   defp bin_range_to_guard(var, range) do
     case range do
-      min..max when min < max ->
+      min..min//step when abs(step) == 1 ->
+        quote(do: unquote(var) === unquote(min))
+
+      min..max//1 ->
         quote(do: unquote(var) >= unquote(min) and unquote(var) <= unquote(max))
 
-      min..max when min > max ->
+      min..max//-1 ->
         quote(do: unquote(var) >= unquote(max) and unquote(var) <= unquote(min))
-
-      min..min ->
-        quote(do: unquote(var) === unquote(min))
 
       min when is_integer(min) ->
         quote(do: unquote(var) === unquote(min))
 
-      {:not, min..max} when min < max ->
+      {:not, min..min//step} when abs(step) == 1 ->
+        quote(do: unquote(var) !== unquote(min))
+
+      {:not, min..max//1} ->
         quote(do: unquote(var) < unquote(min) or unquote(var) > unquote(max))
 
-      {:not, min..max} when min > max ->
+      {:not, min..max//-1} ->
         quote(do: unquote(var) < unquote(max) or unquote(var) > unquote(min))
-
-      {:not, min..min} ->
-        quote(do: unquote(var) !== unquote(min))
 
       {:not, min} when is_integer(min) ->
         quote(do: unquote(var) !== unquote(min))
     end
   end
 
-  defp inspect_bin_range(min..max, printable?) do
+  defp inspect_bin_range(min..max//_, printable?) do
     {" in the range #{inspect_char(min)} to #{inspect_char(max)}",
      printable? and printable?(min) and printable?(max)}
   end
