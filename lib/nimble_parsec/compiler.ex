@@ -903,7 +903,7 @@ defmodule NimbleParsec.Compiler do
   defp bound_combinator({:bytes, count}, metadata) do
     %{counter: counter, offset: offset} = metadata
     {var, counter} = build_var(counter)
-    input = quote do: unquote(var)::binary-size(unquote(count))
+    input = quote do: unquote(var) :: binary - size(unquote(count))
     offset = add_offset(offset, count)
     metadata = %{metadata | counter: counter, offset: offset}
     {:ok, [input], [], [var], metadata}
