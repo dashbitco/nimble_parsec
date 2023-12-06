@@ -1804,7 +1804,7 @@ defmodule NimbleParsec do
   @spec bytes(pos_integer) :: t
   @spec bytes(t, pos_integer) :: t
   def bytes(combinator \\ empty(), count)
-    when is_combinator(combinator) and is_integer(count) and count > 0 do
+      when is_combinator(combinator) and is_integer(count) and count > 0 do
     [{:bytes, count} | combinator]
   end
 
