@@ -237,6 +237,7 @@ defmodule NimbleParsec do
   @typep bound_combinator ::
            {:bin_segment, [inclusive_range], [exclusive_range], bin_modifier}
            | {:string, binary}
+           | {:bytes, pos_integer}
            | :eos
 
   @typep maybe_bound_combinator ::
@@ -380,6 +381,11 @@ defmodule NimbleParsec do
     generate(parsecs, mod, gen_times(t, Enum.random(0..max), mod, acc))
   end
 
+  defp generate([{:bytes, count} | parsecs], mod, acc) do
+    bytes = bytes_random(count)
+    generate(parsecs, mod, [bytes | acc])
+  end
+
   defp generate([], _mod, acc), do: Enum.reverse(acc)
 
   defp gen_export(mod, fun) do
@@ -436,6 +442,10 @@ defmodule NimbleParsec do
 
   defp weighted_random([_ | list], [weight | weights], chosen),
     do: weighted_random(list, weights, chosen - weight)
+
+  defp bytes_random(count) when is_integer(count) do
+    :crypto.strong_rand_bytes(count)
+  end
 
   @doc ~S"""
   Returns an empty combinator.
@@ -1772,6 +1782,30 @@ defmodule NimbleParsec do
   @spec optional(t, t) :: t
   def optional(combinator \\ empty(), optional) do
     choice(combinator, [optional, empty()])
+  end
+
+  @doc """
+  Defines a combinator to consume the next `n` bytes from the input.
+
+  ## Examples
+
+        defmodule MyParser do
+          import NimbleParsec
+
+          defparsec :three_bytes, bytes(3)
+        end
+
+        MyParser.three_bytes("abc")
+        #=> {:ok, ["abc"], "", %{}, {1, 0}, 3}
+
+        MyParser.three_bytes("ab")
+        #=> {:error, "expected 3 bytes", "ab", %{}, {1, 0}, 0}
+  """
+  @spec bytes(pos_integer) :: t
+  @spec bytes(t, pos_integer) :: t
+  def bytes(combinator \\ empty(), count)
+      when is_combinator(combinator) and is_integer(count) and count > 0 do
+    [{:bytes, count} | combinator]
   end
 
   ## Helpers

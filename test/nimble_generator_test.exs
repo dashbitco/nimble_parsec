@@ -107,6 +107,11 @@ defmodule NimbleGeneratorTest do
     assert times(string("foo"), min: 2, gen_times: 3) |> generate() == "foofoofoofoofoo"
   end
 
+  test "bytes" do
+    parsec = bytes(3)
+    assert byte_size(generate(parsec)) === 3
+  end
+
   defparsec :string_foo, string("foo"), export_metadata: true
   defparsec :string_choice, choice([parsec(:string_foo), string("bar")]), export_metadata: true
 

@@ -1467,6 +1467,18 @@ defmodule NimbleParsecTest do
     end
   end
 
+  describe "bytes/2 combinator" do
+    defparsec :parse_bytes, bytes(3)
+
+    test "succeeds if input has sufficient bytes" do
+      assert parse_bytes("abc") == {:ok, ["abc"], "", %{}, {1, 0}, 3}
+    end
+
+    test "fails if input has insufficent bytes" do
+      assert parse_bytes("ab") == {:error, "expected 3 bytes", "ab", %{}, {1, 0}, 0}
+    end
+  end
+
   describe "continuing parser" do
     defparsecp :digits, [?0..?9] |> ascii_char() |> times(min: 1) |> label("digits")
     defparsecp :chars, [?a..?z] |> ascii_char() |> times(min: 1) |> label("chars")

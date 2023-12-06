@@ -900,6 +900,15 @@ defmodule NimbleParsec.Compiler do
     end
   end
 
+  defp bound_combinator({:bytes, count}, metadata) do
+    %{counter: counter, offset: offset} = metadata
+    {var, counter} = build_var(counter)
+    input = quote do: unquote(var) :: binary - size(unquote(count))
+    offset = add_offset(offset, count)
+    metadata = %{metadata | counter: counter, offset: offset}
+    {:ok, [input], [], [var], metadata}
+  end
+
   defp bound_combinator(_, _) do
     :error
   end
@@ -1023,6 +1032,10 @@ defmodule NimbleParsec.Compiler do
 
   defp label({:parsec, name}) do
     Atom.to_string(name)
+  end
+
+  defp label({:bytes, count}) do
+    "#{inspect(count)} bytes"
   end
 
   ## Bin segments
