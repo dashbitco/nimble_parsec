@@ -1792,7 +1792,7 @@ defmodule NimbleParsec do
         defmodule MyParser do
           import NimbleParsec
 
-          defparsec :three_bytes = bytes(3)
+          defparsec :three_bytes, bytes(3)
         end
 
         MyParser.three_bytes("abc")
