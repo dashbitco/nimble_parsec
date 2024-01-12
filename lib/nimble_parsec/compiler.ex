@@ -28,7 +28,7 @@ defmodule NimbleParsec.Compiler do
           {:ok, [term], rest, context, line, byte_offset}
           | {:error, reason, rest, context, line, byte_offset}
         when line: {pos_integer, byte_offset},
-             byte_offset: pos_integer,
+             byte_offset: non_neg_integer,
              rest: binary,
              reason: String.t(),
              context: map
