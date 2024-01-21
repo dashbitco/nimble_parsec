@@ -69,12 +69,12 @@ defmodule NimbleParsec.IntegrationTest do
               |> post_traverse({:sign_int_value, []})
               |> tag(:signed_int)
 
-    defp sign_int_value(_rest, [int, _neg], context, _, _) do
-      {[int * -1], context}
+    defp sign_int_value(rest, [int, _neg], context, _, _) do
+      {rest, [int * -1], context}
     end
 
-    defp sign_int_value(_rest, res, context, _, _) do
-      {res, context}
+    defp sign_int_value(rest, res, context, _, _) do
+      {rest, res, context}
     end
 
     test "returns ok/error" do
@@ -90,8 +90,8 @@ defmodule NimbleParsec.IntegrationTest do
 
     defparsec :language_code, language_code
 
-    defp atomize_language_code(_rest, [language_code], context, _line, _offset) do
-      {[String.to_atom(language_code)], context}
+    defp atomize_language_code(rest, [language_code], context, _line, _offset) do
+      {rest, [String.to_atom(language_code)], context}
     end
 
     test "returns ok/error" do

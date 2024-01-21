@@ -430,7 +430,7 @@ defmodule NimbleParsec.Compiler do
 
       {acc, context} when acc != :error ->
         IO.warn(
-          "Returning a two-element tuple {acc, context} in pre_traverse/post_traverse is deprecated, " <>
+          "returning a two-element tuple {acc, context} in pre_traverse/post_traverse is deprecated, " <>
             "please return {rest, acc, context} instead"
         )
 
@@ -443,9 +443,19 @@ defmodule NimbleParsec.Compiler do
         # TODO: Deprecate two element tuple return that is not error
         quote generated: true do
           case unquote(quoted) do
-            {_, _, _} = res -> res
-            {:error, reason} -> {:error, reason}
-            {acc, context} -> {unquote(rest), acc, context}
+            {_, _, _} = res ->
+              res
+
+            {:error, reason} ->
+              {:error, reason}
+
+            {acc, context} ->
+              IO.warn(
+                "returning a two-element tuple {acc, context} in pre_traverse/post_traverse is deprecated, " <>
+                  "please return {rest, acc, context} instead"
+              )
+
+              {unquote(rest), acc, context}
           end
         end
     end

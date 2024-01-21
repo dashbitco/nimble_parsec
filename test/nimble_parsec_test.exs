@@ -1500,8 +1500,8 @@ defmodule NimbleParsecTest do
     end
   end
 
-  defp location(_rest, args, %{} = context, line, offset, tag) do
-    {[{tag, args, line, offset}], context}
+  defp location(rest, args, %{} = context, line, offset, tag) do
+    {rest, [{tag, args, line, offset}], context}
   end
 
   defp bound?(document) do
@@ -1554,6 +1554,6 @@ defmodule NimbleParsecTest do
   defp private_join_and_wrap(rest, args, %{} = context, {line, line_offset}, byte_offset, joiner)
        when is_binary(rest) and is_integer(line) and is_integer(line_offset) and
               is_integer(byte_offset) do
-    {args |> Enum.join(joiner) |> List.wrap(), context}
+    {rest, args |> Enum.join(joiner) |> List.wrap(), context}
   end
 end
