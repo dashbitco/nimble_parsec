@@ -1776,7 +1776,7 @@ defmodule NimbleParsec do
   @doc """
   Marks the given combinator as `optional`.
 
-  It is equivalent to `choice([optional, empty()])`.
+  It is equivalent to `choice([combinator, empty()])`.
   """
   @spec optional(t) :: t
   @spec optional(t, t) :: t
