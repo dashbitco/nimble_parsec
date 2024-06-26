@@ -1474,7 +1474,7 @@ defmodule NimbleParsecTest do
       assert parse_bytes("abc") == {:ok, ["abc"], "", %{}, {1, 0}, 3}
     end
 
-    test "fails if input has insufficent bytes" do
+    test "fails if input has insufficient bytes" do
       assert parse_bytes("ab") == {:error, "expected 3 bytes", "ab", %{}, {1, 0}, 0}
     end
   end
