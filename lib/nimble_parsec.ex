@@ -1520,7 +1520,7 @@ defmodule NimbleParsec do
   **Note:** this can be potentially a very expensive operation
   as it executes the given combinator byte by byte until finding
   an eventual match or ultimately failing. For example, if you
-  are looking for an integer, it is preferrable to discard
+  are looking for an integer, it is preferable to discard
   everything that is not an integer
 
       ignore(ascii_string([not: ?0..?9]))
