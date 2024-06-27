@@ -25,11 +25,11 @@ defmodule SimpleXML do
                  |> concat(closing_tag)
                  |> post_traverse(:match_and_emit_tag)
 
-  defp match_and_emit_tag(_rest, [tag, [tag, text]], context, _line, _offset),
-    do: {[{String.to_atom(tag), [], text}], context}
+  defp match_and_emit_tag(rest, [tag, [tag, text]], context, _line, _offset),
+    do: {rest, [{String.to_atom(tag), [], text}], context}
 
-  defp match_and_emit_tag(_rest, [tag, [tag | nodes]], context, _line, _offset),
-    do: {[{String.to_atom(tag), [], nodes}], context}
+  defp match_and_emit_tag(rest, [tag, [tag | nodes]], context, _line, _offset),
+    do: {rest, [{String.to_atom(tag), [], nodes}], context}
 
   defp match_and_emit_tag(_rest, [opening, [closing | _]], _context, _line, _offset),
     do: {:error, "closing tag #{inspect(closing)} did not match opening tag #{inspect(opening)}"}
