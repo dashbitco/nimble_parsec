@@ -1,6 +1,8 @@
 # NimbleParsec
 
-[Online Documentation](https://hexdocs.pm/nimble_parsec).
+[![CI](https://github.com/dashbitco/nimble_parsec/actions/workflows/ci.yml/badge.svg)](https://github.com/dashbitco/nimble_parsec/actions/workflows/ci.yml)
+[![Module Version](https://img.shields.io/hexpm/v/nimble_parsec.svg)](https://hex.pm/packages/nimble_parsec)
+[![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/nimble_parsec)
 
 <!-- MDOC !-->
 
