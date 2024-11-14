@@ -287,7 +287,7 @@ defmodule NimbleParsec do
   itself, but even this guarantee may be broken by parsers that have
   custom validations. Keep in mind the following:
 
-    * `generate/1` is not compatible with NimbleParsec's dumped via
+    * `generate/1` is not compatible with NimbleParsecs dumped via
       `mix nimble_parsec.compile`;
 
     * `parsec/2` requires the referenced parsec to set `export_metadata: true`
@@ -462,7 +462,7 @@ defmodule NimbleParsec do
   same module.
 
   Every parser defined via `defparsec/3` or `defparsecp/3` can be
-  used as combinators. However, the `defparsec/3` and `defparsecp/3`
+  used as combinator. However, the `defparsec/3` and `defparsecp/3`
   functions also define an entry-point parsing function, as implied
   by their names. If you want to define a combinator with the sole
   purpose of using it in combinator, use `defcombinatorp/3` instead.
@@ -471,7 +471,7 @@ defmodule NimbleParsec do
 
   `parsec/2` is useful to implement recursive definitions.
 
-  Note while `parsec/2` can be used to compose smaller combinators,
+  Note, while `parsec/2` can be used to compose smaller combinators,
   the preferred mechanism for doing composition is via regular functions
   and not via `parsec/2`. Let's see a practical example. Imagine
   that you have this module:
@@ -758,7 +758,7 @@ defmodule NimbleParsec do
   end
 
   @doc ~S"""
-  Defines an integer combinator with of exact length or `min` and `max`
+  Defines an integer combinator with exact length or `min` and `max`
   length.
 
   If you want an integer of unknown size, use `integer(min: 1)`.
@@ -1459,7 +1459,7 @@ defmodule NimbleParsec do
   end
 
   @doc """
-  Allow the combinator given on `to_repeat` to appear zero or more times.
+  Allows the combinator given on `to_repeat` to appear zero or more times.
 
   Beware! Since `repeat/2` allows zero entries, it cannot be used inside
   `choice/2`, because it will always succeed and may lead to unused function
@@ -1753,7 +1753,7 @@ defmodule NimbleParsec do
         string("<abc>foo</abc>"),
         string("<abc>")
       ]
-  ß
+
   Since both choices can be activated for an input starting with "abc",
   NimbleParsec guarantees it will return the error from one of them, but
   not which.
