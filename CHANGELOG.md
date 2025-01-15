@@ -1,5 +1,11 @@
 # Changelog for NimbleParsec
 
+## v1.4.1 (2025-01-15)
+
+### Enhancements
+
+  * Remove warnings on Elixir v1.18+
+
 ## v1.4.0 (2023-11-08)
 
 ### Enhancements

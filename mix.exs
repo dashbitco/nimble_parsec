@@ -1,7 +1,7 @@
 defmodule NimbleParsec.MixProject do
   use Mix.Project
 
-  @version "1.4.0"
+  @version "1.4.1"
   @url "https://github.com/dashbitco/nimble_parsec"
 
   def project do
@@ -33,7 +33,7 @@ defmodule NimbleParsec.MixProject do
     ex_doc = Path.join(Mix.path_for(:escripts), "ex_doc")
 
     unless File.exists?(ex_doc) do
-      raise "cannot build docs because escript for ex_doc is not installed"
+      raise "cannot build docs because escript for ex_doc is not installed, run \"mix escript.install hex ex_doc\""
     end
 
     args = ["NimbleParsec", @version, Mix.Project.compile_path()]
