@@ -37,6 +37,17 @@ defmodule NimbleParsec.Compiler do
     args = quote(do: [binary, opts \\ []])
     guards = quote(do: is_binary(binary))
 
+    case =
+      quote generated: true do
+        case unquote(:"#{name}__0")(binary, [], [], context, line, byte_offset) do
+          {:ok, acc, rest, context, line, offset} ->
+            {:ok, :lists.reverse(acc), rest, context, line, offset}
+
+          {:error, _, _, _, _, _} = error ->
+            error
+        end
+      end
+
     body =
       quote do
         context = Map.new(Keyword.get(opts, :context, []))
@@ -48,13 +59,7 @@ defmodule NimbleParsec.Compiler do
             line -> {line, byte_offset}
           end
 
-        case unquote(:"#{name}__0")(binary, [], [], context, line, byte_offset) do
-          {:ok, acc, rest, context, line, offset} ->
-            {:ok, :lists.reverse(acc), rest, context, line, offset}
-
-          {:error, _, _, _, _, _} = error ->
-            error
-        end
+        unquote(case)
       end
 
     {doc, spec, {name, args, guards, body}}
