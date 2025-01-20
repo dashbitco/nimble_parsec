@@ -172,7 +172,7 @@ defmodule NimbleParsec.Compiler do
       end
 
     body =
-      quote do
+      quote generated: true do
         case unquote(call) do
           {:ok, acc, rest, context, line, offset} ->
             unquote(next)(rest, acc, stack, context, line, offset)
