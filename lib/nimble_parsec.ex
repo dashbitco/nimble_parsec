@@ -1019,11 +1019,13 @@ defmodule NimbleParsec do
 
   The function given in `call` will receive 5 additional arguments.
   The rest of the parsed binary, the parser results to be post_traversed,
-  the parser context, the current line and the current offset will
+  the parser context, the current position and the current offset will
   be prepended to the given `args`. The `args` will be injected at
   the compile site and therefore must be escapable via `Macro.escape/1`.
+  The position is represented as a tuple `{line, column}`
+  (with column relative to the line in question).
 
-  The line and offset will represent the location after the combinators.
+  The position and offset will represent the location after the combinators.
   To retrieve the position before the combinators, use `pre_traverse/3`.
 
   The `call` must return a tuple `{rest, acc, context}` with list of
@@ -1054,7 +1056,7 @@ defmodule NimbleParsec do
                   |> ascii_char([?a..?z])
                   |> post_traverse({:join_and_wrap, ["-"]})
 
-        defp join_and_wrap(rest, args, context, _line, _offset, joiner) do
+        defp join_and_wrap(rest, args, context, _position, _offset, joiner) do
           {rest, args |> Enum.join(joiner) |> List.wrap(), context}
         end
       end
@@ -1072,12 +1074,12 @@ defmodule NimbleParsec do
   end
 
   @doc """
-  The same as `post_traverse/3` but receives the line and offset
+  The same as `post_traverse/3` but receives the position and offset
   from before the wrapped combinators.
 
   `post_traverse/3` should be preferred as it keeps less stack
   information. Use `pre_traverse/3` only if you have to access
-  the line and offset from before the given combinators.
+  the position and offset from before the given combinators.
   """
   @spec pre_traverse(t, call) :: t
   @spec pre_traverse(t, t, call) :: t
@@ -1197,11 +1199,11 @@ defmodule NimbleParsec do
 
   `call` is a `{module, function, args}` and it will receive 5
   additional arguments. The AST representation of the rest of the
-  parsed binary, the parser results, context, line and offset will
+  parsed binary, the parser results, context, position and offset will
   be prepended to `args`. `call` is invoked at compile time and is
   useful in combinators that avoid injecting runtime dependencies.
 
-  The line and offset will represent the location after the combinators.
+  The position and offset will represent the location after the combinators.
   To retrieve the position before the combinators, use `quoted_pre_traverse/3`.
 
   This function must be used only when you want to emit code that
@@ -1217,12 +1219,12 @@ defmodule NimbleParsec do
   end
 
   @doc """
-  The same as `quoted_post_traverse/3` but receives the line and offset
+  The same as `quoted_post_traverse/3` but receives the position and offset
   from before the wrapped combinators.
 
   `quoted_post_traverse/3` should be preferred as it keeps less stack
   information. Use `quoted_pre_traverse/3` only if you have to access
-  the line and offset from before the given combinators.
+  the position and offset from before the given combinators.
   """
   @spec quoted_pre_traverse(t, mfargs) :: t
   @spec quoted_pre_traverse(t, t, mfargs) :: t
@@ -1566,9 +1568,11 @@ defmodule NimbleParsec do
 
   The function given in `while` will receive 4 additional arguments.
   The `rest` of the binary to be parsed, the parser context, the
-  current line and the current offset will be prepended to the
+  current position and the current offset will be prepended to the
   given `args`. The `args` will be injected at the compile site
   and therefore must be escapable via `Macro.escape/1`.
+  The position is represented as a tuple `{line, column}`
+  (with column relative to the line in question).
 
   ## Examples
 
@@ -1639,8 +1643,8 @@ defmodule NimbleParsec do
 
   `while` is a `{module, function, args}` and it will receive 4
   additional arguments. The AST representations of the binary to be
-  parsed, context, line and offset will be prepended to `args`. `while`
-  is invoked at compile time and is useful in combinators that avoid
+  parsed, context, position (`{line, column}`) and offset will be prepended to `args`.
+  `while` is invoked at compile time and is useful in combinators that avoid
   injecting runtime dependencies.
   """
   @spec quoted_repeat_while(t, mfargs) :: t
