@@ -1023,7 +1023,7 @@ defmodule NimbleParsec do
   be prepended to the given `args`. The `args` will be injected at
   the compile site and therefore must be escapable via `Macro.escape/1`.
   The position is represented as a tuple `{line, column}`
-  (with column relative to line in question).
+  (with column relative to the line in question).
 
   The position and offset will represent the location after the combinators.
   To retrieve the position before the combinators, use `pre_traverse/3`.
@@ -1572,7 +1572,7 @@ defmodule NimbleParsec do
   given `args`. The `args` will be injected at the compile site
   and therefore must be escapable via `Macro.escape/1`.
   The position is represented as a tuple `{line, column}`
-  (with column relative to line in question).
+  (with column relative to the line in question).
 
   ## Examples
 
