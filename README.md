@@ -26,10 +26,6 @@ clauses with binary matching. This provides the following benefits:
     the possibility to compile parsers and do not impose a dependency on
     users of your library
 
-  * No footprints: `NimbleParsec` only needs to be imported in your modules.
-    There is no need for `use NimbleParsec`, leaving no footprints on your
-    modules
-
 The goal of this library is to focus on a set of primitives for writing
 efficient parser combinators. The composition aspect means you should be
 able to use those primitives to implement higher level combinators.
@@ -112,6 +108,31 @@ As you can see, it generates highly inlined code, comparable to
 hand-written parsers. This gives `NimbleParsec` an order of magnitude
 performance gains compared to other parser combinators. Further performance
 can be gained by giving the `inline: true` option to `defparsec/3`.
+
+## Performance considerations
+
+This library works by aggressively inlining code. For example, when we defined `date` and `time` combinators above, if you happen to use them in different occasions as follows, they will be inlined and compiled multiple times:
+
+```elixir
+date_then_time = concat(date, time)
+time_then_date = concat(time, date)
+defparsec :combinations, choice([date_then_time, time_then_date])
+```
+
+Because each `date` and `time` node appears twice, they will be compiled twice. This means that reusing combinators over and over again can lead to memory usage during compilation as well as high compile times.
+
+To address this, `NimbleParsec` allows you to encapsulate combinators and reuse them, using `defpcombinatorp`:
+
+```elixir
+defcombinatorp :date, ...
+defcombinatorp :time, ...
+
+date_then_time = concat(parsec(:date), parsec(:time))
+time_then_date = concat(parsec(:time), parsec(:date))
+defparsec :combinations, choice([date_then_time, time_then_date])
+```
+
+By using `parsec(:date)` and `parsec(:time)`, we point to previously defined and compiled combinators, leading to better compile-time performance.
 
 <!-- MDOC !-->
 
