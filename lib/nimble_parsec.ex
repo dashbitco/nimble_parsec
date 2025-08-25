@@ -471,10 +471,8 @@ defmodule NimbleParsec do
 
   `parsec/2` is useful to implement recursive definitions.
 
-  Note, while `parsec/2` can be used to compose smaller combinators,
-  the preferred mechanism for doing composition is via regular functions
-  and not via `parsec/2`. Let's see a practical example. Imagine
-  that you have this module:
+  `parsec/2` is also useful to compile *large* combinators upfront,
+  therefore reducing compilation time. Imagine that you have this module:
 
       defmodule MyParser do
         import NimbleParsec
@@ -497,9 +495,8 @@ defmodule NimbleParsec do
         defparsec :datetime, date |> ignore(string("T")) |> concat(time), debug: true
       end
 
-  Now imagine that you want to break `date` and `time` apart
-  into helper functions, as you use them in other occasions.
-  Generally speaking, you should **NOT** do this:
+  If you use `date` and `time` as combinators, over and over again,
+  it may be beneficial to compile and reuse them:
 
       defmodule MyParser do
         import NimbleParsec
@@ -523,52 +520,16 @@ defmodule NimbleParsec do
                   parsec(:date) |> ignore(string("T")) |> concat(parsec(:time))
       end
 
-  The reason why the above is not recommended is because each
-  `parsec/2` combinator ends-up adding a stacktrace entry during
-  parsing, which affects the ability of `NimbleParsec` to optimize
-  code. If the goal is to compose combinators, you can do so
-  with modules and functions:
+  While the `date` and `time` above are likely too small to be worthy
+  of compiling into a separate combinator in practice, that's the general
+  approach one should take. In practice, it is best to build your parser
+  and combinators without `parsec/2`, and then, as compile-time increases,
+  you find the largest combinators which are used multiple times and
+  refactor them as `parsec/2`.
 
-      defmodule MyParser.Helpers do
-        import NimbleParsec
-
-        def date do
-          integer(4)
-          |> ignore(string("-"))
-          |> integer(2)
-          |> ignore(string("-"))
-          |> integer(2)
-        end
-
-        def time do
-          integer(2)
-          |> ignore(string(":"))
-          |> integer(2)
-          |> ignore(string(":"))
-          |> integer(2)
-          |> optional(string("Z"))
-        end
-      end
-
-      defmodule MyParser do
-        import NimbleParsec
-        import MyParser.Helpers
-
-        defparsec :datetime,
-                  date() |> ignore(string("T")) |> concat(time())
-      end
-
-  The implementation above will be able to compile to the most
-  efficient format as possible without forcing new stacktrace
-  entries.
-
-  The only situation where you should use `parsec/2` for composition
-  is when a large parser is used over and over again in a way
-  compilation times are high. In this sense, you can use `parsec/2`
-  to improve compilation time at the cost of runtime performance.
-  By using `parsec/2`, the tree size built at compile time will be
-  reduced although runtime performance is degraded as `parsec`
-  introduces a stacktrace entry.
+  Overall, you can use `parsec/2` to improve compilation time at the cost
+  of runtime performance. By using `parsec/2`, the tree size built at compile
+  time will be reduced although runtime performance is slightly degraded.
 
   ## Remote combinators
 
