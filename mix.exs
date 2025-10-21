@@ -17,7 +17,7 @@ defmodule NimbleParsec.MixProject do
   end
 
   def application do
-    []
+    [extra_applications: [:crypto]]
   end
 
   defp package do
