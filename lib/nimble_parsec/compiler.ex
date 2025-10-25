@@ -861,6 +861,26 @@ defmodule NimbleParsec.Compiler do
     {:ok, [string], [], [string], %{metadata | line: line, offset: offset}}
   end
 
+  defp bound_combinator({:integer_nibble}, metadata) do
+    %{offset: offset, counter: counter} = metadata
+    {inputs, vars, guards} = build_integer_nibble(counter)
+    counter = counter + 1
+    offset = add_offset(offset, length(vars))
+
+    metadata = %{metadata | offset: offset, counter: counter}
+    {:ok, inputs, guards, vars, metadata}
+  end
+
+  @nibble_size 4
+  @integer_hi_nibble 3
+  defp build_integer_nibble(counter) do
+    lo_nibble = {:"x#{counter}", [], Elixir}
+    guard = quote(do: unquote(lo_nibble) < unquote(10))
+
+    {[{:"::", [], [@integer_hi_nibble, @nibble_size]}, {:"::", [], [lo_nibble, @nibble_size]}],
+     [lo_nibble], [guard]}
+  end
+
   defp bound_combinator({:bin_segment, inclusive, exclusive, modifier}, metadata) do
     %{line: line, offset: offset, counter: counter} = metadata
 
@@ -989,6 +1009,10 @@ defmodule NimbleParsec.Compiler do
 
   defp label({:string, binary}) do
     "string #{inspect(binary)}"
+  end
+
+  defp label({:integer_nibble}) do
+    "ASCII character in the range \"0\" to \"9\""
   end
 
   defp label({:label, _combinator, label}) do

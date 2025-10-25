@@ -652,6 +652,13 @@ defmodule NimbleParsec do
     bin_segment(combinator, inclusive, exclusive, :integer)
   end
 
+  @spec integer_nibble() :: t
+  @spec integer_nibble(t) :: t
+  def integer_nibble(combinator \\ empty())
+      when is_combinator(combinator) do
+    [{:integer_nibble} | combinator]
+  end
+
   @doc ~S"""
   Defines a single UTF-8 codepoint in the given ranges.
 
@@ -773,7 +780,7 @@ defmodule NimbleParsec do
 
     min_max_compile_runtime_chars(
       combinator,
-      ascii_char([?0..?9]),
+      integer_nibble(),
       count,
       :__compile_integer__,
       :__runtime_integer__,
@@ -789,7 +796,7 @@ defmodule NimbleParsec do
 
     min_max_compile_runtime_chars(
       combinator,
-      ascii_char([?0..?9]),
+      integer_nibble(),
       opts,
       :__compile_integer__,
       :__runtime_integer__,
@@ -2048,7 +2055,7 @@ defmodule NimbleParsec do
     ast =
       quote do
         [head | tail] = unquote(reverse_now_or_later(acc))
-        [:lists.foldl(fn x, acc -> x - ?0 + acc * 10 end, head, tail)]
+        [:lists.foldl(fn x, acc -> x + acc * 10 end, head, tail)]
       end
 
     {:{}, [], [rest, ast, context]}
@@ -2058,7 +2065,7 @@ defmodule NimbleParsec do
     ast =
       quote do
         [head | tail] = unquote(reverse_now_or_later(acc))
-        [:lists.foldl(fn x, acc -> x - ?0 + acc * 10 end, head - ?0, tail)]
+        [:lists.foldl(fn x, acc -> x + acc * 10 end, head, tail)]
       end
 
     {:{}, [], [rest, ast, context]}
@@ -2078,11 +2085,11 @@ defmodule NimbleParsec do
   defp reverse_now_or_later(expr), do: quote(do: :lists.reverse(unquote(expr)))
 
   defp quoted_ascii_to_integer([var | vars], 1) do
-    [quote(do: unquote(var) - ?0) | quoted_ascii_to_integer(vars, 10)]
+    [quote(do: unquote(var)) | quoted_ascii_to_integer(vars, 10)]
   end
 
   defp quoted_ascii_to_integer([var | vars], index) do
-    [quote(do: (unquote(var) - ?0) * unquote(index)) | quoted_ascii_to_integer(vars, index * 10)]
+    [quote(do: unquote(var) * unquote(index)) | quoted_ascii_to_integer(vars, index * 10)]
   end
 
   defp quoted_ascii_to_integer([], _index) do
