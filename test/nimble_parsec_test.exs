@@ -1,3 +1,7 @@
+defmodule NimbleParsecTest.QuotedTraversal do
+  def error(_rest, _acc, _context, _line, _offset), do: {:error, "quoted traversal error"}
+end
+
 defmodule NimbleParsecTest do
   use ExUnit.Case, async: true
 
@@ -1252,8 +1256,43 @@ defmodule NimbleParsecTest do
   end
 
   describe "choice/2 combinator" do
+    three_ascii_chars = times(ascii_char([?a..?z, ?\n]), 3)
+
     defparsecp :simple_choice,
                choice([ascii_char([?a..?z]), ascii_char([?A..?Z]), ascii_char([?0..?9])])
+
+    defparsecp :choice_post_traverse,
+               choice([
+                 post_traverse(three_ascii_chars, {__MODULE__, :error_when_last_is_z, []}),
+                 replace(three_ascii_chars, nil)
+               ])
+
+    defparsecp :choice_pre_traverse,
+               choice([
+                 pre_traverse(three_ascii_chars, {__MODULE__, :error_when_last_is_z, []}),
+                 replace(three_ascii_chars, nil)
+               ])
+
+    defparsecp :choice_quoted_post_traverse,
+               choice([
+                 quoted_post_traverse(
+                   three_ascii_chars,
+                   {NimbleParsecTest.QuotedTraversal, :error, []}
+                 ),
+                 replace(three_ascii_chars, nil)
+               ])
+
+    defparsecp :standalone_quoted_post_traverse,
+               quoted_post_traverse(
+                 three_ascii_chars,
+                 {NimbleParsecTest.QuotedTraversal, :error, []}
+               )
+
+    defparsecp :choice_post_traverse_without_matching_fallback,
+               choice([
+                 post_traverse(three_ascii_chars, {__MODULE__, :error_when_last_is_z, []}),
+                 string("xyz")
+               ])
 
     defparsecp :choice_label,
                choice([ascii_char([?a..?z]), ascii_char([?A..?Z]), ascii_char([?0..?9])])
@@ -1302,6 +1341,31 @@ defmodule NimbleParsecTest do
       assert simple_choice("A=") == {:ok, [?A], "=", %{}, {1, 0}, 1}
       assert simple_choice("0=") == {:ok, [?0], "=", %{}, {1, 0}, 1}
       assert simple_choice("+=") == {:error, @error, "+=", %{}, {1, 0}, 0}
+    end
+
+    test "falls back after a post-traversal error" do
+      assert choice_post_traverse("a\nc!") == {:ok, ~c"a\nc", "!", %{}, {2, 2}, 3}
+
+      assert choice_post_traverse("a\nz!", context: %{source: :initial}) ==
+               {:ok, [nil], "!", %{source: :initial}, {2, 2}, 3}
+    end
+
+    test "falls back after a pre-traversal error" do
+      assert choice_pre_traverse("a\nz!") == {:ok, [nil], "!", %{}, {2, 2}, 3}
+    end
+
+    test "falls back after a quoted traversal error" do
+      assert choice_quoted_post_traverse("a\nc!") == {:ok, [nil], "!", %{}, {2, 2}, 3}
+
+      assert standalone_quoted_post_traverse("a\nc!") ==
+               {:error, "quoted traversal error", "!", %{}, {2, 2}, 3}
+    end
+
+    test "returns a parser error when no branch succeeds after a traversal error" do
+      assert {:error, reason, "a\nz!", %{}, {1, 0}, 0} =
+               choice_post_traverse_without_matching_fallback("a\nz!")
+
+      assert is_binary(reason)
     end
 
     @error "expected something"

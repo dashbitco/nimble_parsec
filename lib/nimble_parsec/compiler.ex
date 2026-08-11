@@ -365,7 +365,7 @@ defmodule NimbleParsec.Compiler do
     end
   end
 
-  defp traverse(traversal, next, rest, user_acc, context, line, offset, _) do
+  defp traverse(traversal, next, rest, user_acc, context, line, offset, config) do
     case apply_traverse(traversal, rest, user_acc, context, line, offset) do
       {:{}, _, [rest, expanded_acc, context]} ->
         quote do
@@ -382,21 +382,32 @@ defmodule NimbleParsec.Compiler do
         end
 
       {:error, reason} ->
-        quote do
-          {:error, unquote(reason), rest, context, line, offset}
-        end
+        traverse_error(reason, config)
 
       quoted ->
+        error = traverse_error(quote(do: reason), config)
+
         quote generated: true do
           case unquote(quoted) do
             {rest, user_acc, context} when is_list(user_acc) ->
               unquote(next)(rest, user_acc ++ acc, stack, context, line, offset)
 
             {:error, reason} ->
-              {:error, reason, rest, context, line, offset}
+              unquote(error)
           end
         end
     end
+  end
+
+  defp traverse_error(reason, %{catch_all: nil}) do
+    quote do
+      {:error, unquote(reason), rest, context, line, offset}
+    end
+  end
+
+  defp traverse_error(_reason, %{catch_all: catch_all, acc_depth: n}) do
+    {_, _, _, body} = build_proxy_to(:unused, catch_all, n)
+    body
   end
 
   defp apply_traverse(mfargs, rest, acc, context, line, offset) do
