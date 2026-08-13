@@ -1,0 +1,333 @@
+# NimbleParsec cheatsheet
+
+A quick reference into the `NimbleParsec` module, a library for building
+text-based parser combinators.
+
+All examples assume `import NimbleParsec` and that the combinator is compiled
+into a parser with `defparsec/3`. A parser returns
+`{:ok, results, rest, context, line, byte_offset}` on success, or
+`{:error, reason, rest, context, line, byte_offset}` on failure. The leading
+`combinator \\ empty()` argument is usually supplied by piping, so it is
+omitted from the signatures below.
+
+## Defining and composing parsers
+{: .col-2}
+
+### [`defparsec(name, combinator, opts)`](`NimbleParsec.defparsec/3`)
+
+```elixir
+defmodule MyParser do
+  import NimbleParsec
+
+  defparsec :digits, integer(min: 1)
+end
+
+MyParser.digits("123")
+#=> {:ok, [123], "", %{}, {1, 0}, 3}
+```
+
+Use `defparsecp/3` for a private parser, and `defcombinator/3` /
+`defcombinatorp/3` for a reusable combinator with no top-level parser.
+
+### [`concat(left, right)`](`NimbleParsec.concat/2`)
+
+```elixir
+integer(4)
+|> ignore(string("-"))
+|> integer(2)
+```
+
+Combinators are plain data, so they compose with `|>`. `concat/2` is the
+function form of piping two combinators together.
+
+### [`parsec(name)`](`NimbleParsec.parsec/2`)
+
+```elixir
+defcombinatorp :date, integer(4)
+
+defparsec :event,
+  parsec(:date)
+  |> ignore(string(": "))
+  |> integer(2)
+```
+
+Invokes an already-compiled combinator, avoiding recompilation and cutting
+compile time.
+
+### [`empty()`](`NimbleParsec.empty/0`)
+
+```elixir
+empty() |> string("hello")
+```
+
+The neutral combinator to start building from.
+
+## Consuming input
+{: .col-2}
+
+### [`ascii_char(ranges)`](`NimbleParsec.ascii_char/2`)
+
+```elixir
+ascii_char([?0..?9])   # one digit
+ascii_char(not: ?\n)   # not a newline
+```
+
+One ASCII codepoint. Ranges accept `min..max`, a single codepoint,
+`{:not, min..max}`, or `{:not, codepoint}`. Use `utf8_char/2` for UTF-8.
+
+### [`string(binary)`](`NimbleParsec.string/2`)
+
+```elixir
+string("T")
+```
+
+Matches the exact binary `"T"`, or errors with `expected a string "T"`.
+
+### [`ascii_string(range, count_or_opts)`](`NimbleParsec.ascii_string/3`)
+
+```elixir
+ascii_string([?a..?z], 2)
+utf8_string([?a..?z], min: 1)
+
+# ascii_string([?a..?z], 2) on "abc"
+#=> {:ok, ["ab"], "c", %{}, {1, 0}, 2}
+```
+
+Takes an exact length or `min:`/`max:`, and returns a binary instead of a
+list of codepoints. Use `utf8_string/3` for UTF-8.
+
+### [`integer(count_or_opts)`](`NimbleParsec.integer/2`)
+
+```elixir
+integer(4)       # exactly 4 digits
+integer(min: 1)  # one or more digits
+
+# integer(4) on "2010" => [2010]
+```
+
+### [`bytes(count)`](`NimbleParsec.bytes/2`)
+
+```elixir
+bytes(3)
+
+# bytes(3) on "abc" => ["abc"]
+```
+
+Consumes the next `count` raw bytes from the input.
+
+### [`eos()`](`NimbleParsec.eos/1`)
+
+```elixir
+letters |> eos()
+```
+
+Succeeds only when the input has been fully consumed.
+
+## Combining parsers
+{: .col-2}
+
+### [`choice(choices)`](`NimbleParsec.choice/3`)
+
+```elixir
+choice([string("foo"), string("bar")])
+```
+
+Tries each combinator in order and keeps the first that matches.
+
+### [`optional(optional)`](`NimbleParsec.optional/2`)
+
+```elixir
+integer(2) |> optional(string("Z"))
+```
+
+Matches the combinator zero or one time.
+
+### [`repeat(to_repeat)`](`NimbleParsec.repeat/3`)
+
+```elixir
+repeat(ascii_char([?a..?z]))
+
+# on "abcd" => [?a, ?b, ?c, ?d]
+# on "1234" => []  (zero times, no error)
+```
+
+Matches the combinator zero or more times.
+
+### [`times(to_repeat, count_or_min_max)`](`NimbleParsec.times/3`)
+
+```elixir
+times(ascii_char([?a..?z]), min: 2)
+times(ascii_char([?a..?z]), max: 4)
+times(ascii_char([?a..?z]), 3)
+```
+
+Matches at least, at most, or exactly a number of times.
+
+### [`duplicate(to_duplicate, n)`](`NimbleParsec.duplicate/3`)
+
+```elixir
+duplicate(ascii_char([?a..?z]), 3)
+```
+
+Repeats the *combinator definition* `n` times at compile time.
+
+### [`eventually(eventually)`](`NimbleParsec.eventually/2`)
+
+```elixir
+eventually(integer(2))
+
+# "let's meet at 12?" => [12], rest "?"
+```
+
+Discards input until the given combinator matches.
+
+### [`repeat_while(to_repeat, while)`](`NimbleParsec.repeat_while/4`)
+
+```elixir
+repeat_while(
+  ascii_char([]),
+  {__MODULE__, :not_comma, []}
+)
+```
+
+Repeats while the predicate returns `{:cont, context}`. See also
+`quoted_repeat_while/4`.
+
+## Transforming results
+{: .col-2}
+
+### [`ignore(to_ignore)`](`NimbleParsec.ignore/2`)
+
+```elixir
+ignore(string("T")) |> integer(2)
+#   "T12" => [12]
+```
+
+Discards the output of the given combinator.
+
+### [`replace(to_replace, value)`](`NimbleParsec.replace/3`)
+
+```elixir
+replace(string("T"), "OTHER")
+|> integer(2)
+#   "T12" => ["OTHER", 12]
+```
+
+Replaces the output of the combinator with a single value.
+
+### [`map(to_map, call)`](`NimbleParsec.map/3`)
+
+```elixir
+ascii_char([?a..?z])
+|> map({Integer, :to_string, []})
+#   ?a => "97"
+```
+
+Applies a function to each result.
+
+### [`reduce(to_reduce, call)`](`NimbleParsec.reduce/3`)
+
+```elixir
+letters
+|> reduce({Enum, :join, ["-"]})
+#   [?a, ?b, ?c] => "97-98-99"
+```
+
+Applies a function to all results at once.
+
+### [`wrap(to_wrap)`](`NimbleParsec.wrap/2`)
+
+```elixir
+integer(min: 1)
+|> integer(min: 1)
+|> wrap()
+```
+
+Collects the combinator's results into a single list element.
+
+### [`tag(to_tag, tag)`](`NimbleParsec.tag/3`)
+
+```elixir
+tag(integer(min: 1), :integer)
+#   "1234" => [integer: [1234]]
+
+unwrap_and_tag(integer(min: 1), :integer)
+#   "1234" => [integer: 1234]
+```
+
+`unwrap_and_tag/3` is the same but unwraps a single result.
+
+### [`post_traverse(to_post_traverse, call)`](`NimbleParsec.post_traverse/3`)
+
+```elixir
+combinator
+|> post_traverse({__MODULE__, :fun, []})
+```
+
+The callback receives the accumulated results and may transform them, thread
+`context`, or return `{:error, reason}` to fail. `pre_traverse/3` runs before
+the combinator.
+
+## Lookahead
+{: .col-2}
+
+### [`lookahead(to_lookahead)`](`NimbleParsec.lookahead/2`)
+
+```elixir
+lookahead(string("if"))
+|> ascii_string([], min: 1)
+```
+
+Succeeds only if the combinator is ahead, without consuming it.
+
+### [`lookahead_not(to_lookahead)`](`NimbleParsec.lookahead_not/2`)
+
+```elixir
+lookahead_not(string("end"))
+|> ascii_char([])
+```
+
+Succeeds only if the combinator is *not* ahead.
+
+## Errors, position & debugging
+{: .col-2}
+
+### [`label(to_label, label)`](`NimbleParsec.label/3`)
+
+```elixir
+integer(2)
+|> ascii_char([?a..?z])
+|> label("a digit then a letter")
+```
+
+Replaces the auto-generated `expected ...` error message.
+
+### [`line(to_wrap)`](`NimbleParsec.line/2`)
+
+```elixir
+line(integer(min: 1))
+#=> {result, {line, offset}}
+
+byte_offset(integer(min: 1))
+#=> {result, byte_offset}
+```
+
+Attaches the line (or, with `byte_offset/2`, the byte offset) to the result.
+
+### [`debug(to_debug)`](`NimbleParsec.debug/2`)
+
+```elixir
+integer(2) |> debug()
+```
+
+Prints the combinator state to `:stderr` at parse time.
+
+### [`generate(parsec)`](`NimbleParsec.generate/1`)
+
+```elixir
+choice([string("foo"), string("bar")])
+|> generate()
+#=> "foo" or "bar"
+```
+
+Builds a random binary that the parser accepts — handy for tests.
